@@ -17,7 +17,7 @@ jobs:
         CUR_COMMIT: ${{ github.sha }}
       run: |
         curr_run_sha="$CUR_COMMIT"
-        prev_run_sha="`curl -s --fail 'https://api.github.com/repos/Swyter/sphinx-euroland/actions/workflows/2949131/runs' | jq .workflow_runs[0].head_sha`"
+        prev_run_sha="`curl -s --fail 'https://api.github.com/repos/Swyter/sphinx-euroland/actions/workflows/2949131/runs' | jq -r .workflow_runs[0].head_sha`"
         
         # swy: only pack it when the folder has changed since the last time we ran a GitHub Actions job
         if [[ -z $(git diff --quiet "$curr_run_sha" "$prev_run_sha" -- io_scene_sphnx || echo changed) ]]; then
@@ -38,5 +38,5 @@ jobs:
         if [[ -f "$FILENAME" ]]; then
           curl --fail --data-binary @"$FILENAME" -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" "$GH_ASSET"
         else
-          print("[no changes in the add-on folder this time around; skipped]")
+          echo "[no changes in the add-on folder this time around; skipped]"
         fi
