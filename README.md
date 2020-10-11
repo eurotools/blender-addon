@@ -3,14 +3,12 @@
 Import and export intermediate Eurocom formats for *Sphinx and the Cursed Mummy* in Blender.
 Heavily work in progress.
 
-> ➥ *You can [download the latest version from the Releases tab](downl)*.
-
-[downl]: https://github.com/Swyter/sphinx-euroland/releases/tag/latest
+> ➥ *You can [download the latest version from the Releases tab](https://github.com/Swyter/sphinx-euroland/releases/tag/latest)*.
 
 # Formats
 
 > *The formats we aim to support are documented here:*  
-> **https://sphinxandthecursedmummy.fandom.com/wiki/Technical**
+> *https://sphinxandthecursedmummy.fandom.com/wiki/Technical*
 
 
 | Format   | Entities       | Maps         | Animations + Skins | Scripts     |
@@ -35,4 +33,5 @@ You can do this by cloning the Git repository and making a symbolic link. On Win
 mklink /j '.\io_scene_sphnx' 'C:\Users\<user-name>\Documents\github\sphinx-euroland\io_scene_sphnx'
 ```
 
-Once you refresh the Blender Add-ons window it should show up and you should be able to enable. But there are many ways of doing this.
+Once you refresh the Blender Add-ons window it should show up and you should be able to enable it. But there are many ways of doing this.
+You can also use the F3 search menu to look for the «*Eurocom reload*» operator, and assign it to a hotkey, like F8, to easily refresh it with the latest changes from the text editor.
