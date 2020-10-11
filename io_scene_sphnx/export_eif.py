@@ -79,7 +79,7 @@ def save(context,
                 ow("\t*FACELAYERSCOUNT 1\n")
                 ow("\t*FACESHADERCOUNT 1\n")
                 ow("\t*VERTEX_LIST {\n")
-                for v in ob.data.vertices:
+                for v in me.vertices:
                     ow("\t\t%.6f %.6f %.6f\n" % (v.co.x, v.co.y, v.co.z))
                 ow("\t}\n")
                 ow("\t*UV_LIST {\n")            
@@ -87,9 +87,13 @@ def save(context,
                     for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
                         ow("\t\t%.6f %.6f\n" % (uv_layer[loop_index].uv.x, uv_layer[loop_index].uv.y))
                 ow("\t}\n")
-                ow("\t*VERTCOL_LIST {\n")
-
-                ow("\t}\n")
+                
+                #Check if the vertex colors layer is active
+                if(bool(me.vertex_colors.active)):
+                    ow("\t*VERTCOL_LIST {\n")
+                    for v in me.vertex_colors[0].data:
+                        ow("\t\t%.6f %.6f %.6f %.6f\n" % (v.color[0], v.color[1], v.color[2], v.color[3]))                    
+                    ow("\t}\n")
 
     time_now = datetime.datetime.utcnow()
 
