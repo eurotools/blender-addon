@@ -67,7 +67,7 @@ from bpy_extras.io_utils import (
 
 @orientation_helper(axis_forward='-Z', axis_up='Y')
 class ImportEIF(bpy.types.Operator, ImportHelper):
-    """Load a static 3ds Max Euroland file"""
+    """Load a static 3ds Max Euroland file, for scenes and entities"""
     bl_idname = "import_scene.eif"
     bl_label = "Import EIF"
     bl_options = {'PRESET', 'UNDO'}
@@ -81,36 +81,14 @@ class ImportEIF(bpy.types.Operator, ImportHelper):
     def execute(self, context):
         print("Selected: " + context.active_object.name)
         from . import import_eif
-
-        if self.split_mode == 'OFF':
-            self.use_split_objects = False
-            self.use_split_groups = False
-        else:
-            self.use_groups_as_vgroups = False
-
-        keywords = self.as_keywords(ignore=("axis_forward",
-                                            "axis_up",
-                                            "filter_glob",
-                                            "split_mode",
-                                            ))
-
-        global_matrix = axis_conversion(from_forward=self.axis_forward,
-                                        from_up=self.axis_up,
-                                        ).to_4x4()
-        keywords["global_matrix"] = global_matrix
-
-        if bpy.data.is_saved and context.preferences.filepaths.use_relative_paths:
-            import os
-            keywords["relpath"] = os.path.dirname(bpy.data.filepath)
-
-        return import_eif.load(context, **keywords)
+        return import_eif.load(context, self.filepath)
 
     def draw(self, context):
         pass
 
 @orientation_helper(axis_forward='-Z', axis_up='Y')
 class ExportEIF(bpy.types.Operator, ExportHelper):
-    """Save a static 3ds Max Euroland file"""
+    """Save a static 3ds Max Euroland file, for scenes and entities"""
 
     bl_idname = "export_scene.eif"
     bl_label = 'Export EIF'
@@ -127,23 +105,8 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
     check_extension = True
 
     def execute(self, context):
-        from . import export_obj
-
-        from mathutils import Matrix
-        keywords = self.as_keywords(ignore=("axis_forward",
-                                            "axis_up",
-                                            "global_scale",
-                                            "check_existing",
-                                            "filter_glob",
-                                            ))
-
-        global_matrix = (Matrix.Scale(self.global_scale, 4) @
-                         axis_conversion(to_forward=self.axis_forward,
-                                         to_up=self.axis_up,
-                                         ).to_4x4())
-
-        keywords["global_matrix"] = global_matrix
-        return export_obj.save(context, **keywords)
+        from . import export_eif
+        return export_eif.save(context, self.filepath)
 
     def draw(self, context):
         pass
@@ -151,7 +114,7 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
 
 @orientation_helper(axis_forward='-Z', axis_up='Y')
 class ImportRTG(bpy.types.Operator, ImportHelper):
-    """Load a dynamic Maya Euroland file"""
+    """Load a dynamic Maya Euroland file; for animations, scripts and maps"""
     bl_idname = "import_scene.rtg"
     bl_label = "Import RTG"
     bl_options = {'PRESET', 'UNDO'}
@@ -165,36 +128,14 @@ class ImportRTG(bpy.types.Operator, ImportHelper):
     def execute(self, context):
         print("Selected: " + context.active_object.name)
         from . import import_eif
-
-        if self.split_mode == 'OFF':
-            self.use_split_objects = False
-            self.use_split_groups = False
-        else:
-            self.use_groups_as_vgroups = False
-
-        keywords = self.as_keywords(ignore=("axis_forward",
-                                            "axis_up",
-                                            "filter_glob",
-                                            "split_mode",
-                                            ))
-
-        global_matrix = axis_conversion(from_forward=self.axis_forward,
-                                        from_up=self.axis_up,
-                                        ).to_4x4()
-        keywords["global_matrix"] = global_matrix
-
-        if bpy.data.is_saved and context.preferences.filepaths.use_relative_paths:
-            import os
-            keywords["relpath"] = os.path.dirname(bpy.data.filepath)
-
-        return import_eif.load(context, **keywords)
+        return import_rtg.load(context, self.filepath)
 
     def draw(self, context):
         pass
 
 @orientation_helper(axis_forward='-Z', axis_up='Y')
 class ExportRTG(bpy.types.Operator, ExportHelper):
-    """Save a dynamic Maya Euroland file"""
+    """Save a dynamic Maya Euroland file; for animations, scripts and maps"""
 
     bl_idname = "export_scene.rtg"
     bl_label = 'Export RTG'
@@ -211,23 +152,8 @@ class ExportRTG(bpy.types.Operator, ExportHelper):
     check_extension = True
 
     def execute(self, context):
-        from . import export_obj
-
-        from mathutils import Matrix
-        keywords = self.as_keywords(ignore=("axis_forward",
-                                            "axis_up",
-                                            "global_scale",
-                                            "check_existing",
-                                            "filter_glob",
-                                            ))
-
-        global_matrix = (Matrix.Scale(self.global_scale, 4) @
-                         axis_conversion(to_forward=self.axis_forward,
-                                         to_up=self.axis_up,
-                                         ).to_4x4())
-
-        keywords["global_matrix"] = global_matrix
-        return export_obj.save(context, **keywords)
+        from . import export_rtg
+        return export_rtg.save(context, self.filepath)
 
     def draw(self, context):
         pass
@@ -235,7 +161,7 @@ class ExportRTG(bpy.types.Operator, ExportHelper):
         
 @orientation_helper(axis_forward='-Z', axis_up='Y')
 class ImportESE(bpy.types.Operator, ImportHelper):
-    """Load a dynamic 3ds Max Euroland file"""
+    """Load a dynamic 3ds Max Euroland file; for cutscenes and maps"""
     bl_idname = "import_scene.ese"
     bl_label = "Import ESE"
     bl_options = {'PRESET', 'UNDO'}
@@ -248,37 +174,15 @@ class ImportESE(bpy.types.Operator, ImportHelper):
 
     def execute(self, context):
         print("Selected: " + context.active_object.name)
-        from . import import_eif
-
-        if self.split_mode == 'OFF':
-            self.use_split_objects = False
-            self.use_split_groups = False
-        else:
-            self.use_groups_as_vgroups = False
-
-        keywords = self.as_keywords(ignore=("axis_forward",
-                                            "axis_up",
-                                            "filter_glob",
-                                            "split_mode",
-                                            ))
-
-        global_matrix = axis_conversion(from_forward=self.axis_forward,
-                                        from_up=self.axis_up,
-                                        ).to_4x4()
-        keywords["global_matrix"] = global_matrix
-
-        if bpy.data.is_saved and context.preferences.filepaths.use_relative_paths:
-            import os
-            keywords["relpath"] = os.path.dirname(bpy.data.filepath)
-
-        return import_eif.load(context, **keywords)
+        from . import import_ese
+        return import_ese.load(context, self.filepath)
 
     def draw(self, context):
         pass
 
 @orientation_helper(axis_forward='-Z', axis_up='Y')
 class ExportESE(bpy.types.Operator, ExportHelper):
-    """Save a dynamic 3ds Max Euroland file"""
+    """Save a dynamic 3ds Max Euroland file; for cutscenes and maps"""
 
     bl_idname = "export_scene.ese"
     bl_label = 'Export ESE'
@@ -295,26 +199,12 @@ class ExportESE(bpy.types.Operator, ExportHelper):
     check_extension = True
 
     def execute(self, context):
-        from . import export_obj
-
-        from mathutils import Matrix
-        keywords = self.as_keywords(ignore=("axis_forward",
-                                            "axis_up",
-                                            "global_scale",
-                                            "check_existing",
-                                            "filter_glob",
-                                            ))
-
-        global_matrix = (Matrix.Scale(self.global_scale, 4) @
-                         axis_conversion(to_forward=self.axis_forward,
-                                         to_up=self.axis_up,
-                                         ).to_4x4())
-
-        keywords["global_matrix"] = global_matrix
-        return export_obj.save(context, **keywords)
+        from . import export_ese
+        return export_ese.save(context, self.filepath)
 
     def draw(self, context):
         pass
+
 
 def menu_func_eif_import(self, context):
     self.layout.operator(ImportEIF.bl_idname, text="Eurocom Interchange File (.eif)")
@@ -330,6 +220,7 @@ def menu_func_ese_import(self, context):
     self.layout.operator(ImportESE.bl_idname, text="Eurocom Scene Export (.ese)")
 def menu_func_ese_export(self, context):
     self.layout.operator(ExportESE.bl_idname, text="Eurocom Scene Export (.ese)")
+
 
 classes = (
     ImportEIF,
