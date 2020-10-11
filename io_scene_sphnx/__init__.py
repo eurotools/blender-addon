@@ -21,10 +21,10 @@
 bl_info = {
     "name": "Eurocom 3D formats for Sphinx and the Cursed Mummy",
     "author": "Swyter, for THQ Nordic",
-    "version": (3, 8, 0),
+    "version": (2020, 10, 10),
     "blender": (2, 81, 6),
     "location": "File > Import-Export",
-    "description": "Export EIF, ESE and RTG files compatible with Euroland.",
+    "description": "Export and import EIF, ESE and RTG files compatible with Euroland.",
     "warning": "",
     "doc_url": "https://sphinxandthecursedmummy.fandom.com/wiki/Technical",
     "tracker_url": "https://discord.gg/sphinx",
@@ -475,12 +475,25 @@ class OBJ_PT_export_geometry(bpy.types.Panel):
         layout.prop(operator, 'keep_vertex_order')
 
 
-def menu_func_import(self, context):
-    self.layout.operator(ImportOBJ.bl_idname, text="Eurocom Interchange Format (.eif)")
+def menu_func_eif_import(self, context):
+    self.layout.operator(ImportOBJ.bl_idname, text="Eurocom Interchange File format (.eif)")
+
+def menu_func_eif_export(self, context):
+    self.layout.operator(ExportOBJ.bl_idname, text="Eurocom Interchange File format (.eif)")
 
 
-def menu_func_export(self, context):
-    self.layout.operator(ExportOBJ.bl_idname, text="Eurocom Interchange Format (.eif)")
+def menu_func_ese_import(self, context):
+    self.layout.operator(ImportOBJ.bl_idname, text="Eurocom Scene Export format (.ese)")
+
+def menu_func_ese_export(self, context):
+    self.layout.operator(ExportOBJ.bl_idname, text="Eurocom Scene Export format (.ese)")
+
+
+def menu_func_rtg_import(self, context):
+    self.layout.operator(ImportOBJ.bl_idname, text="Eurocom Real Time Games format (.rtg)")
+    
+def menu_func_rtg_export(self, context):
+    self.layout.operator(ExportOBJ.bl_idname, text="Eurocom Real Time Games format (.rtg)")
 
 
 classes = (
@@ -499,13 +512,24 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
 
-    bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
-    bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
-
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_eif_import)
+    bpy.types.TOPBAR_MT_file_export.append(menu_func_eif_export)
+    
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_ese_import)
+    bpy.types.TOPBAR_MT_file_export.append(menu_func_ese_export)
+    
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_rtg_import)
+    bpy.types.TOPBAR_MT_file_export.append(menu_func_rtg_export)
 
 def unregister():
-    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
-    bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_eif_import)
+    bpy.types.TOPBAR_MT_file_export.remove(menu_func_eif_export)
+    
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_ese_import)
+    bpy.types.TOPBAR_MT_file_export.remove(menu_func_ese_export)
+    
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_rtg_import)
+    bpy.types.TOPBAR_MT_file_export.remove(menu_func_rtg_export)
 
     for cls in classes:
         bpy.utils.unregister_class(cls)
