@@ -15,7 +15,7 @@ jobs:
       id: pack
       run: | 
         7z a "sphinx-blender-tools-$(date +%Y.%m.%d-%H.%M -u).zip" io_scene_sphnx
-        echo ::set-output name=file_name::"$(find . -name '*tools*.zip' | sort -r -u | head -n 1)"
+        echo ::set-output name=file_name::`basename "$(find . -name '*tools*.zip' | sort -r -u | head -n 1)"`
         
     - name: Upload Release Asset
       id: upload-release-asset 
@@ -25,4 +25,5 @@ jobs:
       with:
         upload_url: https://uploads.github.com/repos/Swyter/sphinx-euroland/releases/32423809/assets
         asset_path: ${{ steps.pack.outputs.file_name }}
+        asset_name: ${{ steps.pack.outputs.file_name }}
         asset_content_type: application/zip
