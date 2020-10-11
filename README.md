@@ -3,6 +3,12 @@
 Import and export intermediate Eurocom formats for *Sphinx and the Cursed Mummy* in Blender.
 Heavily work in progress.
 
+# Formats
+
+The formats we aim to support are documented here:  
+https://sphinxandthecursedmummy.fandom.com/wiki/EIF  
+https://sphinxandthecursedmummy.fandom.com/wiki/RTG  
+https://sphinxandthecursedmummy.fandom.com/wiki/ESE  
 
 # To develop
 
