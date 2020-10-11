@@ -3,13 +3,13 @@
 Import and export intermediate Eurocom formats for *Sphinx and the Cursed Mummy* in Blender.
 Heavily work in progress.
 
-> ➥ ***You can [download the latest version from the Releases tab](downl)***
+> ➥ *You can [download the latest version from the Releases tab](downl)*.
 
 [downl]: https://github.com/Swyter/sphinx-euroland/releases/tag/latest
 
 # Formats
 
-> *The formats we aim to support are documented here:*
+> *The formats we aim to support are documented here:*  
 > **https://sphinxandthecursedmummy.fandom.com/wiki/Technical**
 
 
