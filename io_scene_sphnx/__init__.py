@@ -34,16 +34,15 @@ bl_info = {
 
 if "bpy" in locals():
     import importlib
+    
     if "import_eif" in locals():
         importlib.reload(import_eif)
     if "export_eif" in locals():
         importlib.reload(export_eif)
-        
     if "import_rtg" in locals():
         importlib.reload(import_rtg)
     if "export_rtg" in locals():
-        importlib.reload(export_rtg)
-        
+        importlib.reload(export_rtg)     
     if "import_ese" in locals():
         importlib.reload(import_ese)
     if "export_ese" in locals():
