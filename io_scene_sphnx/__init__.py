@@ -236,16 +236,16 @@ class OBJ_PT_import_geometry(bpy.types.Panel):
 
 
 @orientation_helper(axis_forward='-Z', axis_up='Y')
-class ExportOBJ(bpy.types.Operator, ExportHelper):
-    """Save a Wavefront OBJ File"""
+class ExportEIF(bpy.types.Operator, ExportHelper):
+    """Save a static 3ds Max Euroland file"""
 
-    bl_idname = "export_scene.obj"
-    bl_label = 'Export OBJ'
+    bl_idname = "export_scene.eif"
+    bl_label = 'Export EIF'
     bl_options = {'PRESET'}
 
-    filename_ext = ".obj"
+    filename_ext = ".eif"
     filter_glob: StringProperty(
-            default="*.obj;*.mtl",
+            default="*.eif",
             options={'HIDDEN'},
             )
 
@@ -479,21 +479,21 @@ def menu_func_eif_import(self, context):
     self.layout.operator(ImportEIF.bl_idname, text="Eurocom Interchange File (.eif)")
 
 def menu_func_eif_export(self, context):
-    self.layout.operator(ExportOBJ.bl_idname, text="Eurocom Interchange File (.eif)")
+    self.layout.operator(ExportEIF.bl_idname, text="Eurocom Interchange File (.eif)")
 
 
 def menu_func_ese_import(self, context):
     self.layout.operator(ImportEIF.bl_idname, text="Eurocom Scene Export (.ese)")
 
 def menu_func_ese_export(self, context):
-    self.layout.operator(ExportOBJ.bl_idname, text="Eurocom Scene Export (.ese)")
+    self.layout.operator(ExportEIF.bl_idname, text="Eurocom Scene Export (.ese)")
 
 
 def menu_func_rtg_import(self, context):
     self.layout.operator(ImportEIF.bl_idname, text="Eurocom Real Time Game (.rtg)")
     
 def menu_func_rtg_export(self, context):
-    self.layout.operator(ExportOBJ.bl_idname, text="Eurocom Real Time Game (.rtg)")
+    self.layout.operator(ExportEIF.bl_idname, text="Eurocom Real Time Game (.rtg)")
 
 
 classes = (
@@ -501,7 +501,7 @@ classes = (
     OBJ_PT_import_include,
     OBJ_PT_import_transform,
     OBJ_PT_import_geometry,
-    ExportOBJ,
+    ExportEIF,
     OBJ_PT_export_include,
     OBJ_PT_export_transform,
     OBJ_PT_export_geometry,
@@ -513,21 +513,21 @@ def register():
         bpy.utils.register_class(cls)
 
     bpy.types.TOPBAR_MT_file_import.append(menu_func_eif_import)
-    bpy.types.TOPBAR_MT_file_import.append(menu_func_ese_import)
     bpy.types.TOPBAR_MT_file_import.append(menu_func_rtg_import)
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_ese_import)
         
     bpy.types.TOPBAR_MT_file_export.append(menu_func_eif_export)
-    bpy.types.TOPBAR_MT_file_export.append(menu_func_ese_export)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_rtg_export)
+    bpy.types.TOPBAR_MT_file_export.append(menu_func_ese_export)
 
 def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_eif_import)
-    bpy.types.TOPBAR_MT_file_import.remove(menu_func_ese_import)
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_rtg_import)
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_ese_import)
     
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_eif_export)
-    bpy.types.TOPBAR_MT_file_export.remove(menu_func_ese_export)
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_rtg_export)
+    bpy.types.TOPBAR_MT_file_export.remove(menu_func_ese_export)
 
     for cls in classes:
         bpy.utils.unregister_class(cls)
