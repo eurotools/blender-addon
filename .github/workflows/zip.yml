@@ -1,0 +1,22 @@
+name: Zip it up
+on:
+  push:
+jobs:
+  build-lnx:
+    name: Linux
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install dependencies
+      run: | 
+        sudo apt install p7zip
+
+    - name: Pack things up
+      run: | 
+        7z a "sphinx-blender-tools-$(date +%Y.%m.%d-%H.%M -u).zip" io_scene_sphnx
+        
+    - name: Archive production artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: compiled
+        path: .
