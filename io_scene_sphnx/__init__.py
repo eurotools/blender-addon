@@ -1,3 +1,5 @@
+#  Copyright (c) 2020 Swyter <swyterzone+sphinx@gmail.com>
+#
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  This program is free software; you can redistribute it and/or
@@ -16,28 +18,26 @@
 #
 # ##### END GPL LICENSE BLOCK #####
 
-# <pep8-80 compliant>
-
 bl_info = {
-    "name": "Eurocom 3D formats for Sphinx and the Cursed Mummy",
-    "author": "Swyter, for THQ Nordic",
-    "version": (2020, 10, 10),
-    "blender": (2, 81, 6),
-    "location": "File > Import-Export",
+           "name": "Eurocom 3D formats for Sphinx and the Cursed Mummy",
+         "author": "Swyter, for THQ Nordic",
+        "version": (2020, 10, 10),
+        "blender": (2, 81, 6),
+       "location": "File > Import-Export",
     "description": "Export and import EIF, ESE and RTG files compatible with Euroland.",
-    "warning": "",
-    "doc_url": "https://sphinxandthecursedmummy.fandom.com/wiki/Technical",
+        "warning": "LOL ¯\_(ツ)_/¯",
+        "doc_url": "https://sphinxandthecursedmummy.fandom.com/wiki/Technical",
     "tracker_url": "https://discord.gg/sphinx",
-    "support": 'COMMUNITY',
-    "category": "Import-Export",
+        "support": 'COMMUNITY',
+       "category": "Import-Export",
 }
 
 if "bpy" in locals():
     import importlib
-    if "import_obj" in locals():
-        importlib.reload(import_obj)
-    if "export_obj" in locals():
-        importlib.reload(export_obj)
+    if "import_eif" in locals():
+        importlib.reload(import_eif)
+    if "export_eif" in locals():
+        importlib.reload(export_eif)
 
 
 import bpy
@@ -57,15 +57,15 @@ from bpy_extras.io_utils import (
 
 
 @orientation_helper(axis_forward='-Z', axis_up='Y')
-class ImportOBJ(bpy.types.Operator, ImportHelper):
-    """Load a static Euroland File"""
-    bl_idname = "import_scene.obj"
-    bl_label = "Import OBJ"
+class ImportEIF(bpy.types.Operator, ImportHelper):
+    """Load a static 3ds Max Euroland file"""
+    bl_idname = "import_scene.eif"
+    bl_label = "Import EIF"
     bl_options = {'PRESET', 'UNDO'}
 
-    filename_ext = ".obj"
+    filename_ext = ".eif"
     filter_glob: StringProperty(
-            default="*.obj;*.mtl",
+            default="*.eif",
             options={'HIDDEN'},
             )
 
@@ -120,8 +120,8 @@ class ImportOBJ(bpy.types.Operator, ImportHelper):
             )
 
     def execute(self, context):
-        # print("Selected: " + context.active_object.name)
-        from . import import_obj
+        print("Selected: " + context.active_object.name)
+        from . import import_eif
 
         if self.split_mode == 'OFF':
             self.use_split_objects = False
@@ -144,7 +144,7 @@ class ImportOBJ(bpy.types.Operator, ImportHelper):
             import os
             keywords["relpath"] = os.path.dirname(bpy.data.filepath)
 
-        return import_obj.load(context, **keywords)
+        return import_eif.load(context, **keywords)
 
     def draw(self, context):
         pass
@@ -476,28 +476,28 @@ class OBJ_PT_export_geometry(bpy.types.Panel):
 
 
 def menu_func_eif_import(self, context):
-    self.layout.operator(ImportOBJ.bl_idname, text="Eurocom Interchange File (.eif)")
+    self.layout.operator(ImportEIF.bl_idname, text="Eurocom Interchange File (.eif)")
 
 def menu_func_eif_export(self, context):
     self.layout.operator(ExportOBJ.bl_idname, text="Eurocom Interchange File (.eif)")
 
 
 def menu_func_ese_import(self, context):
-    self.layout.operator(ImportOBJ.bl_idname, text="Eurocom Scene Export (.ese)")
+    self.layout.operator(ImportEIF.bl_idname, text="Eurocom Scene Export (.ese)")
 
 def menu_func_ese_export(self, context):
     self.layout.operator(ExportOBJ.bl_idname, text="Eurocom Scene Export (.ese)")
 
 
 def menu_func_rtg_import(self, context):
-    self.layout.operator(ImportOBJ.bl_idname, text="Eurocom Real Time Games (.rtg)")
+    self.layout.operator(ImportEIF.bl_idname, text="Eurocom Real Time Game (.rtg)")
     
 def menu_func_rtg_export(self, context):
-    self.layout.operator(ExportOBJ.bl_idname, text="Eurocom Real Time Games (.rtg)")
+    self.layout.operator(ExportOBJ.bl_idname, text="Eurocom Real Time Game (.rtg)")
 
 
 classes = (
-    ImportOBJ,
+    ImportEIF,
     OBJ_PT_import_include,
     OBJ_PT_import_transform,
     OBJ_PT_import_geometry,
