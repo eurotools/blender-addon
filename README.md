@@ -5,17 +5,19 @@ Heavily work in progress.
 
 # Formats
 
-The formats we aim to support are documented here:
-https://sphinxandthecursedmummy.fandom.com/wiki/EIF
-https://sphinxandthecursedmummy.fandom.com/wiki/RTG  
-https://sphinxandthecursedmummy.fandom.com/wiki/ESE
+> The formats we aim to support are documented here:  
+> *https://sphinxandthecursedmummy.fandom.com/wiki/Technical*
 
 
-| Format        | Entities       | Maps         | Animations     | Scripts     |
-|:------------- | :------------- | :----------: | -----------:   | -----------:|
-|EIG            | ✓              | ✓           |                |             |
-|RTG            | ✓              | ✓           | ✓              | ✓           |
-|ESE            | ✓              | ✓           | ✓              | ✓          |
+| Format   | Entities       | Maps         | Animations + Skins | Scripts     |
+| :------- | :------------- | :----------- | ------------------ | ----------- |
+| [EIF]    | ✓              | ✓            |                    |             |
+| [RTG]    | ✓              | ✓            | ✓                  | ✓           |
+| [ESE]    | ✓              | ✓            | ✓                  | ✓           |
+
+[EIF]: https://sphinxandthecursedmummy.fandom.com/wiki/EIF
+[RTG]: https://sphinxandthecursedmummy.fandom.com/wiki/RTG
+[ESE]: https://sphinxandthecursedmummy.fandom.com/wiki/ESE
 
 # To develop
 
