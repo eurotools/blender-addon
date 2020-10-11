@@ -15,28 +15,18 @@ jobs:
       id: pack
       run: | 
         7z a "sphinx-blender-tools-$(date +%Y.%m.%d-%H.%M -u).zip" io_scene_sphnx
-        
-        export file_name="$(find . -name '*tools*.zip' | sort -r -u | head -n 1)"
-        
-        echo ::set-output name=file_name::"$file_name"
-        echo ::set-output name=base_name::"$(basename $file_name)"
-        
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.TK }}
-      with:
-        tag_name: latest
-        release_name: Latest version
 
     - name: Upload Release Asset
-      id: upload-release-asset 
-      uses: actions/upload-release-asset@v1
+      id: upload-release-asset
       env:
         GITHUB_TOKEN: ${{ secrets.TK }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ${{ steps.pack.outputs.file_name }}
-        asset_name: ${{ steps.pack.outputs.base_name }}
-        asset_content_type: application/zip
+      run: |
+        owner="Swyter"
+        repo="sphinx-euroland"
+        release_id="32423809"
+        
+        FILENAME="$(find . -name '*tools*.zip' | sort -r -u | head -n 1)"
+        GH_ASSET="https://uploads.github.com/repos/$owner/$repo/releases/$release_id/assets?name=$FILENAME"
+        
+        echo "$GH_ASSET"; echo "$FILENAME"
+        curl --data-binary @"$FILENAME" -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" "$GH_ASSET"
