@@ -25,5 +25,4 @@ jobs:
       with:
         upload_url: https://uploads.github.com/repos/Swyter/sphinx-euroland/releases/32423809/assets
         asset_path: ${{ steps.pack.outputs.file_name }}
-        asset_name: ${{ steps.pack.outputs.file_name }}
         asset_content_type: application/zip
