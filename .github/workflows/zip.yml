@@ -15,15 +15,28 @@ jobs:
       id: pack
       run: | 
         7z a "sphinx-blender-tools-$(date +%Y.%m.%d-%H.%M -u).zip" io_scene_sphnx
-        echo ::set-output name=file_name::"$(find . -name '*tools*.zip' | sort -r -u | head -n 1)"
         
+        export file_name="$(find . -name '*tools*.zip' | sort -r -u | head -n 1)"
+        
+        echo ::set-output name=file_name::"$file_name"
+        echo ::set-output name=base_name::"$(basename $file_name)"
+        
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.TK }}
+      with:
+        tag_name: latest
+        release_name: Latest version
+
     - name: Upload Release Asset
       id: upload-release-asset 
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.TK }}
       with:
-        upload_url: "https://uploads.github.com/repos/Swyter/sphinx-euroland/releases/32423809/assets?name="
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ steps.pack.outputs.file_name }}
-        asset_name: "`basename ${{ steps.pack.outputs.file_name }}`"
+        asset_name: ${{ steps.pack.outputs.base_name }}
         asset_content_type: application/zip
