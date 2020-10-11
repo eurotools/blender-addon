@@ -259,9 +259,11 @@ def register():
     bpy.types.TOPBAR_MT_file_export.append(menu_func_rtg_export)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_ese_export)
     
-    # swy: don't unregister this because Blender crashes with a EXCEPTION_ACCESS_VIOLATION
-    #      when the add-on reenable function reloads itself:
-    #      WM_operator_pystring_ex > RNA_pointer_as_string_keywords > RNA_pointer_as_string_keywords_ex > RNA_property_as_string > Macro_bl_label_length
+    # swy: don't unregister this because Blender crashes with an EXCEPTION_ACCESS_VIOLATION
+    #      when the add-on reenable function reloads itself, kind of sucky. load it once:
+    #       WM_operator_pystring_ex > RNA_pointer_as_string_keywords >
+    #        RNA_pointer_as_string_keywords_ex > RNA_property_as_string >
+    #          Macro_bl_label_length
     if not hasattr(bpy.types, bpy.ops.wm.reload_sphnx.idname()):
         bpy.utils.register_class(ReloadAddon)
 
