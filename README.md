@@ -5,10 +5,17 @@ Heavily work in progress.
 
 # Formats
 
-The formats we aim to support are documented here:  
-https://sphinxandthecursedmummy.fandom.com/wiki/EIF  
+The formats we aim to support are documented here:
+https://sphinxandthecursedmummy.fandom.com/wiki/EIF
 https://sphinxandthecursedmummy.fandom.com/wiki/RTG  
-https://sphinxandthecursedmummy.fandom.com/wiki/ESE  
+https://sphinxandthecursedmummy.fandom.com/wiki/ESE
+
+
+| Format        | Entities       | Maps         | Animations     | Scripts     |
+|:------------- | :------------- | :----------: | -----------:   | -----------:|
+|EIG            | ✓              | ✓           |                |             |
+|RTG            | ✓              | ✓           | ✓              | ✓           |
+|ESE            | ✓              | ✓           | ✓              | ✓          |
 
 # To develop
 
