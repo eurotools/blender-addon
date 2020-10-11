@@ -21,11 +21,9 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.TK }}
       run: |
-        owner="Swyter"
-        repo="sphinx-euroland"
-        release_id="32423809"
+        owner="Swyter"; repo="sphinx-euroland"; release_id="32423809"
         
-        FILENAME="$(find . -name '*tools*.zip' | sort -r -u | head -n 1)"
+        FILENAME="$(basename "$(find . -name '*tools*.zip' | sort -r -u | head -n 1)")"
         GH_ASSET="https://uploads.github.com/repos/$owner/$repo/releases/$release_id/assets?name=$FILENAME"
         
         echo "$GH_ASSET"; echo "$FILENAME"
