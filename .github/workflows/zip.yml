@@ -23,7 +23,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.TK }}
       with:
-        upload_url: https://uploads.github.com/repos/Swyter/sphinx-euroland/releases/32423809/assets
+        upload_url: "https://uploads.github.com/repos/Swyter/sphinx-euroland/releases/32423809/assets?name="
         asset_path: ${{ steps.pack.outputs.file_name }}
         asset_name: "`basename ${{ steps.pack.outputs.file_name }}`"
         asset_content_type: application/zip
