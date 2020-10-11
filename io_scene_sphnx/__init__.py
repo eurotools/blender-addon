@@ -204,6 +204,21 @@ class ExportESE(bpy.types.Operator, ExportHelper):
 
     def draw(self, context):
         pass
+        
+
+class ReloadAddon(bpy.types.Operator):
+    """Reloads the whole Eurocom 3D tools, for development """
+    bl_idname = "wm.reload_sphnx"
+    bl_label = "Reload the Eurocom Add-on (for development)"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        bpy.ops.preferences.addon_enable(module='io_scene_sphnx')
+        print("LOLOL")
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return self.execute(context)
 
 
 def menu_func_eif_import(self, context):
@@ -243,6 +258,12 @@ def register():
     bpy.types.TOPBAR_MT_file_export.append(menu_func_eif_export)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_rtg_export)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_ese_export)
+    
+    # swy: don't unregister this because Blender crashes with a EXCEPTION_ACCESS_VIOLATION
+    #      when the add-on reenable function reloads itself:
+    #      WM_operator_pystring_ex > RNA_pointer_as_string_keywords > RNA_pointer_as_string_keywords_ex > RNA_property_as_string > Macro_bl_label_length
+    if not hasattr(bpy.types, bpy.ops.wm.reload_sphnx.idname()):
+        bpy.utils.register_class(ReloadAddon)
 
 def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_eif_import)
