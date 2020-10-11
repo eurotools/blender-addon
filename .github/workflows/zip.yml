@@ -13,8 +13,16 @@ jobs:
 
     - name: Pack things up
       id: pack
-      run: | 
-        7z a "sphinx-blender-tools-$(date +%Y.%m.%d-%H.%M -u).zip" io_scene_sphnx
+      env:
+        CUR_COMMIT: ${{ github.sha }}
+      run: |
+        curr_run_sha="$CUR_COMMIT"
+        prev_run_sha="`curl -s --fail 'https://api.github.com/repos/Swyter/sphinx-euroland/actions/workflows/2949131/runs' | jq .workflow_runs[0].head_sha`"
+        
+        # swy: only pack it when the folder has changed since the last time we ran a GitHub Actions job
+        if [[ -z $(git diff --quiet "$curr_run_sha" "$prev_run_sha" -- io_scene_sphnx || echo changed) ]]; then
+          7z a "sphinx-blender-tools-$(date +%Y.%m.%d-%H.%M -u).zip" io_scene_sphnx
+        fi
 
     - name: Upload Release Asset
       id: upload-release-asset
@@ -25,6 +33,10 @@ jobs:
         
         FILENAME="$(basename "$(find . -name '*tools*.zip' | sort -r -u | head -n 1)")"
         GH_ASSET="https://uploads.github.com/repos/$owner/$repo/releases/$release_id/assets?name=$FILENAME"
-        
         echo "$GH_ASSET"; echo "$FILENAME"
-        curl --data-binary @"$FILENAME" -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" "$GH_ASSET"
+        
+        if [[ -f "$FILENAME" ]]; then
+          curl --fail --data-binary @"$FILENAME" -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" "$GH_ASSET"
+        else
+          print("[no changes in the add-on folder this time around; skipped]")
+        fi
