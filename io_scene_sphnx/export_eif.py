@@ -138,9 +138,24 @@ def save(context,
                 #Print Shader faces
                 if (len(me.uv_layers) > 1):
                     ow("\t*FACESHADERS {\n")
-                    
                     ow("\t}\n")
-                ow("\t*FACEFORMAT VTCNMFS")
+                ow("\t*FACEFORMAT V\n")
+                
+                #Print Face list
+                ow("\t*FACE_LIST {\n")
+                for poly in me.polygons:
+                    #Get polygon vertices
+                    PolygonVertices = poly.vertices
+                    
+                    #Write vertices
+                    ow("\t\t%d " % (len(PolygonVertices)))
+                    for vert in PolygonVertices:
+                        ow("%d " % vert)
+                    ow("\n")
+                ow("\t}\n")
+                
+                #Close Tag
+                ow("}\n")
 
     time_now = datetime.datetime.utcnow()
 
