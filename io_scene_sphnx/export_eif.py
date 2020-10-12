@@ -80,17 +80,17 @@ def save(context,
                 
                 #==================GET VERTEX LIST==============================
                 for vertex in me.vertices:
-                    VertexList.append("%s,%s,%s" % (str(vertex.co.x),str(vertex.co.y),str(vertex.co.z)))
+                    VertexList.append("%.6f,%.6f,%.6f" % (vertex.co.x,vertex.co.y,vertex.co.z))
  
                  #==================GET UV LIST==============================                   
                 for poly in me.polygons:
                     for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
-                        UVList.append("%s,%s" % (str(uv_layer[loop_index].uv.x),str(uv_layer[loop_index].uv.y)))
+                        UVList.append("%.6f,%.6f" % (uv_layer[loop_index].uv.x,uv_layer[loop_index].uv.y))
                         
                  #==================GET Vertex Color LIST==============================               
                 if(bool(me.vertex_colors.active)):
                     for vertex in me.vertex_colors[0].data:
-                        VertColList.append("%s,%s,%s,%s" % (str(vertex.color[0]),str(vertex.color[1]),str(vertex.color[2]),str(vertex.color[3])))
+                        VertColList.append("%.6f,%.6f,%.6f,%.6f" % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3]))
                 
                 #===================COUNT TRIS======================
                 for face in me.polygons:
@@ -117,14 +117,14 @@ def save(context,
                 ow("\t*VERTEX_LIST {\n")
                 for list_item in VertexList:
                     dataSplit = list_item.split(",")
-                    ow("\t\t%.6f %.6f %.6f\n" % (float(dataSplit[0]), float(dataSplit[1]), float(dataSplit[2])))
+                    ow("\t\t%s %s %s\n" % (dataSplit[0], dataSplit[1], dataSplit[2]))
                 ow("\t}\n")
                 
                 #Print UV data
                 ow("\t*UV_LIST {\n")
                 for list_item in UVList:
                     dataSplit = list_item.split(",")
-                    ow("\t\t%.6f %.6f\n" % (float(dataSplit[0]), float(dataSplit[1])))
+                    ow("\t\t%s %s\n" % (dataSplit[0], dataSplit[1]))
                 ow("\t}\n")
                 
                 #Check if the vertex colors layer is active
@@ -132,7 +132,7 @@ def save(context,
                     ow("\t*VERTCOL_LIST {\n")
                     for list_item in VertColList:
                         dataSplit = list_item.split(",")
-                        ow("\t\t%.6f %.6f %.6f %.6f\n" % (float(dataSplit[0]), float(dataSplit[1]), float(dataSplit[2]), float(dataSplit[3])))                    
+                        ow("\t\t%s %s %s %s\n" % (dataSplit[0], dataSplit[1], dataSplit[2], dataSplit[3]))                    
                     ow("\t}\n")
                     
                 #Print Shader faces
@@ -146,18 +146,16 @@ def save(context,
                 for poly in me.polygons:
                     #Get polygon vertices
                     PolygonVertices = poly.vertices
-                    
+                    TotalIndexVertex = []
                     #Write vertices
                     ow("\t\t%d " % (len(PolygonVertices)))
                     for vert in PolygonVertices:
+                        TotalIndexVertex.append(vert) 
                         ow("%d " % vert)
-                        
                     #Wrtie UVs
-                    for vert_idx, loop_idx in zip(poly.vertices, poly.loop_indices):
-                        uv_coords = ob.data.uv_layers.active.data[loop_idx].uv
-                        print("face idx: %i, vert idx: %i, uvs: %f, %f" % (poly.index, vert_idx, uv_coords.x, uv_coords.y))
-                        ow("%d %d " % (uv_coords.x, uv_coords.y))
-                        
+                    for Item in TotalIndexVertex:
+                        CalcIndex = (poly.index *len(PolygonVertices)) + TotalIndexVertex.index(Item)
+                        ow("%d " % CalcIndex)
                     ow("\n")
                 ow("\t}\n")
                 
