@@ -139,7 +139,7 @@ def save(context,
                 if (len(me.uv_layers) > 1):
                     ow("\t*FACESHADERS {\n")
                     ow("\t}\n")
-                ow("\t*FACEFORMAT V\n")
+                ow("\t*FACEFORMAT VT\n")
                 
                 #Print Face list
                 ow("\t*FACE_LIST {\n")
@@ -151,6 +151,13 @@ def save(context,
                     ow("\t\t%d " % (len(PolygonVertices)))
                     for vert in PolygonVertices:
                         ow("%d " % vert)
+                        
+                    #Wrtie UVs
+                    for vert_idx, loop_idx in zip(poly.vertices, poly.loop_indices):
+                        uv_coords = ob.data.uv_layers.active.data[loop_idx].uv
+                        print("face idx: %i, vert idx: %i, uvs: %f, %f" % (poly.index, vert_idx, uv_coords.x, uv_coords.y))
+                        ow("%d %d " % (uv_coords.x, uv_coords.y))
+                        
                     ow("\n")
                 ow("\t}\n")
                 
@@ -168,6 +175,7 @@ def save(context,
 
     #print scene info
     ow("*SCENE {\n")
+    ow("\t*FILENAME \"%s\"\n" % (os.path.abspath(r'C:\Users\Jordi Martinez\Desktop\Sphinx and the shadow of set\CutScenes\Abydos\CS_Aby_South.elf')))
     ow("\t*FIRSTFRAME %d\n" % (scn.frame_start))
     ow("\t*LASTFRAME %d\n" % (scn.frame_end))
     ow("\t*FRAMESPEED %d\n" % (scn.render.fps))  
@@ -188,4 +196,4 @@ def save(context,
     
     
 if __name__ == "__main__":
-    save({}, str(Path.home()) + "\\Desktop\\TestEIF.EIF")
+    save({}, str(Path.home()) + "\\Desktop\\TestEIF.eif")
