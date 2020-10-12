@@ -49,10 +49,12 @@ def save(context,
         for obj in bpy.context.scene.objects:
             for s in obj.material_slots:
                 if s.material and s.material.use_nodes:
+                    DiffuseColor = s.material.diffuse_color
                     for n in s.material.node_tree.nodes:
                         if n.type == 'TEX_IMAGE':                
                             ow("\t*MATERIAL %d {\n" % (MaterialIndex))
-                            ow("\t\t*NAME \"%s\"\n" % (os.path.splitext(n.image.name)[0]))                    
+                            ow("\t\t*NAME \"%s\"\n" % (os.path.splitext(n.image.name)[0]))
+                            ow("\t\t*COL_DIFFUSE %.6f %.6f %.6f\n" % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
                             ow("\t\t*MAP_DIFFUSE \"%s\"\n" % (bpy.path.abspath(n.image.filepath)))      
                             #Check if the texture exists
                             if (os.path.exists(bpy.path.abspath(n.image.filepath))):
@@ -71,29 +73,74 @@ def save(context,
             if ob.type == 'MESH':
                 me = ob.data
                 uv_layer = me.uv_layers.active.data
-                  
-                ow("*MESH {\n")    
-                ow("\t*NAME %s\n" % (me.name))
-                ow("\t*VERTCOUNT %d\n" % (len(me.vertices)))
-                ow("\t*FACECOUNT %d\n" % (len(me.polygons)))
-                ow("\t*FACELAYERSCOUNT 1\n")
-                ow("\t*FACESHADERCOUNT 1\n")
-                ow("\t*VERTEX_LIST {\n")
-                for v in me.vertices:
-                    ow("\t\t%.6f %.6f %.6f\n" % (v.co.x, v.co.y, v.co.z))
-                ow("\t}\n")
-                ow("\t*UV_LIST {\n")            
+                total_triangles = 0
+                VertexList = []
+                UVList = []
+                VertColList = []
+                
+                #==================GET VERTEX LIST==============================
+                for vertex in me.vertices:
+                    VertexList.append("%s,%s,%s" % (str(vertex.co.x),str(vertex.co.y),str(vertex.co.z)))
+ 
+                 #==================GET UV LIST==============================                   
                 for poly in me.polygons:
                     for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
-                        ow("\t\t%.6f %.6f\n" % (uv_layer[loop_index].uv.x, uv_layer[loop_index].uv.y))
+                        UVList.append("%s,%s" % (str(uv_layer[loop_index].uv.x),str(uv_layer[loop_index].uv.y)))
+                        
+                 #==================GET Vertex Color LIST==============================               
+                if(bool(me.vertex_colors.active)):
+                    for vertex in me.vertex_colors[0].data:
+                        VertColList.append("%s,%s,%s,%s" % (str(vertex.color[0]),str(vertex.color[1]),str(vertex.color[2]),str(vertex.color[3])))
+                
+                #===================COUNT TRIS======================
+                for face in me.polygons:
+                    vertices = face.vertices
+                    triangles = len(vertices) - 2
+                    total_triangles += triangles
+                        
+                #==================PRINT DATA==============================
+                ow("*MESH {\n")    
+                ow("\t*NAME \"%s\"\n" % (me.name))
+                ow("\t*VERTCOUNT %d\n" % (len(VertexList)))
+                ow("\t*UVCOUNT %d\n" % (len(UVList)))
+                if(len(VertColList) > 0):
+                    ow("\t*VERTCOLCOUNT %d\n" % (len(VertColList)))
+                ow("\t*FACECOUNT %d\n" % (len(me.polygons)))
+                ow("\t*TRIFACECOUNT %d\n" % (total_triangles))
+                ow("\t*FACELAYERSCOUNT %d\n" % len(me.uv_layers))
+                
+                #Check if there are more than one layer
+                if (len(me.uv_layers) > 1):
+                    ow("\t*FACESHADERCOUNT %d\n" % len(me.uv_layers))
+                
+                #Print Vertex data
+                ow("\t*VERTEX_LIST {\n")
+                for list_item in VertexList:
+                    dataSplit = list_item.split(",")
+                    ow("\t\t%.6f %.6f %.6f\n" % (float(dataSplit[0]), float(dataSplit[1]), float(dataSplit[2])))
+                ow("\t}\n")
+                
+                #Print UV data
+                ow("\t*UV_LIST {\n")
+                for list_item in UVList:
+                    dataSplit = list_item.split(",")
+                    ow("\t\t%.6f %.6f\n" % (float(dataSplit[0]), float(dataSplit[1])))
                 ow("\t}\n")
                 
                 #Check if the vertex colors layer is active
-                if(bool(me.vertex_colors.active)):
+                if(len(VertColList) > 0):
                     ow("\t*VERTCOL_LIST {\n")
-                    for v in me.vertex_colors[0].data:
-                        ow("\t\t%.6f %.6f %.6f %.6f\n" % (v.color[0], v.color[1], v.color[2], v.color[3]))                    
+                    for list_item in VertColList:
+                        dataSplit = list_item.split(",")
+                        ow("\t\t%.6f %.6f %.6f %.6f\n" % (float(dataSplit[0]), float(dataSplit[1]), float(dataSplit[2]), float(dataSplit[3])))                    
                     ow("\t}\n")
+                    
+                #Print Shader faces
+                if (len(me.uv_layers) > 1):
+                    ow("\t*FACESHADERS {\n")
+                    
+                    ow("\t}\n")
+                ow("\t*FACEFORMAT VTCNMFS")
 
     time_now = datetime.datetime.utcnow()
 
