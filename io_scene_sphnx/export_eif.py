@@ -7,6 +7,7 @@ from math import *
 from pathlib import Path
 from bpy_extras.io_utils import axis_conversion
 from bpy import context
+from pprint import pprint
 
 def save(context,
          filepath,
@@ -83,9 +84,10 @@ def save(context,
                     VertexList.append("%.6f,%.6f,%.6f" % (vertex.co.x,vertex.co.y,vertex.co.z))
  
                  #==================GET UV LIST==============================                   
-                for poly in me.polygons:
-                    for loop_index in range(poly.loop_start, poly.loop_start + poly.loop_total):
-                        UVList.append("%.6f,%.6f" % (uv_layer[loop_index].uv.x,uv_layer[loop_index].uv.y))
+                for count, poly in enumerate(me.polygons):
+                    for loop_index in poly.loop_indices:
+                        print(count, loop_index, "uv_layer len:", len(me.uv_layers))
+                        UVList.append("%.6f,%.6f" % (uv_layer[0].uv.x,uv_layer[0].uv.y))
                         
                  #==================GET Vertex Color LIST==============================               
                 if(bool(me.vertex_colors.active)):
@@ -141,6 +143,8 @@ def save(context,
                     ow("\t}\n")
                 ow("\t*FACEFORMAT VT\n")
                 
+                CalcIndex = 0
+                
                 #Print Face list
                 ow("\t*FACE_LIST {\n")
                 for poly in me.polygons:
@@ -152,10 +156,10 @@ def save(context,
                     for vert in PolygonVertices:
                         TotalIndexVertex.append(vert) 
                         ow("%d " % vert)
-                    #Wrtie UVs
-                    for Item in TotalIndexVertex:
-                        CalcIndex = (poly.index *len(PolygonVertices)) + TotalIndexVertex.index(Item)
+                    # Write UVs
+                    for Item in PolygonVertices:
                         ow("%d " % CalcIndex)
+                        CalcIndex += 1
                     ow("\n")
                 ow("\t}\n")
                 
@@ -182,7 +186,7 @@ def save(context,
     ow("}\n\n")
 
     #Write materials
-    GetMaterials()
+#    GetMaterials()
 
     #Write Meshes
     GetMesh()
