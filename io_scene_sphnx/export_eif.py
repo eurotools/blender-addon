@@ -36,7 +36,7 @@ def save(context,
     #Open writer
     out = open(filepath, "w")
     
-    print("exporting", filepath)
+    print("[i] exporting", filepath)
 
     #Get scene info
     scn = bpy.context.scene 
@@ -69,10 +69,13 @@ def save(context,
         
     def GetMesh():
         for ob in scn.objects:
+            if ob.hide_viewport:
+                continue
+            
             if ob.type == 'MESH':
                 me = ob.data
                 uv_layer = me.uv_layers.active.data
-                total_triangles = 0
+
                 VertexList = []
                 UVList = []
                 VertColList = []
@@ -81,22 +84,21 @@ def save(context,
                 for vertex in me.vertices:
                     VertexList.append("%.6f,%.6f,%.6f" % (vertex.co.x,vertex.co.y,vertex.co.z))
  
-                 #==================GET UV LIST==============================                   
-                for count, poly in enumerate(me.polygons):
-                    for loop_index in poly.loop_indices:
-                        print(count, loop_index, "uv_layer len:", len(me.uv_layers))
-                        UVList.append("%.6f,%.6f" % (uv_layer[0].uv.x,uv_layer[0].uv.y))
+                 #==================GET UV LIST==============================
+                if len(me.vertex_colors):
+                    for pl_count, poly in enumerate(me.polygons):
+                        for li_count, loop_index in enumerate(poly.loop_indices):
+                            print(pl_count, li_count, loop_index, "uv_layer len:", len(uv_layer))
+                            UVList.append("%.6f,%.6f" % (uv_layer[loop_index].uv.x,uv_layer[loop_index].uv.y))
                         
                  #==================GET Vertex Color LIST==============================               
-                if(bool(me.vertex_colors.active)):
-                    for vertex in me.vertex_colors[0].data:
+                if len(me.vertex_colors):
+                    for vertex in me.vertex_colors.active.data:
                         VertColList.append("%.6f,%.6f,%.6f,%.6f" % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3]))
                 
                 #===================COUNT TRIS======================
                 for face in me.polygons:
                     vertices = face.vertices
-                    triangles = len(vertices) - 2
-                    total_triangles += triangles
                         
                 #==================PRINT DATA==============================
                 ow("*MESH {\n")    
@@ -106,7 +108,6 @@ def save(context,
                 if(len(VertColList) > 0):
                     ow("  *VERTCOLCOUNT %d\n" % (len(VertColList)))
                 ow("  *FACECOUNT %d\n" % (len(me.polygons)))
-                ow("  *TRIFACECOUNT %d\n" % (total_triangles))
                 ow("  *FACELAYERSCOUNT %d\n" % len(me.uv_layers))
                 
                 #Check if there are more than one layer
@@ -139,9 +140,10 @@ def save(context,
                 if (len(me.uv_layers) > 1):
                     ow("  *FACESHADERS {\n")
                     ow("  }\n")
-                ow("  *FACEFORMAT VT\n")
+                ow("  *FACEFORMAT VTC\n")
                 
-                CalcIndex = 0
+                uv_index = 0
+                co_index = 0
                 
                 #Print Face list
                 ow("  *FACE_LIST {\n")
@@ -156,8 +158,12 @@ def save(context,
                         ow("%d " % vert)
                     # Write UVs
                     for Item in PolygonVertices:
-                        ow("%d " % CalcIndex)
-                        CalcIndex += 1
+                        ow("%d " % uv_index)
+                        uv_index += 1
+                        
+                    for Item in PolygonVertices:
+                        ow("%d " % co_index)
+                        co_index += 1
                     ow("\n")
                 ow("  }\n")
                 
@@ -172,9 +178,9 @@ def save(context,
 
     #print scene info
     ow("*SCENE {\n")
-    ow("  *FIRSTFRAME %d\n" % (scn.frame_start))
-    ow("  *LASTFRAME %d\n"  % (scn.frame_end  ))
-    ow("  *FRAMESPEED %d\n" % (scn.render.fps ))
+    ow("  *FIRSTFRAME  %d\n" % (scn.frame_start))
+    ow("  *LASTFRAME   %d\n" % (scn.frame_end  ))
+    ow("  *FRAMESPEED  %d\n" % (scn.render.fps ))
     ow("  *STATICFRAME 0\n")
     ow("  *AMBIENTSTATIC 1.0 1.0 1.0\n")
     ow("}\n\n")
@@ -187,9 +193,10 @@ def save(context,
 
     #Close writer
     out.close()
-
+    print('[i] done')
+    
     return {'FINISHED'}
     
     
 if __name__ == "__main__":
-    save({}, str(Path.home()) + "/Desktop/testEIF_b.eif")
+    save({}, str(Path.home()) + "/Desktop/testEIF_d.eif")
