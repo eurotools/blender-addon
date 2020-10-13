@@ -70,8 +70,8 @@ def save(context,
     def GetMesh():
         for ob in scn.objects:
             #Invert 'Y' 'Z'
-            m = axis_conversion("Y", "Z", "Z", "Y").to_4x4()
-            ob.matrix_world = m * ob.matrix_world
+            #m = axis_conversion("Y", "Z", "Z", "Y").to_4x4()
+            #ob.matrix_world = m * ob.matrix_world
             
             if ob.hide_viewport:
                 continue
@@ -94,13 +94,15 @@ def save(context,
                 if len(me.vertex_colors):
                     for pl_count, poly in enumerate(me.polygons):
                         for li_count, loop_index in enumerate(poly.loop_indices):
-                            print(pl_count, li_count, loop_index, "uv_layer len:", len(uv_layer))
+                            #print(pl_count, li_count, loop_index, "uv_layer len:", len(uv_layer))
                             UVList.append("%.6f,%.6f" % (uv_layer[loop_index].uv.x,uv_layer[loop_index].uv.y))
+                    UVList = list(dict.fromkeys(UVList))
                         
                  #==================GET Vertex Color LIST==============================               
                 if len(me.vertex_colors):
                     for vertex in me.vertex_colors.active.data:
                         VertColList.append("%.6f,%.6f,%.6f,%.6f" % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3]))
+                    VertColList = list(dict.fromkeys(VertColList))
                 
                 #===================COUNT TRIS======================
                 for face in me.polygons:
@@ -161,22 +163,22 @@ def save(context,
                 for poly in me.polygons:
                     #Get polygon vertices
                     PolygonVertices = poly.vertices
-                    TotalIndexVertex = []
-                    
+                
                     #Write vertices
                     ow("    %d " % (len(PolygonVertices)))
                     for vert in PolygonVertices:
-                        TotalIndexVertex.append(vert) 
                         ow("%d " % vert)
-                    # Write UVs
+                    #Write UVs
                     if ("T" in FaceFormat):
-                        for Item in PolygonVertices:
-                            ow("%d " % uv_index)
-                            uv_index += 1
+                        for vert_idx, loop_idx in enumerate(poly.loop_indices):
+                            uv_coords = me.uv_layers.active.data[loop_idx].uv
+                            ow("%d " % UVList.index("%.6f,%.6f" % (uv_coords.x, uv_coords.y)))
+                            
+                    #Write Colors
                     if ("C" in FaceFormat):
-                        for Item in PolygonVertices:
-                            ow("%d " % co_index)
-                            co_index += 1
+                        for color_idx, loop_idx in enumerate(poly.loop_indices):
+                            vertex = me.vertex_colors.active.data[loop_idx]
+                            ow("%d " % VertColList.index("%.6f,%.6f,%.6f,%.6f" % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3])))
                     ow("\n")
                 ow("  }\n")
                 
