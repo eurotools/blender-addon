@@ -69,6 +69,10 @@ def save(context,
         
     def GetMesh():
         for ob in scn.objects:
+            #Invert 'Y' 'Z'
+            m = axis_conversion("Y", "Z", "Z", "Y").to_4x4()
+            ob.matrix_world = m * ob.matrix_world
+            
             if ob.hide_viewport:
                 continue
             
@@ -82,7 +86,7 @@ def save(context,
                 
                 #==================GET VERTEX LIST==============================
                 for vertex in me.vertices:
-                    VertexList.append("%.6f,%.6f,%.6f" % (vertex.co.x,vertex.co.y,vertex.co.z))
+                    VertexList.append("%.6f,%.6f,%.6f" % (vertex.co.x,vertex.co.z,vertex.co.y))
  
                  #==================GET UV LIST==============================
                 if len(me.vertex_colors):
