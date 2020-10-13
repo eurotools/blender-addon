@@ -41,7 +41,14 @@ def save(context,
     #Get scene info
     scn = bpy.context.scene 
     ow  = out.write
- 
+    Materials_Dict = dict()
+    
+    def GetMaterialIndex(MaterialName):
+        for index, material in Materials_Dict.items():
+            if material == MaterialName:
+                print(index)
+        return index
+    
     def GetMaterials():
         MaterialIndex = 0
             
@@ -61,6 +68,9 @@ def save(context,
                             if (os.path.exists(bpy.path.abspath(n.image.filepath))):
                                 ow("    *TWOSIDED\n")
                             ow("    *MAP_DIFFUSE_AMOUNT 1.0\n")
+                            
+                            #Add data to dictionary
+                            Materials_Dict[MaterialIndex] = os.path.splitext(n.image.name)[0]
                             
                             #Add 1 to the materials index
                             MaterialIndex +=1
@@ -146,6 +156,9 @@ def save(context,
                         dataSplit = list_item.split(",")
                         ow("    %s %s %s %s\n" % (dataSplit[0], dataSplit[1], dataSplit[2], dataSplit[3]))                    
                     ow("  }\n")
+                
+                if len(ob.material_slots) > 0:
+                    FaceFormat +="M"
                     
                 #Print Shader faces
                 if (len(me.uv_layers) > 1):
@@ -163,7 +176,7 @@ def save(context,
                 for poly in me.polygons:
                     #Get polygon vertices
                     PolygonVertices = poly.vertices
-                
+                    
                     #Write vertices
                     ow("    %d " % (len(PolygonVertices)))
                     for vert in PolygonVertices:
@@ -179,6 +192,14 @@ def save(context,
                         for color_idx, loop_idx in enumerate(poly.loop_indices):
                             vertex = me.vertex_colors.active.data[loop_idx]
                             ow("%d " % VertColList.index("%.6f,%.6f,%.6f,%.6f" % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3])))
+                    
+                    #Write Material Index
+                    if ("M" in FaceFormat):
+                        for s in ob.material_slots:
+                            if s.material and s.material.use_nodes:
+                                for n in s.material.node_tree.nodes:
+                                    if n.type == 'TEX_IMAGE':
+                                        ow("%d " % GetMaterialIndex(os.path.splitext(n.image.name)[0]))
                     ow("\n")
                 ow("  }\n")
                 
@@ -201,7 +222,7 @@ def save(context,
     ow("}\n\n")
 
     #Write materials
-#   GetMaterials()
+    GetMaterials()
 
     #Write Meshes
     GetMesh()
