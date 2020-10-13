@@ -84,6 +84,8 @@ def save(context,
                 UVList = []
                 VertColList = []
                 
+                FaceFormat = "V"
+                
                 #==================GET VERTEX LIST==============================
                 for vertex in me.vertices:
                     VertexList.append("%.6f,%.6f,%.6f" % (vertex.co.x,vertex.co.z,vertex.co.y))
@@ -126,14 +128,17 @@ def save(context,
                 ow("  }\n")
                 
                 #Print UV data
-                ow("  *UV_LIST {\n")
-                for list_item in UVList:
-                    dataSplit = list_item.split(",")
-                    ow("    %s %s\n" % (dataSplit[0], dataSplit[1]))
-                ow("  }\n")
+                if (len(UVList) > 0):
+                    FaceFormat += "T"
+                    ow("  *UV_LIST {\n")
+                    for list_item in UVList:
+                        dataSplit = list_item.split(",")
+                        ow("    %s %s\n" % (dataSplit[0], dataSplit[1]))
+                    ow("  }\n")
                 
                 #Check if the vertex colors layer is active
                 if(len(VertColList) > 0):
+                    FaceFormat +="C"
                     ow("  *VERTCOL_LIST {\n")
                     for list_item in VertColList:
                         dataSplit = list_item.split(",")
@@ -144,7 +149,9 @@ def save(context,
                 if (len(me.uv_layers) > 1):
                     ow("  *FACESHADERS {\n")
                     ow("  }\n")
-                ow("  *FACEFORMAT VTC\n")
+                    
+                #Get FaceFormat
+                ow("  *FACEFORMAT %s\n" % FaceFormat)
                 
                 uv_index = 0
                 co_index = 0
@@ -155,19 +162,21 @@ def save(context,
                     #Get polygon vertices
                     PolygonVertices = poly.vertices
                     TotalIndexVertex = []
+                    
                     #Write vertices
                     ow("    %d " % (len(PolygonVertices)))
                     for vert in PolygonVertices:
                         TotalIndexVertex.append(vert) 
                         ow("%d " % vert)
                     # Write UVs
-                    for Item in PolygonVertices:
-                        ow("%d " % uv_index)
-                        uv_index += 1
-                        
-                    for Item in PolygonVertices:
-                        ow("%d " % co_index)
-                        co_index += 1
+                    if ("T" in FaceFormat):
+                        for Item in PolygonVertices:
+                            ow("%d " % uv_index)
+                            uv_index += 1
+                    if ("C" in FaceFormat):
+                        for Item in PolygonVertices:
+                            ow("%d " % co_index)
+                            co_index += 1
                     ow("\n")
                 ow("  }\n")
                 
