@@ -51,7 +51,7 @@ def save(context,
         VertexList = []
         
         for vertex in me.vertices:
-            VertexList.append("%.6f,%.6f,%.6f" % (vertex.co.x,vertex.co.y,vertex.co.z))
+            VertexList.append("%.6f,%.6f,%.6f" % (vertex.co.x,vertex.co.z,vertex.co.y))
         return VertexList
     
     def GetUVList(me):
@@ -136,6 +136,7 @@ def save(context,
                 if(len(VertColList) > 0):
                     ow("  *VERTCOLCOUNT %d\n" % (len(VertColList)))
                 ow("  *FACECOUNT %d\n" % (len(me.polygons)))
+                ow("  *TRIFACECOUNT %d\n" % (sum(len(p.vertices) - 2 for p in me.polygons)))
                 ow("  *FACELAYERSCOUNT %d\n" % len(me.uv_layers))
                 
                 #Check if there are more than one layer
@@ -222,19 +223,26 @@ def save(context,
 #*===============================================================================================
 #*	Write file header
 #*===============================================================================================
-    time_now = datetime.datetime.utcnow()
-
+    # Stop edit mode
+    if bpy.ops.object.mode_set.poll():
+        bpy.ops.object.mode_set(mode='OBJECT')
+        
+    bpy.context.scene.world.light_settings.use_ambient_occlusion = True
+    
     #Script header
+    time_now = datetime.datetime.utcnow()
     ow("*EUROCOM_INTERCHANGE_FILE 100\n")
     ow("*COMMENT Eurocom Interchange File Version 1.00 %s\n\n" % time_now.strftime("%A %B %d %Y %H:%M"))
 
     #print scene info
     ow("*SCENE {\n")
+    ow("  *FILENAME \"%s\"\n" % (bpy.data.filepath))
     ow("  *FIRSTFRAME  %d\n" % (scn.frame_start))
     ow("  *LASTFRAME   %d\n" % (scn.frame_end  ))
     ow("  *FRAMESPEED  %d\n" % (scn.render.fps ))
-    ow("  *STATICFRAME 0\n")
-    ow("  *AMBIENTSTATIC 1.0 1.0 1.0\n")
+    ow("  *STATICFRAME %d\n" % (scn.frame_current))
+    AmbientValue = bpy.context.scene.world.light_settings.ao_factor
+    ow("  *AMBIENTSTATIC %.6f %.6f %.6f\n" %(AmbientValue, AmbientValue, AmbientValue))
     ow("}\n\n")
 
     #Write materials
