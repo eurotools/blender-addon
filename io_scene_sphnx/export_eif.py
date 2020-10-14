@@ -43,12 +43,46 @@ def save(context,
     ow  = out.write
     Materials_Dict = dict()
     
+    
+#*===============================================================================================
+#*	Get data lists from the object
+#*===============================================================================================
+    def GetVertexList(me):
+        VertexList = []
+        
+        for vertex in me.vertices:
+            VertexList.append("%.6f,%.6f,%.6f" % (vertex.co.x,vertex.co.y,vertex.co.z))
+        return VertexList
+    
+    def GetUVList(me):
+        UVList = []
+        uv_layer = me.uv_layers.active.data
+        
+        if len(me.uv_layers):
+            for pl_count, poly in enumerate(me.polygons):
+                for li_count, loop_index in enumerate(poly.loop_indices):
+                    #print(pl_count, li_count, loop_index, "uv_layer len:", len(uv_layer))
+                    UVList.append("%.6f,%.6f" % (uv_layer[loop_index].uv.x,uv_layer[loop_index].uv.y))
+            UVList = list(dict.fromkeys(UVList))
+        return UVList
+    
+    def GetVertexColorList(me):
+        VertColList = []
+        
+        if len(me.vertex_colors):
+            for vertex in me.vertex_colors.active.data:
+                VertColList.append("%.6f,%.6f,%.6f,%.6f" % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3]))
+            VertColList = list(dict.fromkeys(VertColList))
+        return VertColList
+    
     def GetMaterialIndex(MaterialName):
         for index, material in Materials_Dict.items():
             if material == MaterialName:
-                print(index)
-        return index
-    
+                return index
+            
+#*===============================================================================================
+#*	Get materials and write data
+#*===============================================================================================        
     def GetMaterials():
         MaterialIndex = 0
             
@@ -74,50 +108,26 @@ def save(context,
                             
                             #Add 1 to the materials index
                             MaterialIndex +=1
-        ow("  }\n")
+                    ow("  }\n")
         ow("}\n\n")
         
+#*===============================================================================================
+#*	Write object data to the file
+#*===============================================================================================
     def GetMesh():
-        for ob in scn.objects:
-            #Invert 'Y' 'Z'
-            #m = axis_conversion("Y", "Z", "Z", "Y").to_4x4()
-            #ob.matrix_world = m * ob.matrix_world
-            
+        for ob in scn.objects:        
             if ob.hide_viewport:
                 continue
             
             if ob.type == 'MESH':
                 me = ob.data
-                uv_layer = me.uv_layers.active.data
 
-                VertexList = []
-                UVList = []
-                VertColList = []
+                VertexList = GetVertexList(ob.data)
+                UVList = GetUVList(ob.data)
+                VertColList = GetVertexColorList(ob.data)
                 
                 FaceFormat = "V"
-                
-                #==================GET VERTEX LIST==============================
-                for vertex in me.vertices:
-                    VertexList.append("%.6f,%.6f,%.6f" % (vertex.co.x,vertex.co.z,vertex.co.y))
- 
-                 #==================GET UV LIST==============================
-                if len(me.vertex_colors):
-                    for pl_count, poly in enumerate(me.polygons):
-                        for li_count, loop_index in enumerate(poly.loop_indices):
-                            #print(pl_count, li_count, loop_index, "uv_layer len:", len(uv_layer))
-                            UVList.append("%.6f,%.6f" % (uv_layer[loop_index].uv.x,uv_layer[loop_index].uv.y))
-                    UVList = list(dict.fromkeys(UVList))
-                        
-                 #==================GET Vertex Color LIST==============================               
-                if len(me.vertex_colors):
-                    for vertex in me.vertex_colors.active.data:
-                        VertColList.append("%.6f,%.6f,%.6f,%.6f" % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3]))
-                    VertColList = list(dict.fromkeys(VertColList))
-                
-                #===================COUNT TRIS======================
-                for face in me.polygons:
-                    vertices = face.vertices
-                        
+                                       
                 #==================PRINT DATA==============================
                 ow("*MESH {\n")    
                 ow("  *NAME \"%s\"\n" % (me.name))
@@ -142,6 +152,7 @@ def save(context,
                 #Print UV data
                 if (len(UVList) > 0):
                     FaceFormat += "T"
+                    
                     ow("  *UV_LIST {\n")
                     for list_item in UVList:
                         dataSplit = list_item.split(",")
@@ -151,6 +162,7 @@ def save(context,
                 #Check if the vertex colors layer is active
                 if(len(VertColList) > 0):
                     FaceFormat +="C"
+                    
                     ow("  *VERTCOL_LIST {\n")
                     for list_item in VertColList:
                         dataSplit = list_item.split(",")
@@ -177,35 +189,39 @@ def save(context,
                     #Get polygon vertices
                     PolygonVertices = poly.vertices
                     
-                    #Write vertices
+                    #Write vertices ---V
                     ow("    %d " % (len(PolygonVertices)))
                     for vert in PolygonVertices:
                         ow("%d " % vert)
-                    #Write UVs
+                        
+                    #Write UVs ---T
                     if ("T" in FaceFormat):
                         for vert_idx, loop_idx in enumerate(poly.loop_indices):
                             uv_coords = me.uv_layers.active.data[loop_idx].uv
                             ow("%d " % UVList.index("%.6f,%.6f" % (uv_coords.x, uv_coords.y)))
                             
-                    #Write Colors
+                    #Write Colors ---C
                     if ("C" in FaceFormat):
                         for color_idx, loop_idx in enumerate(poly.loop_indices):
                             vertex = me.vertex_colors.active.data[loop_idx]
                             ow("%d " % VertColList.index("%.6f,%.6f,%.6f,%.6f" % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3])))
                     
-                    #Write Material Index
+                    #Write Material Index ---M
                     if ("M" in FaceFormat):
-                        for s in ob.material_slots:
-                            if s.material and s.material.use_nodes:
-                                for n in s.material.node_tree.nodes:
-                                    if n.type == 'TEX_IMAGE':
-                                        ow("%d " % GetMaterialIndex(os.path.splitext(n.image.name)[0]))
+                        s = ob.material_slots[poly.material_index]
+                        if s.material and s.material.use_nodes:
+                            for n in s.material.node_tree.nodes:
+                                if n.type == 'TEX_IMAGE':
+                                    ow("%d " % GetMaterialIndex(os.path.splitext(n.image.name)[0]))
                     ow("\n")
                 ow("  }\n")
                 
                 #Close Tag
                 ow("}\n")
 
+#*===============================================================================================
+#*	Write file header
+#*===============================================================================================
     time_now = datetime.datetime.utcnow()
 
     #Script header
