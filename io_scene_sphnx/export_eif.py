@@ -85,30 +85,37 @@ def save(context,
 #*===============================================================================================        
     def GetMaterials():
         MaterialIndex = 0
-            
         ow("*MATERIALS {\n")
         
-        for obj in bpy.context.scene.objects:
-            for s in obj.material_slots:
-                if s.material and s.material.use_nodes:
-                    DiffuseColor = s.material.diffuse_color
-                    for n in s.material.node_tree.nodes:
-                        if n.type == 'TEX_IMAGE':                
-                            ow("  *MATERIAL %d {\n" % (MaterialIndex))
-                            ow("    *NAME \"%s\"\n" % (os.path.splitext(n.image.name)[0]))
-                            ow("    *COL_DIFFUSE %.6f %.6f %.6f\n" % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-                            ow("    *MAP_DIFFUSE \"%s\"\n" % (bpy.path.abspath(n.image.filepath)))      
-                            #Check if the texture exists
-                            if (os.path.exists(bpy.path.abspath(n.image.filepath))):
-                                ow("    *TWOSIDED\n")
-                            ow("    *MAP_DIFFUSE_AMOUNT 1.0\n")
-                            
-                            #Add data to dictionary
-                            Materials_Dict[MaterialIndex] = os.path.splitext(n.image.name)[0]
-                            
-                            #Add 1 to the materials index
-                            MaterialIndex +=1
-                    ow("  }\n")
+        for obj in scn.objects:
+            if obj.hide_viewport:
+                continue
+            
+            if obj.type == 'MESH':
+                if len(obj.material_slots) > 0:
+                    for s in obj.material_slots:
+                        if s.material and s.material.use_nodes:
+                            DiffuseColor = s.material.diffuse_color
+                            for n in s.material.node_tree.nodes:
+                                if n.type == 'TEX_IMAGE':
+                                    ImageName = n.image.name
+                                    if os.path.splitext(ImageName)[0] not in Materials_Dict.values():
+                                        ow("  *MATERIAL %d {\n" % (MaterialIndex))
+                                        ow("    *NAME \"%s\"\n" % (os.path.splitext(ImageName)[0]))
+                                        ow("    *COL_DIFFUSE %.6f %.6f %.6f\n" % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                                        ow("    *MAP_DIFFUSE \"%s\"\n" % (bpy.path.abspath(n.image.filepath)))
+                                        
+                                        #Check if the texture exists
+                                        if (os.path.exists(bpy.path.abspath(n.image.filepath))):
+                                            ow("    *TWOSIDED\n")
+                                        ow("    *MAP_DIFFUSE_AMOUNT 1.0\n")
+                                        
+                                        #Add data to dictionary
+                                        Materials_Dict[MaterialIndex] = os.path.splitext(ImageName)[0]
+                                        
+                                        #Add 1 to the materials index
+                                        MaterialIndex +=1
+                                        ow("  }\n")
         ow("}\n\n")
         
 #*===============================================================================================
@@ -122,9 +129,9 @@ def save(context,
             if ob.type == 'MESH':
                 me = ob.data
 
-                VertexList = GetVertexList(ob.data)
-                UVList = GetUVList(ob.data)
-                VertColList = GetVertexColorList(ob.data)
+                VertexList = GetVertexList(me)
+                UVList = GetUVList(me)
+                VertColList = GetVertexColorList(me)
                 
                 FaceFormat = "V"
                                        
