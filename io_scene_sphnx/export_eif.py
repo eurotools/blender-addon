@@ -88,38 +88,50 @@ def save(context,
 #*===============================================================================================        
     def GetMaterials():
         MaterialIndex = 0
-        ow("*MATERIALS {\n")
-        
-        for obj in scn.objects:
-            if obj.hide_viewport:
-                continue
+
+        ow("*MATERIALS {\n")        
+        for mat in bpy.data.materials:
+            DiffuseColor = mat.diffuse_color
             
-            if obj.type == 'MESH':
-                if len(obj.material_slots) > 0:
-                    for s in obj.material_slots:
-                        if s.material and s.material.use_nodes:
-                            DiffuseColor = s.material.diffuse_color
-                            for n in s.material.node_tree.nodes:
-                                if n.type == 'TEX_IMAGE':
-                                    ImageName = n.image.name
-                                    if os.path.splitext(ImageName)[0] not in Materials_Dict.values():
-                                        ow("  *MATERIAL %d {\n" % (MaterialIndex))
-                                        ow("    *NAME \"%s\"\n" % (os.path.splitext(ImageName)[0]))
-                                        ow("    *COL_DIFFUSE %.6f %.6f %.6f\n" % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-                                        ow("    *MAP_DIFFUSE \"%s\"\n" % (bpy.path.abspath(n.image.filepath)))
-                                        
-                                        #Check if the texture exists
-                                        if (os.path.exists(bpy.path.abspath(n.image.filepath))):
-                                            ow("    *TWOSIDED\n")
-                                        ow("    *MAP_DIFFUSE_AMOUNT 1.0\n")
-                                        
-                                        #Add data to dictionary
-                                        Materials_Dict[MaterialIndex] = os.path.splitext(ImageName)[0]
-                                        
-                                        #Add 1 to the materials index
-                                        MaterialIndex +=1
-                                        ow("  }\n")
+            #Check if material has texture
+            ImageNode = mat.node_tree.nodes.get('Image Texture', None)
+            if (ImageNode is not None):
+                ImageName = ImageNode.image.name
+
+                if os.path.splitext(ImageName)[0] not in Materials_Dict.values():
+                    ow("  *MATERIAL %d {\n" % (MaterialIndex))
+                    ow("    *NAME \"%s\"\n" % (os.path.splitext(ImageName)[0]))
+                    ow("    *COL_DIFFUSE %.6f %.6f %.6f\n" % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                    ow("    *MAP_DIFFUSE \"%s\"\n" % (bpy.path.abspath(ImageNode.image.filepath)))
+                    
+                    #Check if the texture exists
+                    if (os.path.exists(bpy.path.abspath(ImageNode.image.filepath))):
+                        ow("    *TWOSIDED\n")
+                    ow("    *MAP_DIFFUSE_AMOUNT 1.0\n")
+                    
+                    #Add data to dictionary
+                    Materials_Dict[MaterialIndex] = os.path.splitext(ImageName)[0]
+                    MaterialIndex +=1
+                    
+                    #Add 1 to the materials index
+                    ow("  }\n")
+                    
+            #Material has no texture
+            else:
+                Color = DiffuseColor[0] + DiffuseColor[1] + DiffuseColor[2]
+                if Color not in Materials_Dict.values():
+                    ow("  *MATERIAL %d {\n" % (MaterialIndex))
+                    ow("    *NAME \"%s\"\n" % (mat.name))
+                    ow("    *COL_DIFFUSE %.6f %.6f %.6f\n" % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+
+                    #Add data to dictionary
+                    Materials_Dict[MaterialIndex] = DiffuseColor[0]+DiffuseColor[1]+DiffuseColor[2]
+                    MaterialIndex +=1
+                    
+                    #Add 1 to the materials index
+                    ow("  }\n")
         ow("}\n\n")
+       
         
 #*===============================================================================================
 #*	Write object data to the file
@@ -223,10 +235,13 @@ def save(context,
                         #Write Material Index ---M
                         if ("M" in FaceFormat):
                             s = ob.material_slots[poly.material_index]
-                            if s.material and s.material.use_nodes:
-                                for n in s.material.node_tree.nodes:
-                                    if n.type == 'TEX_IMAGE':
-                                        ow("%d " % GetMaterialIndex(os.path.splitext(n.image.name)[0]))
+                            ImageNode = s.material.node_tree.nodes.get('Image Texture', None)
+                            if (ImageNode is not None):
+                                ImageName = ImageNode.image.name
+                                ow("%d " % GetMaterialIndex(os.path.splitext(ImageName)[0]))
+                            else:
+                                DiffuseColor = s.material.diffuse_color
+                                ow("%d " % GetMaterialIndex(DiffuseColor[0]+DiffuseColor[1]+DiffuseColor[2]))
                         ow("\n")
                     ow("  }\n")
                 
