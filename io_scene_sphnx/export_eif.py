@@ -56,23 +56,26 @@ def save(context,
     
     def GetUVList(me):
         UVList = []
-        uv_layer = me.uv_layers.active.data
         
-        if len(me.uv_layers):
-            for pl_count, poly in enumerate(me.polygons):
-                for li_count, loop_index in enumerate(poly.loop_indices):
-                    #print(pl_count, li_count, loop_index, "uv_layer len:", len(uv_layer))
-                    UVList.append("%.6f,%.6f" % (uv_layer[loop_index].uv.x,uv_layer[loop_index].uv.y))
-            UVList = list(dict.fromkeys(UVList))
+        if hasattr(me.uv_layers.active, "data"):
+            uv_layer = me.uv_layers.active.data
+            
+            if len(me.uv_layers):
+                for pl_count, poly in enumerate(me.polygons):
+                    for li_count, loop_index in enumerate(poly.loop_indices):
+                        #print(pl_count, li_count, loop_index, "uv_layer len:", len(uv_layer))
+                        UVList.append("%.6f,%.6f" % (uv_layer[loop_index].uv.x,uv_layer[loop_index].uv.y))
+                UVList = list(dict.fromkeys(UVList))
         return UVList
     
     def GetVertexColorList(me):
         VertColList = []
         
         if len(me.vertex_colors):
-            for vertex in me.vertex_colors.active.data:
-                VertColList.append("%.6f,%.6f,%.6f,%.6f" % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3]))
-            VertColList = list(dict.fromkeys(VertColList))
+            if hasattr(me.vertex_colors.active, "data"):
+                for vertex in me.vertex_colors.active.data:
+                    VertColList.append("%.6f,%.6f,%.6f,%.6f" % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3]))
+                VertColList = list(dict.fromkeys(VertColList))
         return VertColList
     
     def GetMaterialIndex(MaterialName):
@@ -127,102 +130,103 @@ def save(context,
                 continue
             
             if ob.type == 'MESH':
-                me = ob.data
+                if hasattr(ob, "data"):
+                    me = ob.data
 
-                VertexList = GetVertexList(me)
-                UVList = GetUVList(me)
-                VertColList = GetVertexColorList(me)
-                
-                FaceFormat = "V"
-                                       
-                #==================PRINT DATA==============================
-                ow("*MESH {\n")    
-                ow("  *NAME \"%s\"\n" % (me.name))
-                ow("  *VERTCOUNT %d\n" % (len(VertexList)))
-                ow("  *UVCOUNT %d\n" % (len(UVList)))
-                if(len(VertColList) > 0):
-                    ow("  *VERTCOLCOUNT %d\n" % (len(VertColList)))
-                ow("  *FACECOUNT %d\n" % (len(me.polygons)))
-                ow("  *TRIFACECOUNT %d\n" % (sum(len(p.vertices) - 2 for p in me.polygons)))
-                ow("  *FACELAYERSCOUNT %d\n" % len(me.uv_layers))
-                
-                #Check if there are more than one layer
-                if (len(me.uv_layers) > 1):
-                    ow("  *FACESHADERCOUNT %d\n" % len(me.uv_layers))
-                
-                #Print Vertex data
-                ow("  *VERTEX_LIST {\n")
-                for list_item in VertexList:
-                    dataSplit = list_item.split(",")
-                    ow("    %s %s %s\n" % (dataSplit[0], dataSplit[1], dataSplit[2]))
-                ow("  }\n")
-                
-                #Print UV data
-                if (len(UVList) > 0):
-                    FaceFormat += "T"
+                    VertexList = GetVertexList(ob.data)
+                    UVList = GetUVList(ob.data)
+                    VertColList = GetVertexColorList(ob.data)
                     
-                    ow("  *UV_LIST {\n")
-                    for list_item in UVList:
+                    FaceFormat = "V"
+                                           
+                    #==================PRINT DATA==============================
+                    ow("*MESH {\n")    
+                    ow("  *NAME \"%s\"\n" % (me.name))
+                    ow("  *VERTCOUNT %d\n" % (len(VertexList)))
+                    ow("  *UVCOUNT %d\n" % (len(UVList)))
+                    if(len(VertColList) > 0):
+                        ow("  *VERTCOLCOUNT %d\n" % (len(VertColList)))
+                    ow("  *FACECOUNT %d\n" % (len(me.polygons)))
+                    ow("  *TRIFACECOUNT %d\n" % (sum(len(p.vertices) - 2 for p in me.polygons)))
+                    ow("  *FACELAYERSCOUNT %d\n" % len(me.uv_layers))
+                    
+                    #Check if there are more than one layer
+                    if (len(me.uv_layers) > 1):
+                        ow("  *FACESHADERCOUNT %d\n" % len(me.uv_layers))
+                    
+                    #Print Vertex data
+                    ow("  *VERTEX_LIST {\n")
+                    for list_item in VertexList:
                         dataSplit = list_item.split(",")
-                        ow("    %s %s\n" % (dataSplit[0], dataSplit[1]))
-                    ow("  }\n")
-                
-                #Check if the vertex colors layer is active
-                if(len(VertColList) > 0):
-                    FaceFormat +="C"
-                    
-                    ow("  *VERTCOL_LIST {\n")
-                    for list_item in VertColList:
-                        dataSplit = list_item.split(",")
-                        ow("    %s %s %s %s\n" % (dataSplit[0], dataSplit[1], dataSplit[2], dataSplit[3]))                    
-                    ow("  }\n")
-                
-                if len(ob.material_slots) > 0:
-                    FaceFormat +="M"
-                    
-                #Print Shader faces
-                if (len(me.uv_layers) > 1):
-                    ow("  *FACESHADERS {\n")
+                        ow("    %s %s %s\n" % (dataSplit[0], dataSplit[1], dataSplit[2]))
                     ow("  }\n")
                     
-                #Get FaceFormat
-                ow("  *FACEFORMAT %s\n" % FaceFormat)
-                
-                uv_index = 0
-                co_index = 0
-                
-                #Print Face list
-                ow("  *FACE_LIST {\n")
-                for poly in me.polygons:
-                    #Get polygon vertices
-                    PolygonVertices = poly.vertices
-                    
-                    #Write vertices ---V
-                    ow("    %d " % (len(PolygonVertices)))
-                    for vert in PolygonVertices:
-                        ow("%d " % vert)
+                    #Print UV data
+                    if (len(UVList) > 0):
+                        FaceFormat += "T"
                         
-                    #Write UVs ---T
-                    if ("T" in FaceFormat):
-                        for vert_idx, loop_idx in enumerate(poly.loop_indices):
-                            uv_coords = me.uv_layers.active.data[loop_idx].uv
-                            ow("%d " % UVList.index("%.6f,%.6f" % (uv_coords.x, uv_coords.y)))
-                            
-                    #Write Colors ---C
-                    if ("C" in FaceFormat):
-                        for color_idx, loop_idx in enumerate(poly.loop_indices):
-                            vertex = me.vertex_colors.active.data[loop_idx]
-                            ow("%d " % VertColList.index("%.6f,%.6f,%.6f,%.6f" % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3])))
+                        ow("  *UV_LIST {\n")
+                        for list_item in UVList:
+                            dataSplit = list_item.split(",")
+                            ow("    %s %s\n" % (dataSplit[0], dataSplit[1]))
+                        ow("  }\n")
                     
-                    #Write Material Index ---M
-                    if ("M" in FaceFormat):
-                        s = ob.material_slots[poly.material_index]
-                        if s.material and s.material.use_nodes:
-                            for n in s.material.node_tree.nodes:
-                                if n.type == 'TEX_IMAGE':
-                                    ow("%d " % GetMaterialIndex(os.path.splitext(n.image.name)[0]))
-                    ow("\n")
-                ow("  }\n")
+                    #Check if the vertex colors layer is active
+                    if(len(VertColList) > 0):
+                        FaceFormat +="C"
+                        
+                        ow("  *VERTCOL_LIST {\n")
+                        for list_item in VertColList:
+                            dataSplit = list_item.split(",")
+                            ow("    %s %s %s %s\n" % (dataSplit[0], dataSplit[1], dataSplit[2], dataSplit[3]))                    
+                        ow("  }\n")
+                    
+                    if len(ob.material_slots) > 0:
+                        FaceFormat +="M"
+                        
+                    #Print Shader faces
+                    if (len(me.uv_layers) > 1):
+                        ow("  *FACESHADERS {\n")
+                        ow("  }\n")
+                        
+                    #Get FaceFormat
+                    ow("  *FACEFORMAT %s\n" % FaceFormat)
+                    
+                    uv_index = 0
+                    co_index = 0
+                    
+                    #Print Face list
+                    ow("  *FACE_LIST {\n")
+                    for poly in me.polygons:
+                        #Get polygon vertices
+                        PolygonVertices = poly.vertices
+                        
+                        #Write vertices ---V
+                        ow("    %d " % (len(PolygonVertices)))
+                        for vert in PolygonVertices:
+                            ow("%d " % vert)
+                            
+                        #Write UVs ---T
+                        if ("T" in FaceFormat):
+                            for vert_idx, loop_idx in enumerate(poly.loop_indices):
+                                uv_coords = me.uv_layers.active.data[loop_idx].uv
+                                ow("%d " % UVList.index("%.6f,%.6f" % (uv_coords.x, uv_coords.y)))
+                                
+                        #Write Colors ---C
+                        if ("C" in FaceFormat):
+                            for color_idx, loop_idx in enumerate(poly.loop_indices):
+                                vertex = me.vertex_colors.active.data[loop_idx]
+                                ow("%d " % VertColList.index("%.6f,%.6f,%.6f,%.6f" % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3])))
+                        
+                        #Write Material Index ---M
+                        if ("M" in FaceFormat):
+                            s = ob.material_slots[poly.material_index]
+                            if s.material and s.material.use_nodes:
+                                for n in s.material.node_tree.nodes:
+                                    if n.type == 'TEX_IMAGE':
+                                        ow("%d " % GetMaterialIndex(os.path.splitext(n.image.name)[0]))
+                        ow("\n")
+                    ow("  }\n")
                 
                 #Close Tag
                 ow("}\n")
@@ -237,7 +241,7 @@ def save(context,
     bpy.context.scene.world.light_settings.use_ambient_occlusion = True
     
     #Script header
-    time_now = datetime.datetime.utcnow()
+    time_now = datetime.datetime.now()
     ow("*EUROCOM_INTERCHANGE_FILE 100\n")
     ow("*COMMENT Eurocom Interchange File Version 1.00 %s\n\n" % time_now.strftime("%A %B %d %Y %H:%M"))
 
