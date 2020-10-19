@@ -136,6 +136,7 @@ def save(context,
                     VertexList = GetVertexList(ob.data)
                     UVList = GetUVList(ob.data)
                     VertColList = GetVertexColorList(ob.data)
+                    NumFaceLayers = len(me.uv_layers)
                     
                     FaceFormat = "V"
                                            
@@ -144,11 +145,14 @@ def save(context,
                     ow("  *NAME \"%s\"\n" % (me.name))
                     ow("  *VERTCOUNT %d\n" % (len(VertexList)))
                     ow("  *UVCOUNT %d\n" % (len(UVList)))
-                    if(len(VertColList) > 0):
-                        ow("  *VERTCOLCOUNT %d\n" % (len(VertColList)))
+                    ow("  *VERTCOLCOUNT %d\n" % (len(VertColList)))
                     ow("  *FACECOUNT %d\n" % (len(me.polygons)))
                     ow("  *TRIFACECOUNT %d\n" % (sum(len(p.vertices) - 2 for p in me.polygons)))
-                    ow("  *FACELAYERSCOUNT %d\n" % len(me.uv_layers))
+                    
+                    if NumFaceLayers > 0:
+                        ow("  *FACELAYERSCOUNT %d\n" % (NumFaceLayers))
+                    else:
+                        ow("  *FACELAYERSCOUNT %d\n" % (NumFaceLayers + 1))
                     
                     #Check if there are more than one layer
                     if (len(me.uv_layers) > 1):
@@ -161,25 +165,23 @@ def save(context,
                         ow("    %s %s %s\n" % (dataSplit[0], dataSplit[1], dataSplit[2]))
                     ow("  }\n")
                     
-                    #Print UV data
+                    #Print UV data  
+                    ow("  *UV_LIST {\n")
                     if (len(UVList) > 0):
                         FaceFormat += "T"
-                        
-                        ow("  *UV_LIST {\n")
                         for list_item in UVList:
                             dataSplit = list_item.split(",")
                             ow("    %s %s\n" % (dataSplit[0], dataSplit[1]))
-                        ow("  }\n")
+                    ow("  }\n")
                     
                     #Check if the vertex colors layer is active
+                    ow("  *VERTCOL_LIST {\n")
                     if(len(VertColList) > 0):
                         FaceFormat +="C"
-                        
-                        ow("  *VERTCOL_LIST {\n")
                         for list_item in VertColList:
                             dataSplit = list_item.split(",")
                             ow("    %s %s %s %s\n" % (dataSplit[0], dataSplit[1], dataSplit[2], dataSplit[3]))                    
-                        ow("  }\n")
+                    ow("  }\n")
                     
                     if len(ob.material_slots) > 0:
                         FaceFormat +="M"
