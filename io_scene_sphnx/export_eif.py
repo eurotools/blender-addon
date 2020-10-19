@@ -94,44 +94,46 @@ def save(context,
             DiffuseColor = mat.diffuse_color
             
             #Check if material has texture
-            ImageNode = mat.node_tree.nodes.get('Image Texture', None)
-            if (ImageNode is not None):
-                ImageName = ImageNode.image.name
+            if hasattr(mat.node_tree, "nodes"): 
+                ImageNode = mat.node_tree.nodes.get('Image Texture', None)
+                if (ImageNode is not None):
+                    ImageName = ImageNode.image.name
 
-                if os.path.splitext(ImageName)[0] not in Materials_Dict.values():
-                    ow("  *MATERIAL %d {\n" % (MaterialIndex))
-                    ow("    *NAME \"%s\"\n" % (os.path.splitext(ImageName)[0]))
-                    ow("    *COL_DIFFUSE %.6f %.6f %.6f\n" % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-                    ow("    *MAP_DIFFUSE \"%s\"\n" % (bpy.path.abspath(ImageNode.image.filepath)))
-                    
-                    #Check if the texture exists
-                    if (os.path.exists(bpy.path.abspath(ImageNode.image.filepath))):
-                        ow("    *TWOSIDED\n")
-                    ow("    *MAP_DIFFUSE_AMOUNT 1.0\n")
-                    
-                    #Add data to dictionary
-                    Materials_Dict[MaterialIndex] = os.path.splitext(ImageName)[0]
-                    MaterialIndex +=1
-                    
-                    #Add 1 to the materials index
-                    ow("  }\n")
-                    
-            #Material has no texture
-            else:
-                Color = DiffuseColor[0] + DiffuseColor[1] + DiffuseColor[2]
-                if Color not in Materials_Dict.values():
-                    ow("  *MATERIAL %d {\n" % (MaterialIndex))
-                    ow("    *NAME \"%s\"\n" % (mat.name))
-                    ow("    *COL_DIFFUSE %.6f %.6f %.6f\n" % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                    if os.path.splitext(ImageName)[0] not in Materials_Dict.values():
+                        ow("  *MATERIAL %d {\n" % (MaterialIndex))
+                        ow("    *NAME \"%s\"\n" % (os.path.splitext(ImageName)[0]))
+                        ow("    *COL_DIFFUSE %.6f %.6f %.6f\n" % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                        ow("    *MAP_DIFFUSE \"%s\"\n" % (bpy.path.abspath(ImageNode.image.filepath)))
+                        
+                        #Check if the texture exists
+                        if (os.path.exists(bpy.path.abspath(ImageNode.image.filepath))):
+                            ow("    *TWOSIDED\n")
+                        ow("    *MAP_DIFFUSE_AMOUNT 1.0\n")
+                        
+                        #Add data to dictionary
+                        Materials_Dict[MaterialIndex] = os.path.splitext(ImageName)[0]
+                        MaterialIndex +=1
+                        
+                        #Add 1 to the materials index
+                        ow("  }\n")
+                        
+                #Material has no texture
+                else:
+                    Color = DiffuseColor[0] + DiffuseColor[1] + DiffuseColor[2]
+                    if Color not in Materials_Dict.values():
+                        ow("  *MATERIAL %d {\n" % (MaterialIndex))
+                        ow("    *NAME \"%s\"\n" % (mat.name))
+                        ow("    *COL_DIFFUSE %.6f %.6f %.6f\n" % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
 
-                    #Add data to dictionary
-                    Materials_Dict[MaterialIndex] = DiffuseColor[0]+DiffuseColor[1]+DiffuseColor[2]
-                    MaterialIndex +=1
-                    
-                    #Add 1 to the materials index
-                    ow("  }\n")
+                        #Add data to dictionary
+                        Materials_Dict[MaterialIndex] = DiffuseColor[0]+DiffuseColor[1]+DiffuseColor[2]
+                        MaterialIndex +=1
+                        
+                        #Add 1 to the materials index
+                        ow("  }\n")
         ow("}\n\n")
-       
+        print("Dictionary Lenght: %d" % len(Materials_Dict))
+        
         
 #*===============================================================================================
 #*	Write object data to the file
@@ -154,7 +156,7 @@ def save(context,
                                            
                     #==================PRINT DATA==============================
                     ow("*MESH {\n")    
-                    ow("  *NAME \"%s\"\n" % (me.name))
+                    ow("  *NAME \"%s\"\n" % (ob.name))
                     ow("  *VERTCOUNT %d\n" % (len(VertexList)))
                     ow("  *UVCOUNT %d\n" % (len(UVList)))
                     ow("  *VERTCOLCOUNT %d\n" % (len(VertColList)))
@@ -235,19 +237,78 @@ def save(context,
                         #Write Material Index ---M
                         if ("M" in FaceFormat):
                             s = ob.material_slots[poly.material_index]
-                            ImageNode = s.material.node_tree.nodes.get('Image Texture', None)
-                            if (ImageNode is not None):
-                                ImageName = ImageNode.image.name
-                                ow("%d " % GetMaterialIndex(os.path.splitext(ImageName)[0]))
-                            else:
-                                DiffuseColor = s.material.diffuse_color
-                                ow("%d " % GetMaterialIndex(DiffuseColor[0]+DiffuseColor[1]+DiffuseColor[2]))
+                            if hasattr(s.material.node_tree, "nodes"): 
+                                ImageNode = s.material.node_tree.nodes.get('Image Texture', None)
+                                if (ImageNode is not None):
+                                    ImageName = ImageNode.image.name
+                                    ow("%d " % GetMaterialIndex(os.path.splitext(ImageName)[0]))
+                                else:
+                                    DiffuseColor = s.material.diffuse_color
+                                    ow("%d " % GetMaterialIndex(DiffuseColor[0]+DiffuseColor[1]+DiffuseColor[2]))
                         ow("\n")
                     ow("  }\n")
                 
                 #Close Tag
                 ow("}\n")
-
+                
+#*===============================================================================================
+#*	Get GeomNode of each object
+#*===============================================================================================
+    def GetGeomNode():
+        for ob in scn.objects:        
+            if ob.hide_viewport:
+                continue
+            
+            if ob.type == 'MESH':
+                if hasattr(ob, "data"):
+                    me = ob.data
+                    
+                    ow("*GEOMNODE {\n")    
+                    ow("  *NAME \"%s\"\n" % (ob.name))
+                    ow("  *MESH \"%s\"\n" % (ob.name))
+                    ow("  *WORLD_TM {\n")
+                    RotationMatrix = ob.matrix_world
+                    ow("    *TMROW0 %.6f %.6f %.6f\n" % (RotationMatrix[0].x,RotationMatrix[0].y,RotationMatrix[0].z))
+                    ow("    *TMROW1 %.6f %.6f %.6f\n" % (RotationMatrix[1].x,RotationMatrix[1].y,RotationMatrix[1].z))
+                    ow("    *TMROW2 %.6f %.6f %.6f\n" % (RotationMatrix[2].x,RotationMatrix[2].y,RotationMatrix[2].z))
+                    ow("    *TMROW3 %.6f %.6f %.6f\n" % (RotationMatrix[3].x,RotationMatrix[3].y,RotationMatrix[3].z))
+                    ow("    *POS %.6f %.6f %.6f\n" % (ob.location.x, ob.location.y, ob.location.z))
+                    ow("    *ROT %.6f %.6f %.6f\n" % (ob.rotation_euler.x, ob.rotation_euler.y, ob.rotation_euler.z))
+                    ow("    *SCL %.6f %.6f %.6f\n" % (ob.scale.x, ob.scale.y, ob.scale.z))
+                    ow("  }\n")
+                    ow("  *USER_FLAGS_COUNT 1\n")
+                    ow("  *USER_FLAGS {\n")
+                    ow("    *SET 0 %s\n" % ("0x00004000"))
+                    ow("  }\n")
+                    ow("}\n")
+                    
+#*===============================================================================================
+#*	Get Place node of each object
+#*===============================================================================================
+    def GetPlaceNode():
+        for ob in scn.objects:        
+            if ob.hide_viewport:
+                continue
+            
+            if ob.type == 'MESH':
+                if hasattr(ob, "data"):
+                    me = ob.data
+                    
+                    ow("*PLACENODE {\n")    
+                    ow("  *NAME \"%s\"\n" % (ob.name))
+                    ow("  *MESH \"%s\"\n" % (ob.name))
+                    ow("  *WORLD_TM {\n")
+                    RotationMatrix = ob.matrix_world
+                    ow("    *TMROW0 %.6f %.6f %.6f\n" % (RotationMatrix[0].x,RotationMatrix[0].y,RotationMatrix[0].z))
+                    ow("    *TMROW1 %.6f %.6f %.6f\n" % (RotationMatrix[1].x,RotationMatrix[1].y,RotationMatrix[1].z))
+                    ow("    *TMROW2 %.6f %.6f %.6f\n" % (RotationMatrix[2].x,RotationMatrix[2].y,RotationMatrix[2].z))
+                    ow("    *TMROW3 %.6f %.6f %.6f\n" % (RotationMatrix[3].x,RotationMatrix[3].y,RotationMatrix[3].z))
+                    ow("    *POS %.6f %.6f %.6f\n" % (ob.location.x, ob.location.y, ob.location.z))
+                    ow("    *ROT %.6f %.6f %.6f\n" % (ob.rotation_euler.x, ob.rotation_euler.y, ob.rotation_euler.z))
+                    ow("    *SCL %.6f %.6f %.6f\n" % (ob.scale.x, ob.scale.y, ob.scale.z))
+                    ow("  }\n")
+                    ow("}\n")
+        
 #*===============================================================================================
 #*	Write file header
 #*===============================================================================================
@@ -278,6 +339,12 @@ def save(context,
 
     #Write Meshes
     GetMesh()
+    
+    #Write GeomNode
+    GetGeomNode()
+    
+    #Write PlaceNode
+    GetPlaceNode()
 
     #Close writer
     out.close()
