@@ -8,6 +8,7 @@ from pathlib import Path
 from bpy_extras.io_utils import axis_conversion
 from bpy import context
 from pprint import pprint
+from decimal import Decimal
 
 def save(context,
          filepath,
@@ -64,7 +65,7 @@ def save(context,
                 for pl_count, poly in enumerate(me.polygons):
                     for li_count, loop_index in enumerate(poly.loop_indices):
                         #print(pl_count, li_count, loop_index, 'uv_layer len:', len(uv_layer))
-                        UVList.append('%.6f,%.6f' % (uv_layer[loop_index].uv.x,uv_layer[loop_index].uv.y))
+                        UVList.append('%.6f,%.6f' % (uv_layer[loop_index].uv.x,1.0-uv_layer[loop_index].uv.y))
                 UVList = list(dict.fromkeys(UVList))
         return UVList
 
@@ -132,7 +133,7 @@ def save(context,
                         #Add 1 to the materials index
                         ow('  }\n')
         ow('}\n\n')
-        print('Dictionary Lenght: %d' % len(Materials_Dict))
+        print('Dictionary Length: %d' % len(Materials_Dict))
 
 
 #*===============================================================================================
@@ -226,7 +227,7 @@ def save(context,
                         if ('T' in FaceFormat):
                             for vert_idx, loop_idx in enumerate(poly.loop_indices):
                                 uv_coords = me.uv_layers.active.data[loop_idx].uv
-                                ow('%d ' % UVList.index('%.6f,%.6f' % (uv_coords.x, uv_coords.y)))
+                                ow('%d ' % UVList.index('%.6f,%.6f' % (uv_coords.x, 1.0-float(uv_coords.y))))
 
                         #Write Colors ---C
                         if ('C' in FaceFormat):
