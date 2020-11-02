@@ -114,7 +114,7 @@ def save(context,
             print(keyframes)
             
             #for f in keyframes_obj:
-            for f in range(sce.frame_start, sce.frame_end):
+            for f in range(sce.frame_start, sce.frame_end + 1):
                 # swy: restrict the keyframes to those within bounds 
                 #if f < sce.frame_start or f > sce.frame_end:
                 #    continue
