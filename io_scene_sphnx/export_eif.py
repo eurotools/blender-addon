@@ -64,7 +64,6 @@ def save(context,
                     uv_layer = layer.data
                     for pl_count, poly in enumerate(me.polygons):
                         for li_count, loop_index in enumerate(poly.loop_indices):
-                            #print(pl_count, li_count, loop_index, 'uv_layer len:', len(uv_layer))
                             UVList.append('%.6f,%.6f' % (uv_layer[loop_index].uv.x,1.0-uv_layer[loop_index].uv.y))
                 UVList = list(dict.fromkeys(UVList))
         return UVList
@@ -84,7 +83,18 @@ def save(context,
         for index, material in Materials_Dict.items():
             if material == MaterialName:
                 return index
-
+                
+    def SearchMaterialIndex(mat):
+        if hasattr(mat.material.node_tree, 'nodes'):
+            ImageNode = mat.material.node_tree.nodes.get('Image Texture', None)
+            if (ImageNode is not None):
+                ImageName = ImageNode.image.name
+                MaterialIndex = GetMaterialIndex(os.path.splitext(ImageName)[0])
+            else:
+                DiffuseColor = mat.material.diffuse_color
+                MaterialIndex = GetMaterialIndex(DiffuseColor[0]+DiffuseColor[1]+DiffuseColor[2])
+            return MaterialIndex
+            
 #*===============================================================================================
 #*	Get materials and write data
 #*===============================================================================================
@@ -111,7 +121,11 @@ def save(context,
                             ow('    *MAP_DIFFUSE \"%s\"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
                             ow('    *TWOSIDED\n')
                         ow('    *MAP_DIFFUSE_AMOUNT 1.0\n')
-
+                        
+                        #Check if use Alpha (as a comment)
+                        if mat.blend_method.startswith('ALPHA'):
+                            ow('    *MAP_HASALPHA\n')
+                        
                         #Add data to dictionary
                         Materials_Dict[MaterialIndex] = os.path.splitext(ImageName)[0]
                         MaterialIndex +=1
@@ -136,7 +150,6 @@ def save(context,
         ow('}\n\n')
         print('Dictionary Length: %d' % len(Materials_Dict))
 
-
 #*===============================================================================================
 #*	Write object data to the file
 #*===============================================================================================
@@ -144,7 +157,6 @@ def save(context,
         for ob in scn.objects:
             if ob.hide_viewport:
                 continue
-
             if ob.type == 'MESH':
                 if hasattr(ob, 'data'):
                     me = ob.data
@@ -158,46 +170,46 @@ def save(context,
 
                     #==================PRINT DATA==============================
                     ow('*MESH {\n')
-                    ow('  *NAME "%s" \n' % (ob.name))
-                    ow('  *VERTCOUNT    %3d\n' % (len(VertexList)))
-                    ow('  *UVCOUNT      %3d\n' % (len(UVList)))
-                    ow('  *VERTCOLCOUNT %3d\n' % (len(VertColList)))
-                    ow('  *FACECOUNT    %3d\n' % (len(me.polygons)))
-                    ow('  *TRIFACECOUNT %3d\n' % (sum(len(p.vertices) - 2 for p in me.polygons)))
+                    ow('	*NAME "%s" \n' % (ob.name))
+                    ow('	*VERTCOUNT    %3d\n' % (len(VertexList)))
+                    ow('	*UVCOUNT      %3d\n' % (len(UVList)))
+                    ow('	*VERTCOLCOUNT %3d\n' % (len(VertColList)))
+                    ow('	*FACECOUNT    %3d\n' % (len(me.polygons)))
+                    ow('	*TRIFACECOUNT %3d\n' % (sum(len(p.vertices) - 2 for p in me.polygons)))
 
                     if NumFaceLayers > 0:
-                        ow('  *FACELAYERSCOUNT %d\n' % (NumFaceLayers))
+                        ow('	*FACELAYERSCOUNT %d\n' % (NumFaceLayers))
                     else:
-                        ow('  *FACELAYERSCOUNT %d\n' % (NumFaceLayers + 1))
+                        ow('	*FACELAYERSCOUNT %d\n' % (NumFaceLayers + 1))
 
                     #Check if there are more than one layer
                     if (len(me.uv_layers) > 1):
-                        ow('  *FACESHADERCOUNT %d\n' % len(ob.material_slots))
+                        ow('	*FACESHADERCOUNT %d\n' % len(ob.material_slots))
 
                     #Print Vertex data
-                    ow('  *VERTEX_LIST {\n')
+                    ow('	*VERTEX_LIST {\n')
                     for list_item in VertexList:
                         dataSplit = list_item.split(',')
-                        ow('    %s %s %s\n' % (dataSplit[0], dataSplit[1], dataSplit[2]))
-                    ow('  }\n')
+                        ow('		%s %s %s\n' % (dataSplit[0], dataSplit[1], dataSplit[2]))
+                    ow('	}\n')
 
                     #Print UV data
-                    ow('  *UV_LIST {\n')
+                    ow('	*UV_LIST {\n')
                     if (len(UVList) > 0):
                         FaceFormat += 'T'
                         for list_item in UVList:
                             dataSplit = list_item.split(',')
-                            ow('    %s %s\n' % (dataSplit[0], dataSplit[1]))
-                    ow('  }\n')
+                            ow('		%s %s\n' % (dataSplit[0], dataSplit[1]))
+                    ow('	}\n')
 
                     #Check if the vertex colors layer is active
-                    ow('  *VERTCOL_LIST {\n')
+                    ow('	*VERTCOL_LIST {\n')
                     if(len(VertColList) > 0):
                         FaceFormat +='C'
                         for list_item in VertColList:
                             dataSplit = list_item.split(',')
-                            ow('    %s %s %s %s\n' % (dataSplit[0], dataSplit[1], dataSplit[2], dataSplit[3]))
-                    ow('  }\n')
+                            ow('		%s %s %s %s\n' % (dataSplit[0], dataSplit[1], dataSplit[2], dataSplit[3]))
+                    ow('	}\n')
 
                     if len(ob.material_slots) > 0:
                         FaceFormat +='M'
@@ -210,40 +222,29 @@ def save(context,
                     if (len(me.uv_layers) > 1):
                         ShaderIndex = 0
                         MaterialIndex = 0
-                        ow('  *FACESHADERS {\n')
+                        ow('	*FACESHADERS {\n')
                         for mat in ob.material_slots:
-                            ow('    *SHADER %d {\n' % ShaderIndex)
-                            if hasattr(mat.material.node_tree, 'nodes'):
-                                ImageNode = mat.material.node_tree.nodes.get('Image Texture', None)
-                                if (ImageNode is not None):
-                                    ImageName = ImageNode.image.name
-                                    MaterialIndex = GetMaterialIndex(os.path.splitext(ImageName)[0])
-                                else:
-                                    DiffuseColor = mat.material.diffuse_color
-                                    MaterialIndex = GetMaterialIndex(DiffuseColor[0]+DiffuseColor[1]+DiffuseColor[2])
+                            ow('		*SHADER %d {\n' % ShaderIndex)                           
                             if mat.material.blend_method == 'OPAQUE':                               
-                                ow('        %d    %s\n' % (MaterialIndex,"Non"))
-                                ow('    }\n')
+                                ow('			%d	%s\n' % (SearchMaterialIndex(mat),"Non"))
+                                ow('		}\n')
                             else:
-                                ow('        %d    %s\n' % (MaterialIndex,"Alp"))
-                                ow('    }\n')
+                                ow('			%d	%s\n' % (SearchMaterialIndex(mat),"Alp"))
+                                ow('		}\n')
                             MaterialIndex +=1
-                        ow('  }\n')
+                        ow('	}\n')
 
                     #Get FaceFormat
-                    ow('  *FACEFORMAT %s\n' % FaceFormat)
-
-                    uv_index = 0
-                    co_index = 0
+                    ow('	*FACEFORMAT %s\n' % FaceFormat)
 
                     #Print Face list
-                    ow('  *FACE_LIST {\n')
+                    ow('	*FACE_LIST {\n')
                     for poly in me.polygons:
                         #Get polygon vertices
                         PolygonVertices = poly.vertices
 
                         #Write vertices ---V
-                        ow('    %d ' % (len(PolygonVertices)))
+                        ow('		%d ' % (len(PolygonVertices)))
                         for vert in PolygonVertices:
                             ow('%d ' % vert)
 
@@ -264,15 +265,8 @@ def save(context,
                         #Write Material Index ---M
                         if ('M' in FaceFormat):
                             s = ob.material_slots[poly.material_index]
-                            if hasattr(s.material.node_tree, 'nodes'):
-                                ImageNode = s.material.node_tree.nodes.get('Image Texture', None)
-                                if (ImageNode is not None):
-                                    ImageName = ImageNode.image.name
-                                    ow('%d ' % GetMaterialIndex(os.path.splitext(ImageName)[0]))
-                                else:
-                                    DiffuseColor = s.material.diffuse_color
-                                    ow('%d ' % GetMaterialIndex(DiffuseColor[0]+DiffuseColor[1]+DiffuseColor[2]))
-                        
+                            ow('%d ' % SearchMaterialIndex(s))
+                            
                         #Write Flags ---F
                         if ('F' in FaceFormat):
                             s = ob.material_slots[poly.material_index]
@@ -281,7 +275,7 @@ def save(context,
                             else:
                                 ow('%d ' % 00000)
                         ow('\n')
-                    ow('  }\n')
+                    ow('	}\n')
 
                 #Close Tag
                 ow('}\n')
@@ -299,21 +293,21 @@ def save(context,
                     me = ob.data
 
                     ow('*GEOMNODE {\n')
-                    ow('  *NAME "%s" \n' % (ob.name))
-                    ow('  *MESH "%s" \n' % (ob.name))
-                    ow('  *WORLD_TM {\n')
-                    ow('    *TMROW0 1.000000 0.000000 0.000000 0.000000\n')
-                    ow('    *TMROW1 0.000000 1.000000 0.000000 0.000000\n')
-                    ow('    *TMROW2 0.000000 0.000000 1.000000 0.000000\n')
-                    ow('    *TMROW3 0.000000 0.000000 0.000000 1.000000\n')
-                    ow('    *POS 0.000000 0.000000 0.000000\n')
-                    ow('    *ROT -0.000000 0.000000 0.000000\n')
-                    ow('    *SCL 1.000000 1.000000 1.000000\n')
-                    ow('  }\n')
-                    #ow('  *USER_FLAGS_COUNT 1\n')
-                    #ow('  *USER_FLAGS {\n')
-                    #ow('    *SET 0 %s\n' % ('0x00004000'))
-                    #ow('  }\n')
+                    ow('	*NAME "%s" \n' % (ob.name))
+                    ow('	*MESH "%s" \n' % (ob.name))
+                    ow('	*WORLD_TM {\n')
+                    ow('		*TMROW0 1.000000 0.000000 0.000000 0.000000\n')
+                    ow('		*TMROW1 0.000000 1.000000 0.000000 0.000000\n')
+                    ow('		*TMROW2 0.000000 0.000000 1.000000 0.000000\n')
+                    ow('		*TMROW3 0.000000 0.000000 0.000000 1.000000\n')
+                    ow('		*POS 0.000000 0.000000 0.000000\n')
+                    ow('		*ROT -0.000000 0.000000 0.000000\n')
+                    ow('		*SCL 1.000000 1.000000 1.000000\n')
+                    ow('	}\n')
+                    #ow('	*USER_FLAGS_COUNT 1\n')
+                    #ow('	*USER_FLAGS {\n')
+                    #ow('		*SET 0 %s\n' % ('0x00004000'))
+                    #ow('	}\n')
                     ow('}\n')
 
 #*===============================================================================================
@@ -329,18 +323,18 @@ def save(context,
                     me = ob.data
 
                     ow('*PLACENODE {\n')
-                    ow('  *NAME "%s" \n' % (ob.name))
-                    ow('  *MESH "%s" \n' % (ob.name))
-                    ow('  *WORLD_TM {\n')
+                    ow('	*NAME "%s" \n' % (ob.name))
+                    ow('	*MESH "%s" \n' % (ob.name))
+                    ow('	*WORLD_TM {\n')
                     RotationMatrix = ob.matrix_world
-                    ow('    *TMROW0 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[0].x,RotationMatrix[0].y,RotationMatrix[0].z))
-                    ow('    *TMROW1 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[1].x,RotationMatrix[1].y,RotationMatrix[1].z))
-                    ow('    *TMROW2 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[2].x,RotationMatrix[2].y,RotationMatrix[2].z))
-                    ow('    *TMROW3 %.6f %.6f %.6f 1.0\n' % (RotationMatrix[0].w,RotationMatrix[1].w,RotationMatrix[2].w))
-                    ow('    *POS    %.6f %.6f %.6f\n' % (ob.location.x, ob.location.y, ob.location.z))
-                    ow('    *ROT    %.6f %.6f %.6f\n' % (radians(ob.rotation_euler.x), radians(ob.rotation_euler.y), radians(ob.rotation_euler.z)))
-                    ow('    *SCL    %.6f %.6f %.6f\n' % (ob.scale.x, ob.scale.y, ob.scale.z))
-                    ow('  }\n')
+                    ow('		*TMROW0 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[0].x,RotationMatrix[0].y,RotationMatrix[0].z))
+                    ow('		*TMROW1 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[1].x,RotationMatrix[1].y,RotationMatrix[1].z))
+                    ow('		*TMROW2 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[2].x,RotationMatrix[2].y,RotationMatrix[2].z))
+                    ow('		*TMROW3 %.6f %.6f %.6f 1.0\n' % (RotationMatrix[0].w,RotationMatrix[1].w,RotationMatrix[2].w))
+                    ow('		*POS    %.6f %.6f %.6f\n' % (ob.location.x, ob.location.y, ob.location.z))
+                    ow('		*ROT    %.6f %.6f %.6f\n' % (radians(ob.rotation_euler.x), radians(ob.rotation_euler.y), radians(ob.rotation_euler.z)))
+                    ow('		*SCL    %.6f %.6f %.6f\n' % (ob.scale.x, ob.scale.y, ob.scale.z))
+                    ow('	}\n')
                     ow('}\n')
 
 #*===============================================================================================
@@ -359,13 +353,13 @@ def save(context,
 
     #print scene info
     ow('*SCENE {\n')
-    ow('  *FILENAME  "%s"\n' % (bpy.data.filepath))
-    ow('  *FIRSTFRAME  %3d\n' % (scn.frame_start))
-    ow('  *LASTFRAME   %3d\n' % (scn.frame_end  ))
-    ow('  *FRAMESPEED  %3d\n' % (scn.render.fps ))
-    ow('  *STATICFRAME %3d\n' % (scn.frame_current))
+    ow('	*FILENAME  "%s"\n' % (bpy.data.filepath))
+    ow('	*FIRSTFRAME  %3d\n' % (scn.frame_start))
+    ow('	*LASTFRAME   %3d\n' % (scn.frame_end  ))
+    ow('	*FRAMESPEED  %3d\n' % (scn.render.fps ))
+    ow('	*STATICFRAME %3d\n' % (scn.frame_current))
     AmbientValue = bpy.context.scene.world.light_settings.ao_factor
-    ow('  *AMBIENTSTATIC %.6f %.6f %.6f\n' %(AmbientValue, AmbientValue, AmbientValue))
+    ow('	*AMBIENTSTATIC %.6f %.6f %.6f\n' %(AmbientValue, AmbientValue, AmbientValue))
     ow('}\n\n')
 
     #Write materials
