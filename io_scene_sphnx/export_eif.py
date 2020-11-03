@@ -172,7 +172,7 @@ def save(context,
 
                     #Check if there are more than one layer
                     if (len(me.uv_layers) > 1):
-                        ow('  *FACESHADERCOUNT %d\n' % len(me.uv_layers))
+                        ow('  *FACESHADERCOUNT %d\n' % len(ob.material_slots))
 
                     #Print Vertex data
                     ow('  *VERTEX_LIST {\n')
@@ -201,10 +201,33 @@ def save(context,
 
                     if len(ob.material_slots) > 0:
                         FaceFormat +='M'
-
+                        
+                    #Flags
+                    if len(ob.material_slots) > 0:
+                        FaceFormat +='F'
+                        
                     #Print Shader faces
                     if (len(me.uv_layers) > 1):
+                        ShaderIndex = 0
+                        MaterialIndex = 0
                         ow('  *FACESHADERS {\n')
+                        for mat in ob.material_slots:
+                            ow('    *SHADER %d {\n' % ShaderIndex)
+                            if hasattr(mat.material.node_tree, 'nodes'):
+                                ImageNode = mat.material.node_tree.nodes.get('Image Texture', None)
+                                if (ImageNode is not None):
+                                    ImageName = ImageNode.image.name
+                                    MaterialIndex = GetMaterialIndex(os.path.splitext(ImageName)[0])
+                                else:
+                                    DiffuseColor = mat.material.diffuse_color
+                                    MaterialIndex = GetMaterialIndex(DiffuseColor[0]+DiffuseColor[1]+DiffuseColor[2])
+                            if mat.material.blend_method == 'OPAQUE':                               
+                                ow('        %d    %s\n' % (MaterialIndex,"Non"))
+                                ow('    }\n')
+                            else:
+                                ow('        %d    %s\n' % (MaterialIndex,"Alp"))
+                                ow('    }\n')
+                            MaterialIndex +=1
                         ow('  }\n')
 
                     #Get FaceFormat
@@ -249,6 +272,14 @@ def save(context,
                                 else:
                                     DiffuseColor = s.material.diffuse_color
                                     ow('%d ' % GetMaterialIndex(DiffuseColor[0]+DiffuseColor[1]+DiffuseColor[2]))
+                        
+                        #Write Flags ---F
+                        if ('F' in FaceFormat):
+                            s = ob.material_slots[poly.material_index]
+                            if s.material.use_backface_culling == False:
+                                ow('%d ' % 65536)
+                            else:
+                                ow('%d ' % 00000)
                         ow('\n')
                     ow('  }\n')
 
@@ -357,4 +388,4 @@ def save(context,
 
 
 if __name__ == '__main__':
-    save({}, 'C:/Users/Usuario/Downloads/Necropolis/New folder/testEIF_d.eif') # str(Path.home()) + '/Desktop/testEIF_d.eif')
+    save({}, str(Path.home()) + '/Desktop/testEIF_d.eif')
