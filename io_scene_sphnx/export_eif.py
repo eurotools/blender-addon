@@ -75,7 +75,7 @@ def save(context,
         if len(me.vertex_colors):
             if hasattr(me.vertex_colors.active, 'data'):
                 for vertex in me.vertex_colors.active.data:
-                    VertColList.append('%.6f,%.6f,%.6f,%.6f' % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3]))
+                    VertColList.append('%.6f,%.6f,%.6f,%.6f' % (vertex.color[0] * .5,vertex.color[1] * .5,vertex.color[2] * .5,vertex.color[3]))
                 VertColList = list(dict.fromkeys(VertColList))
         return VertColList
 
@@ -233,7 +233,7 @@ def save(context,
                         if ('C' in FaceFormat):
                             for color_idx, loop_idx in enumerate(poly.loop_indices):
                                 vertex = me.vertex_colors.active.data[loop_idx]
-                                ow('%d ' % VertColList.index('%.6f,%.6f,%.6f,%.6f' % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3])))
+                                ow('%d ' % VertColList.index('%.6f,%.6f,%.6f,%.6f' % (vertex.color[0] * .5,vertex.color[1] * .5,vertex.color[2] * .5,vertex.color[3])))
 
                         #Write Material Index ---M
                         if ('M' in FaceFormat):
@@ -302,8 +302,8 @@ def save(context,
                     ow('    *TMROW0 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[0].x,RotationMatrix[0].y,RotationMatrix[0].z))
                     ow('    *TMROW1 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[1].x,RotationMatrix[1].y,RotationMatrix[1].z))
                     ow('    *TMROW2 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[2].x,RotationMatrix[2].y,RotationMatrix[2].z))
-                    ow('    *TMROW3 %.6f %.6f %.6f 1.0\n' % (RotationMatrix[0].w,RotationMatrix[1].w,RotationMatrix[2].w))
-                    ow('    *POS    %.6f %.6f %.6f\n' % (ob.location.x, ob.location.y, ob.location.z))
+                    ow('    *TMROW3 %.6f %.6f %.6f 1.0\n' % (RotationMatrix[0].w,RotationMatrix[2].w,RotationMatrix[1].w))
+                    ow('    *POS    %.6f %.6f %.6f\n' % (ob.location.x, ob.location.z, ob.location.y))
                     ow('    *ROT    %.6f %.6f %.6f\n' % (radians(ob.rotation_euler.x), radians(ob.rotation_euler.y), radians(ob.rotation_euler.z)))
                     ow('    *SCL    %.6f %.6f %.6f\n' % (ob.scale.x, ob.scale.y, ob.scale.z))
                     ow('  }\n')
@@ -347,7 +347,7 @@ def save(context,
     GetPlaceNode()
 
     #Close writer
-    out.close()
+    del ow; out.close()
     print('[i] done')
 
     return {'FINISHED'}
