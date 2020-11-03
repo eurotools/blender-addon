@@ -163,7 +163,8 @@ def save(context,
             if ob.type == 'MESH':
                 
                 #Apply Axis conversion
-                ob.matrix_world = global_matrix
+                if global_matrix is not None:
+                    ob.data.transform(global_matrix)
                 
                 if hasattr(ob, 'data'):
                     me = ob.data
