@@ -45,8 +45,8 @@ def save(context,
     Materials_Dict = dict()
     
     # Axis Conversion
-    global_matrix = axis_conversion(from_forward='-Y',from_up='Z',to_forward='Z',to_up='Y').to_4x4()
-
+    global_matrix = axis_conversion(to_forward='Z',to_up='Y').to_4x4()
+    
 #*===============================================================================================
 #*	Get data lists from the object
 #*===============================================================================================
@@ -54,7 +54,7 @@ def save(context,
         VertexList = []
 
         for vertex in me.vertices:
-            VertexList.append('%.6f,%.6f,%.6f' % (vertex.co.x,vertex.co.y,vertex.co.z))
+            VertexList.append('%.6f,%.6f,%.6f' % (vertex.co.x,vertex.co.z,vertex.co.y))
         return VertexList
 
     def GetUVList(me):
@@ -156,7 +156,12 @@ def save(context,
 #*	Write object data to the file
 #*===============================================================================================
     def GetMesh():
-        for ob in scn.objects:
+        for obj in scn.objects:
+            #Clone object
+            ob = obj.copy()
+            ob.data = obj.data.copy()
+            
+            #Export clon
             if ob.hide_viewport:
                 continue
             if ob.type == 'MESH':
@@ -284,63 +289,56 @@ def save(context,
 
                 #Close Tag
                 ow('}\n')
+                
+                #Write GeomNode
+                GetGeomNode(ob)
+
+                #Write PlaceNode
+                GetPlaceNode(ob)
+                
+            #Delete cloned object
+            bpy.data.objects.remove(ob, do_unlink=True)
 
 #*===============================================================================================
 #*	Get GeomNode of each object
 #*===============================================================================================
-    def GetGeomNode():
-        for ob in scn.objects:
-            if ob.hide_viewport:
-                continue
-
-            if ob.type == 'MESH':
-                if hasattr(ob, 'data'):
-                    me = ob.data
-
-                    ow('*GEOMNODE {\n')
-                    ow('	*NAME "%s" \n' % (ob.name))
-                    ow('	*MESH "%s" \n' % (ob.name))
-                    ow('	*WORLD_TM {\n')
-                    ow('		*TMROW0 1.000000 0.000000 0.000000 0.000000\n')
-                    ow('		*TMROW1 0.000000 1.000000 0.000000 0.000000\n')
-                    ow('		*TMROW2 0.000000 0.000000 1.000000 0.000000\n')
-                    ow('		*TMROW3 0.000000 0.000000 0.000000 1.000000\n')
-                    ow('		*POS 0.000000 0.000000 0.000000\n')
-                    ow('		*ROT -0.000000 0.000000 0.000000\n')
-                    ow('		*SCL 1.000000 1.000000 1.000000\n')
-                    ow('	}\n')
-                    #ow('	*USER_FLAGS_COUNT 1\n')
-                    #ow('	*USER_FLAGS {\n')
-                    #ow('		*SET 0 %s\n' % ('0x00004000'))
-                    #ow('	}\n')
-                    ow('}\n')
+    def GetGeomNode(ob):
+        ow('*GEOMNODE {\n')
+        ow('	*NAME "%s" \n' % (ob.name))
+        ow('	*MESH "%s" \n' % (ob.name))
+        ow('	*WORLD_TM {\n')
+        ow('		*TMROW0 1.000000 0.000000 0.000000 0.000000\n')
+        ow('		*TMROW1 0.000000 1.000000 0.000000 0.000000\n')
+        ow('		*TMROW2 0.000000 0.000000 1.000000 0.000000\n')
+        ow('		*TMROW3 0.000000 0.000000 0.000000 1.000000\n')
+        ow('		*POS 0.000000 0.000000 0.000000\n')
+        ow('		*ROT -0.000000 0.000000 0.000000\n')
+        ow('		*SCL 1.000000 1.000000 1.000000\n')
+        ow('	}\n')
+        #ow('	*USER_FLAGS_COUNT 1\n')
+        #ow('	*USER_FLAGS {\n')
+        #ow('		*SET 0 %s\n' % ('0x00004000'))
+        #ow('	}\n')
+        ow('}\n')
 
 #*===============================================================================================
 #*	Get Place node of each object
 #*===============================================================================================
-    def GetPlaceNode():
-        for ob in scn.objects:
-            if ob.hide_viewport:
-                continue
-
-            if ob.type == 'MESH':
-                if hasattr(ob, 'data'):
-                    me = ob.data
-
-                    ow('*PLACENODE {\n')
-                    ow('	*NAME "%s" \n' % (ob.name))
-                    ow('	*MESH "%s" \n' % (ob.name))
-                    ow('	*WORLD_TM {\n')
-                    RotationMatrix = ob.matrix_world
-                    ow('		*TMROW0 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[0].x,RotationMatrix[0].y,RotationMatrix[0].z))
-                    ow('		*TMROW1 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[1].x,RotationMatrix[1].y,RotationMatrix[1].z))
-                    ow('		*TMROW2 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[2].x,RotationMatrix[2].y,RotationMatrix[2].z))
-                    ow('		*TMROW3 %.6f %.6f %.6f 1.0\n' % (RotationMatrix[0].w,RotationMatrix[1].w,RotationMatrix[2].w))
-                    ow('		*POS    %.6f %.6f %.6f\n' % (ob.location.x, ob.location.y, ob.location.z))
-                    ow('		*ROT    %.6f %.6f %.6f\n' % (radians(ob.rotation_euler.x), radians(ob.rotation_euler.y), radians(ob.rotation_euler.z)))
-                    ow('		*SCL    %.6f %.6f %.6f\n' % (ob.scale.x, ob.scale.y, ob.scale.z))
-                    ow('	}\n')
-                    ow('}\n')
+    def GetPlaceNode(ob):
+        ow('*PLACENODE {\n')
+        ow('	*NAME "%s" \n' % (ob.name))
+        ow('	*MESH "%s" \n' % (ob.name))
+        ow('	*WORLD_TM {\n')
+        RotationMatrix = ob.matrix_world
+        ow('		*TMROW0 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[0].x,RotationMatrix[0].y,RotationMatrix[0].z))
+        ow('		*TMROW1 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[1].x,RotationMatrix[1].y,RotationMatrix[1].z))
+        ow('		*TMROW2 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[2].x,RotationMatrix[2].y,RotationMatrix[2].z))
+        ow('		*TMROW3 %.6f %.6f %.6f 1.0\n' % (RotationMatrix[0].w,RotationMatrix[1].w,RotationMatrix[2].w))
+        ow('		*POS    %.6f %.6f %.6f\n' % (ob.location.x, ob.location.y, ob.location.z))
+        ow('		*ROT    %.6f %.6f %.6f\n' % (radians(ob.rotation_euler.x), radians(ob.rotation_euler.y), radians(ob.rotation_euler.z)))
+        ow('		*SCL    %.6f %.6f %.6f\n' % (ob.scale.x, ob.scale.y, ob.scale.z))
+        ow('	}\n')
+        ow('}\n')
 
 #*===============================================================================================
 #*	Write file header
@@ -372,12 +370,6 @@ def save(context,
 
     #Write Meshes
     GetMesh()
-
-    #Write GeomNode
-    GetGeomNode()
-
-    #Write PlaceNode
-    GetPlaceNode()
 
     #Close writer
     out.close()
