@@ -45,8 +45,7 @@ def save(context,
     Materials_Dict = dict()
     
     # Axis Conversion
-    global_matrix = axis_conversion(to_forward='Z', to_up='Y').to_4x4()
-
+    global_matrix = axis_conversion(from_forward='-Y',from_up='Z',to_forward='Z',to_up='Y').to_4x4()
 
 #*===============================================================================================
 #*	Get data lists from the object
