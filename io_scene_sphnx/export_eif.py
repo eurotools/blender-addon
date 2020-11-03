@@ -165,7 +165,7 @@ def save(context,
                     UVList = GetUVList(ob.data)
                     VertColList = GetVertexColorList(ob.data)
                     NumFaceLayers = len(me.uv_layers)
-
+                    MatSlots = ob.material_slots
                     FaceFormat = 'V'
 
                     #==================PRINT DATA==============================
@@ -184,7 +184,7 @@ def save(context,
 
                     #Check if there are more than one layer
                     if (len(me.uv_layers) > 1):
-                        ow('	*FACESHADERCOUNT %d\n' % len(ob.material_slots))
+                        ow('	*FACESHADERCOUNT %d\n' % len(MatSlots))
 
                     #Print Vertex data
                     ow('	*VERTEX_LIST {\n')
@@ -211,11 +211,11 @@ def save(context,
                             ow('		%s %s %s %s\n' % (dataSplit[0], dataSplit[1], dataSplit[2], dataSplit[3]))
                     ow('	}\n')
 
-                    if len(ob.material_slots) > 0:
+                    if len(MatSlots) > 0:
                         FaceFormat +='M'
                         
                     #Flags
-                    if len(ob.material_slots) > 0:
+                    if len(MatSlots) > 0:
                         FaceFormat +='F'
                         
                     #Print Shader faces
@@ -223,7 +223,7 @@ def save(context,
                         ShaderIndex = 0
                         MaterialIndex = 0
                         ow('	*FACESHADERS {\n')
-                        for mat in ob.material_slots:
+                        for mat in MatSlots:
                             ow('		*SHADER %d {\n' % ShaderIndex)                           
                             if mat.material.blend_method == 'OPAQUE':                               
                                 ow('			%d	%s\n' % (SearchMaterialIndex(mat),"Non"))
@@ -261,16 +261,14 @@ def save(context,
                                 for layerIndex in me.vertex_colors:
                                     vertex = layerIndex.data[loop_idx]
                                     ow('%d ' % VertColList.index('%.6f,%.6f,%.6f,%.6f' % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3])))
-
+                        
                         #Write Material Index ---M
                         if ('M' in FaceFormat):
-                            s = ob.material_slots[poly.material_index]
-                            ow('%d ' % SearchMaterialIndex(s))
+                            ow('%d ' % SearchMaterialIndex(MatSlots[poly.material_index]))
                             
                         #Write Flags ---F
                         if ('F' in FaceFormat):
-                            s = ob.material_slots[poly.material_index]
-                            if s.material.use_backface_culling == False:
+                            if MatSlots[poly.material_index].material.use_backface_culling == False:
                                 ow('%d ' % 65536)
                             else:
                                 ow('%d ' % 00000)
