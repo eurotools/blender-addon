@@ -43,6 +43,9 @@ def save(context,
     scn = bpy.context.scene
     ow  = out.write
     Materials_Dict = dict()
+    
+    # Axis Conversion
+    global_matrix = axis_conversion(to_forward='Z', to_up='Y').to_4x4()
 
 
 #*===============================================================================================
@@ -52,7 +55,7 @@ def save(context,
         VertexList = []
 
         for vertex in me.vertices:
-            VertexList.append('%.6f,%.6f,%.6f' % (vertex.co.x,vertex.co.z,vertex.co.y))
+            VertexList.append('%.6f,%.6f,%.6f' % (vertex.co.x,vertex.co.y,vertex.co.z))
         return VertexList
 
     def GetUVList(me):
@@ -158,6 +161,10 @@ def save(context,
             if ob.hide_viewport:
                 continue
             if ob.type == 'MESH':
+                
+                #Apply Axis conversion
+                ob.matrix_world = global_matrix
+                
                 if hasattr(ob, 'data'):
                     me = ob.data
 
@@ -341,7 +348,7 @@ def save(context,
     # Stop edit mode
     if bpy.ops.object.mode_set.poll():
         bpy.ops.object.mode_set(mode='OBJECT')
-
+     
     bpy.context.scene.world.light_settings.use_ambient_occlusion = True
 
     #Script header
