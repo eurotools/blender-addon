@@ -104,10 +104,10 @@ def save(context,
                         ow('  *MATERIAL %d {\n' % (MaterialIndex))
                         ow('    *NAME \"%s\"\n' % (os.path.splitext(ImageName)[0]))
                         ow('    *COL_DIFFUSE %.6f %.6f %.6f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-                        ow('    *MAP_DIFFUSE \"%s\"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
 
                         #Check if the texture exists
                         if (os.path.exists(bpy.path.abspath(ImageNode.image.filepath))):
+                            ow('    *MAP_DIFFUSE \"%s\"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
                             ow('    *TWOSIDED\n')
                         ow('    *MAP_DIFFUSE_AMOUNT 1.0\n')
 
@@ -268,19 +268,18 @@ def save(context,
                     ow('  *NAME "%s" \n' % (ob.name))
                     ow('  *MESH "%s" \n' % (ob.name))
                     ow('  *WORLD_TM {\n')
-                    RotationMatrix = ob.matrix_world
-                    ow('    *TMROW0 %.6f %.6f %.6f\n' % (RotationMatrix[0].x,RotationMatrix[0].y,RotationMatrix[0].z))
-                    ow('    *TMROW1 %.6f %.6f %.6f\n' % (RotationMatrix[1].x,RotationMatrix[1].y,RotationMatrix[1].z))
-                    ow('    *TMROW2 %.6f %.6f %.6f\n' % (RotationMatrix[2].x,RotationMatrix[2].y,RotationMatrix[2].z))
-                    ow('    *TMROW3 %.6f %.6f %.6f\n' % (RotationMatrix[3].x,RotationMatrix[3].y,RotationMatrix[3].z))
-                    ow('    *POS    %.6f %.6f %.6f\n' % (ob.location.x, ob.location.y, ob.location.z))
-                    ow('    *ROT    %.6f %.6f %.6f\n' % (ob.rotation_euler.x, ob.rotation_euler.y, ob.rotation_euler.z))
-                    ow('    *SCL    %.6f %.6f %.6f\n' % (ob.scale.x, ob.scale.y, ob.scale.z))
+                    ow('    *TMROW0 1.000000 0.000000 0.000000 0.000000\n')
+                    ow('    *TMROW1 0.000000 1.000000 0.000000 0.000000\n')
+                    ow('    *TMROW2 0.000000 0.000000 1.000000 0.000000\n')
+                    ow('    *TMROW3 0.000000 0.000000 0.000000 1.000000\n')
+                    ow('    *POS 0.000000 0.000000 0.000000\n')
+                    ow('    *ROT -0.000000 0.000000 0.000000\n')
+                    ow('    *SCL 1.000000 1.000000 1.000000\n')
                     ow('  }\n')
-                    ow('  *USER_FLAGS_COUNT 1\n')
-                    ow('  *USER_FLAGS {\n')
-                    ow('    *SET 0 %s\n' % ('0x00004000'))
-                    ow('  }\n')
+                    #ow('  *USER_FLAGS_COUNT 1\n')
+                    #ow('  *USER_FLAGS {\n')
+                    #ow('    *SET 0 %s\n' % ('0x00004000'))
+                    #ow('  }\n')
                     ow('}\n')
 
 #*===============================================================================================
@@ -300,12 +299,12 @@ def save(context,
                     ow('  *MESH "%s" \n' % (ob.name))
                     ow('  *WORLD_TM {\n')
                     RotationMatrix = ob.matrix_world
-                    ow('    *TMROW0 %.6f %.6f %.6f\n' % (RotationMatrix[0].x,RotationMatrix[0].y,RotationMatrix[0].z))
-                    ow('    *TMROW1 %.6f %.6f %.6f\n' % (RotationMatrix[1].x,RotationMatrix[1].y,RotationMatrix[1].z))
-                    ow('    *TMROW2 %.6f %.6f %.6f\n' % (RotationMatrix[2].x,RotationMatrix[2].y,RotationMatrix[2].z))
-                    ow('    *TMROW3 %.6f %.6f %.6f\n' % (RotationMatrix[3].x,RotationMatrix[3].y,RotationMatrix[3].z))
+                    ow('    *TMROW0 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[0].x,RotationMatrix[0].y,RotationMatrix[0].z))
+                    ow('    *TMROW1 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[1].x,RotationMatrix[1].y,RotationMatrix[1].z))
+                    ow('    *TMROW2 %.6f %.6f %.6f 0.0\n' % (RotationMatrix[2].x,RotationMatrix[2].y,RotationMatrix[2].z))
+                    ow('    *TMROW3 %.6f %.6f %.6f 1.0\n' % (RotationMatrix[0].w,RotationMatrix[1].w,RotationMatrix[2].w))
                     ow('    *POS    %.6f %.6f %.6f\n' % (ob.location.x, ob.location.y, ob.location.z))
-                    ow('    *ROT    %.6f %.6f %.6f\n' % (ob.rotation_euler.x, ob.rotation_euler.y, ob.rotation_euler.z))
+                    ow('    *ROT    %.6f %.6f %.6f\n' % (radians(ob.rotation_euler.x), radians(ob.rotation_euler.y), radians(ob.rotation_euler.z)))
                     ow('    *SCL    %.6f %.6f %.6f\n' % (ob.scale.x, ob.scale.y, ob.scale.z))
                     ow('  }\n')
                     ow('}\n')
@@ -355,4 +354,4 @@ def save(context,
 
 
 if __name__ == '__main__':
-    save({}, str(Path.home()) + '/Desktop/testEIF_d.eif')
+    save({}, 'C:/Users/Usuario/Downloads/Necropolis/New folder/testEIF_d.eif') # str(Path.home()) + '/Desktop/testEIF_d.eif')
