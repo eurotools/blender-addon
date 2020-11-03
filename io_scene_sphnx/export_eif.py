@@ -59,13 +59,13 @@ def save(context,
         UVList = []
 
         if hasattr(me.uv_layers.active, 'data'):
-            uv_layer = me.uv_layers.active.data
-
             if len(me.uv_layers):
-                for pl_count, poly in enumerate(me.polygons):
-                    for li_count, loop_index in enumerate(poly.loop_indices):
-                        #print(pl_count, li_count, loop_index, 'uv_layer len:', len(uv_layer))
-                        UVList.append('%.6f,%.6f' % (uv_layer[loop_index].uv.x,1.0-uv_layer[loop_index].uv.y))
+                for layer in me.uv_layers:
+                    uv_layer = layer.data
+                    for pl_count, poly in enumerate(me.polygons):
+                        for li_count, loop_index in enumerate(poly.loop_indices):
+                            #print(pl_count, li_count, loop_index, 'uv_layer len:', len(uv_layer))
+                            UVList.append('%.6f,%.6f' % (uv_layer[loop_index].uv.x,1.0-uv_layer[loop_index].uv.y))
                 UVList = list(dict.fromkeys(UVList))
         return UVList
 
@@ -74,9 +74,10 @@ def save(context,
 
         if len(me.vertex_colors):
             if hasattr(me.vertex_colors.active, 'data'):
-                for vertex in me.vertex_colors.active.data:
-                    VertColList.append('%.6f,%.6f,%.6f,%.6f' % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3]))
-                VertColList = list(dict.fromkeys(VertColList))
+                for layer in me.vertex_colors:
+                    for vertex in layer.data:
+                        VertColList.append('%.6f,%.6f,%.6f,%.6f' % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3]))
+                    VertColList = list(dict.fromkeys(VertColList))
         return VertColList
 
     def GetMaterialIndex(MaterialName):
@@ -226,14 +227,16 @@ def save(context,
                         #Write UVs ---T
                         if ('T' in FaceFormat):
                             for vert_idx, loop_idx in enumerate(poly.loop_indices):
-                                uv_coords = me.uv_layers.active.data[loop_idx].uv
-                                ow('%d ' % UVList.index('%.6f,%.6f' % (uv_coords.x, 1.0-float(uv_coords.y))))
+                                for layer in me.uv_layers:
+                                    uv_coords = layer.data[loop_idx].uv
+                                    ow('%d ' % UVList.index('%.6f,%.6f' % (uv_coords.x, 1.0-float(uv_coords.y))))
 
                         #Write Colors ---C
                         if ('C' in FaceFormat):
                             for color_idx, loop_idx in enumerate(poly.loop_indices):
-                                vertex = me.vertex_colors.active.data[loop_idx]
-                                ow('%d ' % VertColList.index('%.6f,%.6f,%.6f,%.6f' % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3])))
+                                for layerIndex in me.vertex_colors:
+                                    vertex = layerIndex.data[loop_idx]
+                                    ow('%d ' % VertColList.index('%.6f,%.6f,%.6f,%.6f' % (vertex.color[0],vertex.color[1],vertex.color[2],vertex.color[3])))
 
                         #Write Material Index ---M
                         if ('M' in FaceFormat):
