@@ -2,6 +2,7 @@ import bpy
 import os
 import math
 import datetime
+import bmesh
 from mathutils import *
 from math import *
 from pathlib import Path
@@ -9,6 +10,7 @@ from bpy_extras.io_utils import axis_conversion
 from bpy import context
 from pprint import pprint
 from decimal import Decimal
+from mathutils import Euler
 
 def save(context,
          filepath,
@@ -45,7 +47,7 @@ def save(context,
     Materials_Dict = dict()
     
     # Axis Conversion
-    global_matrix = axis_conversion(to_forward='Z',to_up='Y').to_4x4()
+    global_matrix = axis_conversion(to_forward='Y',to_up='Z').to_4x4()
     
 #*===============================================================================================
 #*	Get data lists from the object
@@ -54,7 +56,7 @@ def save(context,
         VertexList = []
 
         for vertex in me.vertices:
-            VertexList.append('%.6f,%.6f,%.6f' % (vertex.co.x,vertex.co.z,vertex.co.y))
+            VertexList.append('%.6f,%.6f,%.6f' % (vertex.co.x,vertex.co.y,vertex.co.z))
         return VertexList
 
     def GetUVList(me):
@@ -97,6 +99,10 @@ def save(context,
                 MaterialIndex = GetMaterialIndex(DiffuseColor[0]+DiffuseColor[1]+DiffuseColor[2])
             return MaterialIndex
             
+    def MirrorVertices(ob):
+        for vertex in ob.data.vertices:
+            vertex.co.x = vertex.co.x * -1.0
+        
 #*===============================================================================================
 #*	Get materials and write data
 #*===============================================================================================
@@ -157,7 +163,7 @@ def save(context,
 #*===============================================================================================
     def GetMesh():
         for obj in scn.objects:
-            #Clone object
+            #Duplicate object
             ob = obj.copy()
             ob.data = obj.data.copy()
             
@@ -169,10 +175,14 @@ def save(context,
                 #Apply Axis conversion
                 if global_matrix is not None:
                     ob.data.transform(global_matrix)
+                    ob.rotation_euler = Euler((0.3, 0.4, 0.0), 'XZY')
+                    
+                #Mirror Vertices
+                MirrorVertices(ob)
                 
-                if hasattr(ob, 'data'):
+                if hasattr(ob, 'data'):            
                     me = ob.data
-
+            
                     VertexList = GetVertexList(ob.data)
                     UVList = GetUVList(ob.data)
                     VertColList = GetVertexColorList(ob.data)
@@ -296,7 +306,6 @@ def save(context,
                 #Write PlaceNode
                 GetPlaceNode(ob)
                 
-            #Delete cloned object
             bpy.data.objects.remove(ob, do_unlink=True)
 
 #*===============================================================================================
