@@ -20,7 +20,7 @@
 
 bl_info = {
            "name": "Eurocom 3D formats for Sphinx and the Cursed Mummy",
-         "author": "Swyter, for THQ Nordic",
+         "author": "Swyter, for THQ Nordic | jmarti856",
         "version": (2020, 10, 10),
         "blender": (2, 81, 6),
        "location": "File > Import-Export",
