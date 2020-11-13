@@ -39,6 +39,10 @@ def save(context,
     #Open writer
     with open(filepath, 'w') as out:
         ow = out.write
+        
+        # swy: add a macro to write a whole line, carriage return included
+        def wl(line):
+            ow(line + '\n')
 
         print('[i] exporting', filepath)
 
@@ -116,7 +120,7 @@ def save(context,
         def GetMaterials():
             MaterialIndex = 0
 
-            ow('*MATERIALS {\n')
+            wl('*MATERIALS {')
             for mat in bpy.data.materials:
                 DiffuseColor = mat.diffuse_color
 
@@ -127,42 +131,43 @@ def save(context,
                         ImageName = ImageNode.image.name
 
                         if os.path.splitext(ImageName)[0] not in Materials_Dict.values():
-                            ow('  *MATERIAL %d {\n' % (MaterialIndex))
-                            ow('    *NAME \"%s\"\n' % (os.path.splitext(ImageName)[0]))
-                            ow('    *COL_DIFFUSE %.6f %.6f %.6f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                            wl('  *MATERIAL %d {' % (MaterialIndex))
+                            wl('    *NAME "%s"' % (os.path.splitext(ImageName)[0]))
+                            wl('    *COL_DIFFUSE %.6f %.6f %.6f' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
 
                             #Check if the texture exists
                             if (os.path.exists(bpy.path.abspath(ImageNode.image.filepath))):
-                                ow('    *MAP_DIFFUSE \"%s\"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
-                                ow('    *TWOSIDED\n')
-                            ow('    *MAP_DIFFUSE_AMOUNT 1.0\n')
+                                wl('    *MAP_DIFFUSE "%s"' % (bpy.path.abspath(ImageNode.image.filepath)))
+                                wl('    *TWOSIDED')
+                            wl('    *MAP_DIFFUSE_AMOUNT 1.0')
 
                             #Check if use Alpha (as a comment)
                             if mat.blend_method.startswith('ALPHA'):
-                                ow('    *MAP_HASALPHA\n')
+                                wl('    *MAP_HASALPHA')
 
                             #Add data to dictionary
                             Materials_Dict[MaterialIndex] = os.path.splitext(ImageName)[0]
                             MaterialIndex +=1
 
                             #Add 1 to the materials index
-                            ow('  }\n')
+                            wl('  }')
 
                     #Material has no texture
                     else:
                         Color = DiffuseColor[0] + DiffuseColor[1] + DiffuseColor[2]
                         if Color not in Materials_Dict.values():
-                            ow('  *MATERIAL %d {\n' % (MaterialIndex))
-                            ow('    *NAME \"%s\"\n' % (mat.name))
-                            ow('    *COL_DIFFUSE %.6f %.6f %.6f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                            wl('  *MATERIAL %d {' % (MaterialIndex))
+                            wl('    *NAME \"%s\"' % (mat.name))
+                            wl('    *COL_DIFFUSE %.6f %.6f %.6f' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
 
                             #Add data to dictionary
                             Materials_Dict[MaterialIndex] = DiffuseColor[0]+DiffuseColor[1]+DiffuseColor[2]
                             MaterialIndex +=1
 
                             #Add 1 to the materials index
-                            ow('  }\n')
-            ow('}\n\n')
+                            wl('  }')
+            wl('}')
+            wl('')
             print('Dictionary Length: %d' % len(Materials_Dict))
 
     #*===============================================================================================
@@ -198,73 +203,73 @@ def save(context,
                         FaceFormat = 'V'
 
                         #==================PRINT DATA==============================
-                        ow('*MESH {\n')
-                        ow(' *NAME "%s" \n' % (ob.name))
-                        ow(' *VERTCOUNT    %3d\n' % (len(VertexList)))
-                        ow(' *UVCOUNT      %3d\n' % (len(UVList)))
-                        ow(' *VERTCOLCOUNT %3d\n' % (len(VertColList)))
-                        ow(' *FACECOUNT    %3d\n' % (len(me.polygons)))
-                        ow(' *TRIFACECOUNT %3d\n' % (sum(len(p.vertices) - 2 for p in me.polygons)))
+                        wl('*MESH {')
+                        wl(' *NAME "%s"' % (ob.name))
+                        wl(' *VERTCOUNT    %3d' % (len(VertexList)))
+                        wl(' *UVCOUNT      %3d' % (len(UVList)))
+                        wl(' *VERTCOLCOUNT %3d' % (len(VertColList)))
+                        wl(' *FACECOUNT    %3d' % (len(me.polygons)))
+                        wl(' *TRIFACECOUNT %3d' % (sum(len(p.vertices) - 2 for p in me.polygons)))
 
                         if NumFaceLayers > 0:
-                            ow(' *FACELAYERSCOUNT %d\n' % (NumFaceLayers))
+                            wl(' *FACELAYERSCOUNT %d' % (NumFaceLayers))
                         else:
-                            ow(' *FACELAYERSCOUNT %d\n' % (NumFaceLayers + 1))
+                            wl(' *FACELAYERSCOUNT %d' % (NumFaceLayers + 1))
 
                         #Check if there are more than one layer
                         if (len(me.uv_layers) > 1):
-                            ow(' *FACESHADERCOUNT %d\n' % len(MatSlots))
+                            wl(' *FACESHADERCOUNT %d' % len(MatSlots))
 
                         #Print Vertex data
-                        ow(' *VERTEX_LIST {\n')
+                        wl(' *VERTEX_LIST {')
                         for vtx in VertexList:
-                            ow('  %.6f %.6f %.6f\n' % (vtx[0], vtx[1], vtx[2]))
-                        ow(' }\n')
+                            wl('  %.6f %.6f %.6f' % (vtx[0], vtx[1], vtx[2]))
+                        wl(' }')
 
                         #Print UV data
-                        ow(' *UV_LIST {\n')
+                        wl(' *UV_LIST {')
                         if (len(UVList) > 0):
                             FaceFormat += 'T'
                             for uv in UVList:
-                                ow('  %.6f %.6f\n' % (uv[0], uv[1]))
-                        ow(' }\n')
+                                wl('  %.6f %.6f' % (uv[0], uv[1]))
+                        wl(' }')
 
                         #Check if the vertex colors layer is active
-                        ow(' *VERTCOL_LIST {\n')
+                        wl(' *VERTCOL_LIST {')
                         if(len(VertColList) > 0):
-                            FaceFormat +='C'
+                            FaceFormat += 'C'
                             for col in VertColList:
-                                ow('  %.6f %.6f %.6f %.6f\n' % (col[0], col[1], col[2], col[3]))
-                        ow(' }\n')
+                                wl('  %.6f %.6f %.6f %.6f' % (col[0], col[1], col[2], col[3]))
+                        wl(' }')
 
                         if len(MatSlots) > 0:
-                            FaceFormat +='M'
+                            FaceFormat += 'M'
 
                         #Flags
                         if len(MatSlots) > 0:
-                            FaceFormat +='F'
+                            FaceFormat += 'F'
 
                         #Print Shader faces
                         if (len(me.uv_layers) > 1):
                             ShaderIndex = 0
                             MaterialIndex = 0
-                            ow(' *FACESHADERS {\n')
+                            wl(' *FACESHADERS {')
                             for mat in MatSlots:
-                                ow('  *SHADER %d {\n' % ShaderIndex)
+                                wl('  *SHADER %d {' % ShaderIndex)
                                 if mat.material.blend_method == 'OPAQUE':
-                                    ow('   %d %s\n' % (SearchMaterialIndex(mat),"Non"))
-                                    ow('  }\n')
+                                    wl('   %d %s' % (SearchMaterialIndex(mat),"Non"))
+                                    wl('  }')
                                 else:
-                                    ow('   %d %s\n' % (SearchMaterialIndex(mat),"Alp"))
-                                    ow('  }\n')
+                                    wl('   %d %s' % (SearchMaterialIndex(mat),"Alp"))
+                                    wl('  }')
                                 MaterialIndex +=1
-                            ow(' }\n')
+                            wl(' }')
 
                         #Get FaceFormat
-                        ow(' *FACEFORMAT %s\n' % FaceFormat)
+                        wl(' *FACEFORMAT %s' % FaceFormat)
 
                         #Print Face list
-                        ow(' *FACE_LIST {\n')
+                        wl(' *FACE_LIST {')
                         for poly in me.polygons:
                             #Get polygon vertices
                             PolygonVertices = poly.vertices
@@ -299,10 +304,10 @@ def save(context,
                                 else:
                                     ow('%d ' % 00000)
                             ow('\n')
-                        ow(' }\n')
+                        wl(' }')
 
                     #Close Tag
-                    ow('}\n')
+                    wl('}')
 
                     #Write GeomNode
                     GetGeomNode(ob)
@@ -316,43 +321,39 @@ def save(context,
     #* Get GeomNode of each object
     #*===============================================================================================
         def GetGeomNode(ob):
-            ow('*GEOMNODE {\n')
-            ow(' *NAME "%s" \n' % (ob.name))
-            ow(' *MESH "%s" \n' % (ob.name))
-            ow(' *WORLD_TM {\n')
-            ow('  *TMROW0 1 0 0 0 \n')
-            ow('  *TMROW1 0 1 0 0 \n')
-            ow('  *TMROW2 0 0 1 0 \n')
-            ow('  *TMROW3 0 0 0 1 \n')
-            ow('  *POS    0 0 0   \n')
-            ow('  *ROT   -0 0 0   \n')
-            ow('  *SCL    1 1 1   \n')
-            ow(' }\n')
-            #ow(' *USER_FLAGS_COUNT 1\n')
-            #ow(' *USER_FLAGS {\n')
-            #ow('  *SET 0 %s\n' % ('0x00004000'))
-            #ow(' }\n')
-            ow('}\n')
+            wl('*GEOMNODE {')
+            wl(' *NAME "%s"' % (ob.name))
+            wl(' *MESH "%s"' % (ob.name))
+            wl(' *WORLD_TM {')
+            wl('  *TMROW0 1 0 0 0')
+            wl('  *TMROW1 0 1 0 0')
+            wl('  *TMROW2 0 0 1 0')
+            wl('  *TMROW3 0 0 0 1')
+            wl('  *POS    0 0 0')
+            wl('  *ROT   -0 0 0')
+            wl('  *SCL    1 1 1')
+            wl(' }')
+            wl('}')
 
     #*===============================================================================================
     #* Get Place node of each object
     #*===============================================================================================
         def GetPlaceNode(ob):
-            ow('*PLACENODE {\n')
-            ow(' *NAME "%s" \n' % (ob.name))
-            ow(' *MESH "%s" \n' % (ob.name))
-            ow(' *WORLD_TM {\n')
+            wl('*PLACENODE {')
+            wl(' *NAME "%s"' % (ob.name))
+            wl(' *MESH "%s"' % (ob.name))
+            wl(' *WORLD_TM {')
             RotationMatrix = ob.matrix_world
-            ow('  *TMROW0 %.6f %.6f %.6f 0\n' % (RotationMatrix[0].x,RotationMatrix[0].y,RotationMatrix[0].z))
-            ow('  *TMROW1 %.6f %.6f %.6f 0\n' % (RotationMatrix[1].x,RotationMatrix[1].y,RotationMatrix[1].z))
-            ow('  *TMROW2 %.6f %.6f %.6f 0\n' % (RotationMatrix[2].x,RotationMatrix[2].y,RotationMatrix[2].z))
-            ow('  *TMROW3 %.6f %.6f %.6f 1\n' % (RotationMatrix[0].w,RotationMatrix[1].w,RotationMatrix[2].w))
+            wl('  *TMROW0 %.6f %.6f %.6f 0' % (RotationMatrix[0].x,RotationMatrix[0].y,RotationMatrix[0].z))
+            wl('  *TMROW1 %.6f %.6f %.6f 0' % (RotationMatrix[1].x,RotationMatrix[1].y,RotationMatrix[1].z))
+            wl('  *TMROW2 %.6f %.6f %.6f 0' % (RotationMatrix[2].x,RotationMatrix[2].y,RotationMatrix[2].z))
+            wl('  *TMROW3 %.6f %.6f %.6f 1' % (RotationMatrix[0].w,RotationMatrix[1].w,RotationMatrix[2].w))
             # swy: these aren't actually used or read by this version of the importer
-            ow('  *POS    %.6f %.6f %.6f  \n' % (ob.location.x, ob.location.y, ob.location.z))
-            ow('  *ROT    %.6f %.6f %.6f  \n' % (radians(ob.rotation_euler.x), radians(ob.rotation_euler.y), radians(ob.rotation_euler.z)))
-            ow('  *SCL    %.6f %.6f %.6f  \n' % (ob.scale.x, ob.scale.y, ob.scale.z))
-            ow(' }\n')
-            ow('}\n')
+            wl('  *POS    %.6f %.6f %.6f'   % (ob.location.x, ob.location.y, ob.location.z))
+            wl('  *ROT    %.6f %.6f %.6f'   % (radians(ob.rotation_euler.x), radians(ob.rotation_euler.y), radians(ob.rotation_euler.z)))
+            wl('  *SCL    %.6f %.6f %.6f'   % (ob.scale.x, ob.scale.y, ob.scale.z))
+            wl(' }')
+            wl('}')
 
     #*===============================================================================================
     #* Write file header
@@ -364,21 +365,21 @@ def save(context,
         bpy.context.scene.world.light_settings.use_ambient_occlusion = True
 
         #Script header
-        time_now = datetime.datetime.now()
-        ow('*EUROCOM_INTERCHANGE_FILE 100\n')
-        ow('*COMMENT Eurocom Interchange File Version 1.00 %s\n\n' % time_now.strftime('%A %B %d %Y %H:%M'))
-
+        wl('*EUROCOM_INTERCHANGE_FILE 100')
+        wl('*COMMENT Eurocom Interchange File Version 1.00 %s' % (datetime.datetime.utcnow()).strftime('%A %B %d %Y %H:%M'))
+        wl('')
         #print scene info
-        ow('*SCENE {\n')
-        ow(' *FILENAME   "%s"\n' % (bpy.data.filepath))
-        ow(' *FIRSTFRAME  %3d\n' % (scn.frame_start))
-        ow(' *LASTFRAME   %3d\n' % (scn.frame_end  ))
-        ow(' *FRAMESPEED  %3d\n' % (scn.render.fps ))
-        ow(' *STATICFRAME %3d\n' % (scn.frame_current))
+        wl('*SCENE {')
+        wl(' *FILENAME   "%s"' % (bpy.data.filepath))
+        wl(' *FIRSTFRAME  %3d' % (scn.frame_start  ))
+        wl(' *LASTFRAME   %3d' % (scn.frame_end    ))
+        wl(' *FRAMESPEED  %3d' % (scn.render.fps   ))
+        wl(' *STATICFRAME %3d' % (scn.frame_current))
         AmbientValue = bpy.context.scene.world.light_settings.ao_factor
-        ow(' *AMBIENTSTATIC %.6f %.6f %.6f\n' %(AmbientValue, AmbientValue, AmbientValue))
-        ow('}\n\n') 
-
+        wl(' *AMBIENTSTATIC %.6f %.6f %.6f' %(AmbientValue, AmbientValue, AmbientValue))
+        wl('}') 
+        wl('')
+        
         #Write materials
         GetMaterials()
 
