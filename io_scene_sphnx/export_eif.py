@@ -299,10 +299,12 @@ def save(context,
 
                             #Write Flags ---F
                             if ('F' in FaceFormat):
-                                if MatSlots[poly.material_index].material.use_backface_culling == False:
-                                    ow('%d ' % 65536)
-                                else:
-                                    ow('%d ' % 00000)
+                                flags = 0
+                                
+                                if MatSlots[poly.material_index].material.use_backface_culling:
+                                    flags |= 1 << 16
+   
+                                ow('%d ' % flags)
                             ow('\n')
                         wl(' }')
 
