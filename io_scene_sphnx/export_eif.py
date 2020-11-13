@@ -30,7 +30,7 @@ def save(context,
          keep_vertex_order=False,
          use_vertex_groups=False,
          use_nurbs=True,
-         use_selection=True,
+         use_selection=False,
          use_animation=False,
          global_matrix=None,
          path_mode='AUTO'
@@ -45,18 +45,58 @@ def save(context,
 
         print('[i] exporting', filepath)
         
-        #*===============================================================================================
-        #* Write file header
-        #*===============================================================================================
-        
         # Stop edit mode
         if bpy.ops.object.mode_set.poll():
             bpy.ops.object.mode_set(mode='OBJECT')
 
-        bpy.context.scene.world.light_settings.use_ambient_occlusion = True
-        
         # Get scene info
         scn = bpy.context.scene
+        
+        if use_selection:
+            obs = bpy.context.selected_objects
+        else:
+            obs = bpy.context.scene.objects
+            
+            
+        # Axis Conversion
+        global_matrix = axis_conversion(to_forward='Z', to_up='Y').to_4x4()
+        
+        # swy: bake modifiers and get the final mesh
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        bm = bmesh.new()
+
+        for ob in obs:
+            if use_mesh_modifiers:
+                ob_eval = ob.evaluated_get(depsgraph)
+            else:
+                ob_eval = ob
+
+            try:
+                me = ob_eval.to_mesh()
+            except RuntimeError:
+                continue
+
+            me.transform(ob.matrix_world)
+            bm.from_mesh(me)
+            ob_eval.to_mesh_clear()
+
+        mesh = bpy.data.meshes.new("TMP PLY EXPORT")
+        bm.to_mesh(mesh)
+        bm.free()
+
+        if global_matrix is not None:
+            mesh.transform(global_matrix)
+
+        if use_normals:
+            mesh.calc_normals()
+            
+        bpy.data.meshes.remove(mesh)
+
+        bpy.context.scene.world.light_settings.use_ambient_occlusion = True
+        
+        #*===============================================================================================
+        #* Write file header
+        #*===============================================================================================
 
         # Script header
         wl('*EUROCOM_INTERCHANGE_FILE 100')
@@ -75,9 +115,6 @@ def save(context,
         wl('')
         
         Materials_Dict = dict()
-
-        # Axis Conversion
-        global_matrix = axis_conversion(to_forward='Y', to_up='Z').to_4x4()
 
     #*===============================================================================================
     #* Get data lists from the object
@@ -195,7 +232,7 @@ def save(context,
     #* Write object data to the file
     #*===============================================================================================
         def GetMesh():
-            for obj in scn.objects:
+            for obj in obs:
                 #Duplicate object
                 ob = obj.copy()
                 ob.data = obj.data.copy()
@@ -209,7 +246,6 @@ def save(context,
                     #Apply Axis conversion
                     if global_matrix is not None:
                         ob.data.transform(global_matrix)
-                        ob.rotation_euler = Euler((0.3, 0.4, 0.0), 'XZY')
 
                     if hasattr(ob, 'data'):
                         me = ob.data
