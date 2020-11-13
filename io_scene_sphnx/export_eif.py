@@ -64,20 +64,20 @@ def save(context,
         wl('')
         # print scene info
         wl('*SCENE {')
-        wl(' *FILENAME   "%s"' % (bpy.data.filepath))
-        wl(' *FIRSTFRAME  %3d' % (scn.frame_start  ))
-        wl(' *LASTFRAME   %3d' % (scn.frame_end    ))
-        wl(' *FRAMESPEED  %3d' % (scn.render.fps   ))
-        wl(' *STATICFRAME %3d' % (scn.frame_current))
+        wl('  *FILENAME   "%s"' % (bpy.data.filepath))
+        wl('  *FIRSTFRAME  %3d' % (scn.frame_start  ))
+        wl('  *LASTFRAME   %3d' % (scn.frame_end    ))
+        wl('  *FRAMESPEED  %3d' % (scn.render.fps   ))
+        wl('  *STATICFRAME %3d' % (scn.frame_current))
         AmbientValue = bpy.context.scene.world.light_settings.ao_factor
-        wl(' *AMBIENTSTATIC %.6f %.6f %.6f' %(AmbientValue, AmbientValue, AmbientValue))
+        wl('  *AMBIENTSTATIC %.6f %.6f %.6f' %(AmbientValue, AmbientValue, AmbientValue))
         wl('}') 
         wl('')
         
         Materials_Dict = dict()
 
         # Axis Conversion
-        global_matrix = axis_conversion(to_forward='Y',to_up='Z').to_4x4()
+        global_matrix = axis_conversion(to_forward='Y', to_up='Z').to_4x4()
 
     #*===============================================================================================
     #* Get data lists from the object
@@ -134,10 +134,6 @@ def save(context,
                     DiffuseColor = mat.material.diffuse_color
                     MaterialIndex = GetMaterialIndex(DiffuseColor[0]+DiffuseColor[1]+DiffuseColor[2])
                 return MaterialIndex
-
-        def MirrorVertices(ob):
-            for vertex in ob.data.vertices:
-                vertex.co.x = vertex.co.x * -1.0
 
     #*===============================================================================================
     #* Get materials and write data
@@ -204,18 +200,16 @@ def save(context,
                 ob = obj.copy()
                 ob.data = obj.data.copy()
 
-                #Export clon
+                # export cloned object
                 if ob.hide_viewport:
                     continue
+
                 if ob.type == 'MESH':
 
                     #Apply Axis conversion
                     if global_matrix is not None:
                         ob.data.transform(global_matrix)
                         ob.rotation_euler = Euler((0.3, 0.4, 0.0), 'XZY')
-
-                    #Mirror Vertices
-                    MirrorVertices(ob)
 
                     if hasattr(ob, 'data'):
                         me = ob.data
@@ -229,43 +223,43 @@ def save(context,
 
                         #==================PRINT DATA==============================
                         wl('*MESH {')
-                        wl(' *NAME "%s"' % (ob.name))
-                        wl(' *VERTCOUNT    %3d' % (len(VertexList)))
-                        wl(' *UVCOUNT      %3d' % (len(UVList)))
-                        wl(' *VERTCOLCOUNT %3d' % (len(VertColList)))
-                        wl(' *FACECOUNT    %3d' % (len(me.polygons)))
-                        wl(' *TRIFACECOUNT %3d' % (sum(len(p.vertices) - 2 for p in me.polygons)))
+                        wl('  *NAME "%s"' % (ob.name))
+                        wl('  *VERTCOUNT    %3d' % (len(VertexList)))
+                        wl('  *UVCOUNT      %3d' % (len(UVList)))
+                        wl('  *VERTCOLCOUNT %3d' % (len(VertColList)))
+                        wl('  *FACECOUNT    %3d' % (len(me.polygons)))
+                        wl('  *TRIFACECOUNT %3d' % (sum(len(p.vertices) - 2 for p in me.polygons)))
 
                         if NumFaceLayers > 0:
-                            wl(' *FACELAYERSCOUNT %d' % (NumFaceLayers))
+                            wl('  *FACELAYERSCOUNT %d' % (NumFaceLayers))
                         else:
-                            wl(' *FACELAYERSCOUNT %d' % (NumFaceLayers + 1))
+                            wl('  *FACELAYERSCOUNT %d' % (NumFaceLayers + 1))
 
                         #Check if there are more than one layer
                         if (len(me.uv_layers) > 1):
-                            wl(' *FACESHADERCOUNT %d' % len(MatSlots))
+                            wl('  *FACESHADERCOUNT %d' % len(MatSlots))
 
                         #Print Vertex data
-                        wl(' *VERTEX_LIST {')
+                        wl('  *VERTEX_LIST {')
                         for vtx in VertexList:
-                            wl('  %.6f %.6f %.6f' % (vtx[0], vtx[1], vtx[2]))
-                        wl(' }')
+                            wl('    %.6f %.6f %.6f' % (vtx[0], vtx[1], vtx[2]))
+                        wl('  }')
 
                         #Print UV data
-                        wl(' *UV_LIST {')
+                        wl('  *UV_LIST {')
                         if (len(UVList) > 0):
                             FaceFormat += 'T'
                             for uv in UVList:
-                                wl('  %.6f %.6f' % (uv[0], uv[1]))
-                        wl(' }')
+                                wl('    %.6f %.6f' % (uv[0], uv[1]))
+                        wl('  }')
 
                         #Check if the vertex colors layer is active
-                        wl(' *VERTCOL_LIST {')
+                        wl('  *VERTCOL_LIST {')
                         if(len(VertColList) > 0):
                             FaceFormat += 'C'
                             for col in VertColList:
-                                wl('  %.6f %.6f %.6f %.6f' % (col[0], col[1], col[2], col[3]))
-                        wl(' }')
+                                wl('    %.6f %.6f %.6f %.6f' % (col[0], col[1], col[2], col[3]))
+                        wl('  }')
 
                         if len(MatSlots) > 0:
                             FaceFormat += 'M'
@@ -300,7 +294,7 @@ def save(context,
                             PolygonVertices = poly.vertices
 
                             #Write vertices ---V
-                            ow('  %d ' % (len(PolygonVertices)))
+                            ow('    %d ' % (len(PolygonVertices)))
                             for vert in PolygonVertices:
                                 ow('%d ' % vert)
 
@@ -349,17 +343,17 @@ def save(context,
     #*===============================================================================================
         def GetGeomNode(ob):
             wl('*GEOMNODE {')
-            wl(' *NAME "%s"' % (ob.name))
-            wl(' *MESH "%s"' % (ob.name))
-            wl(' *WORLD_TM {')
-            wl('  *TMROW0 1 0 0 0')
-            wl('  *TMROW1 0 1 0 0')
-            wl('  *TMROW2 0 0 1 0')
-            wl('  *TMROW3 0 0 0 1')
-            wl('  *POS    0 0 0')
-            wl('  *ROT   -0 0 0')
-            wl('  *SCL    1 1 1')
-            wl(' }')
+            wl('  *NAME "%s"' % (ob.name))
+            wl('  *MESH "%s"' % (ob.name))
+            wl('  *WORLD_TM {')
+            wl('    *TMROW0 1 0 0 0')
+            wl('    *TMROW1 0 1 0 0')
+            wl('    *TMROW2 0 0 1 0')
+            wl('    *TMROW3 0 0 0 1')
+            wl('    *POS    0 0 0')
+            wl('    *ROT   -0 0 0')
+            wl('    *SCL    1 1 1')
+            wl('  }')
             wl('}')
 
     #*===============================================================================================
@@ -367,18 +361,18 @@ def save(context,
     #*===============================================================================================
         def GetPlaceNode(ob):
             wl('*PLACENODE {')
-            wl(' *NAME "%s"' % (ob.name))
-            wl(' *MESH "%s"' % (ob.name))
-            wl(' *WORLD_TM {')
+            wl('  *NAME "%s"' % (ob.name))
+            wl('  *MESH "%s"' % (ob.name))
+            wl('  *WORLD_TM {')
             RotationMatrix = ob.matrix_world
-            wl('  *TMROW0 %.6f %.6f %.6f 0' % (RotationMatrix[0].x,RotationMatrix[0].y,RotationMatrix[0].z))
-            wl('  *TMROW1 %.6f %.6f %.6f 0' % (RotationMatrix[1].x,RotationMatrix[1].y,RotationMatrix[1].z))
-            wl('  *TMROW2 %.6f %.6f %.6f 0' % (RotationMatrix[2].x,RotationMatrix[2].y,RotationMatrix[2].z))
-            wl('  *TMROW3 %.6f %.6f %.6f 1' % (RotationMatrix[0].w,RotationMatrix[1].w,RotationMatrix[2].w))
+            wl('    *TMROW0 %.6f %.6f %.6f 0' % (RotationMatrix[0].x,RotationMatrix[0].y,RotationMatrix[0].z))
+            wl('    *TMROW1 %.6f %.6f %.6f 0' % (RotationMatrix[1].x,RotationMatrix[1].y,RotationMatrix[1].z))
+            wl('    *TMROW2 %.6f %.6f %.6f 0' % (RotationMatrix[2].x,RotationMatrix[2].y,RotationMatrix[2].z))
+            wl('    *TMROW3 %.6f %.6f %.6f 1' % (RotationMatrix[0].w,RotationMatrix[1].w,RotationMatrix[2].w))
             # swy: these aren't actually used or read by this version of the importer
-            wl('  *POS    %.6f %.6f %.6f'   % (ob.location.x, ob.location.y, ob.location.z))
-            wl('  *ROT    %.6f %.6f %.6f'   % (radians(ob.rotation_euler.x), radians(ob.rotation_euler.y), radians(ob.rotation_euler.z)))
-            wl('  *SCL    %.6f %.6f %.6f'   % (ob.scale.x, ob.scale.y, ob.scale.z))
+            wl('    *POS    %.6f %.6f %.6f'   % (ob.location.x, ob.location.y, ob.location.z))
+            wl('    *ROT    %.6f %.6f %.6f'   % (radians(ob.rotation_euler.x), radians(ob.rotation_euler.y), radians(ob.rotation_euler.z)))
+            wl('    *SCL    %.6f %.6f %.6f'   % (ob.scale.x, ob.scale.y, ob.scale.z))
             wl(' }')
             wl('}')
         
