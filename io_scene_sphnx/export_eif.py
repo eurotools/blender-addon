@@ -36,7 +36,6 @@ def save(context,
          path_mode='AUTO'
          ):
 
-    #Open writer
     with open(filepath, 'w') as out:
         ow = out.write
         
@@ -45,9 +44,35 @@ def save(context,
             ow(line + '\n')
 
         print('[i] exporting', filepath)
+        
+        #*===============================================================================================
+        #* Write file header
+        #*===============================================================================================
+        
+        # Stop edit mode
+        if bpy.ops.object.mode_set.poll():
+            bpy.ops.object.mode_set(mode='OBJECT')
 
-        #Get scene info
+        bpy.context.scene.world.light_settings.use_ambient_occlusion = True
+        
+        # Get scene info
         scn = bpy.context.scene
+
+        # Script header
+        wl('*EUROCOM_INTERCHANGE_FILE 100')
+        wl('*COMMENT Eurocom Interchange File Version 1.00 %s' % (datetime.datetime.utcnow()).strftime('%A %B %d %Y %H:%M'))
+        wl('')
+        # print scene info
+        wl('*SCENE {')
+        wl(' *FILENAME   "%s"' % (bpy.data.filepath))
+        wl(' *FIRSTFRAME  %3d' % (scn.frame_start  ))
+        wl(' *LASTFRAME   %3d' % (scn.frame_end    ))
+        wl(' *FRAMESPEED  %3d' % (scn.render.fps   ))
+        wl(' *STATICFRAME %3d' % (scn.frame_current))
+        AmbientValue = bpy.context.scene.world.light_settings.ao_factor
+        wl(' *AMBIENTSTATIC %.6f %.6f %.6f' %(AmbientValue, AmbientValue, AmbientValue))
+        wl('}') 
+        wl('')
         
         Materials_Dict = dict()
 
@@ -356,31 +381,6 @@ def save(context,
             wl('  *SCL    %.6f %.6f %.6f'   % (ob.scale.x, ob.scale.y, ob.scale.z))
             wl(' }')
             wl('}')
-
-    #*===============================================================================================
-    #* Write file header
-    #*===============================================================================================
-        # Stop edit mode
-        if bpy.ops.object.mode_set.poll():
-            bpy.ops.object.mode_set(mode='OBJECT')
-
-        bpy.context.scene.world.light_settings.use_ambient_occlusion = True
-
-        #Script header
-        wl('*EUROCOM_INTERCHANGE_FILE 100')
-        wl('*COMMENT Eurocom Interchange File Version 1.00 %s' % (datetime.datetime.utcnow()).strftime('%A %B %d %Y %H:%M'))
-        wl('')
-        #print scene info
-        wl('*SCENE {')
-        wl(' *FILENAME   "%s"' % (bpy.data.filepath))
-        wl(' *FIRSTFRAME  %3d' % (scn.frame_start  ))
-        wl(' *LASTFRAME   %3d' % (scn.frame_end    ))
-        wl(' *FRAMESPEED  %3d' % (scn.render.fps   ))
-        wl(' *STATICFRAME %3d' % (scn.frame_current))
-        AmbientValue = bpy.context.scene.world.light_settings.ao_factor
-        wl(' *AMBIENTSTATIC %.6f %.6f %.6f' %(AmbientValue, AmbientValue, AmbientValue))
-        wl('}') 
-        wl('')
         
         #Write materials
         GetMaterials()
