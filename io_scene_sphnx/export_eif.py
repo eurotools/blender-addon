@@ -17,7 +17,7 @@ def save(context,
          *,
          use_triangles=False,
          use_edges=True,
-         use_normals=False,
+         use_normals=True,
          use_smooth_groups=False,
          use_smooth_groups_bitflags=False,
          use_uvs=True,
@@ -57,41 +57,15 @@ def save(context,
         else:
             obs = bpy.context.scene.objects
             
-            
         # Axis Conversion
         global_matrix = axis_conversion(to_forward='Z', to_up='Y').to_4x4()
         
-        # swy: bake modifiers and get the final mesh
-        depsgraph = bpy.context.evaluated_depsgraph_get()
-        bm = bmesh.new()
-
-        for ob in obs:
-            if use_mesh_modifiers:
-                ob_eval = ob.evaluated_get(depsgraph)
-            else:
-                ob_eval = ob
-
-            try:
-                me = ob_eval.to_mesh()
-            except RuntimeError:
-                continue
-
-            me.transform(ob.matrix_world)
-            bm.from_mesh(me)
-            ob_eval.to_mesh_clear()
-
-        mesh = bpy.data.meshes.new("TMP PLY EXPORT")
-        bm.to_mesh(mesh)
-        bm.free()
-
-        if global_matrix is not None:
-            mesh.transform(global_matrix)
-
-        if use_normals:
-            mesh.calc_normals()
-            
-        bpy.data.meshes.remove(mesh)
-
+        global_matrix = Matrix(((1, 0, 0),
+                                (0, 0, 1),
+                                (0, 1, 0))).to_4x4()
+        
+        
+        #global_matrix[0][0] *= -1
         bpy.context.scene.world.light_settings.use_ambient_occlusion = True
         
         #*===============================================================================================
@@ -234,25 +208,38 @@ def save(context,
         def GetMesh():
             for obj in obs:
                 #Duplicate object
-                ob = obj.copy()
-                ob.data = obj.data.copy()
+                ob = obj
 
                 # export cloned object
                 if ob.hide_viewport:
                     continue
 
                 if ob.type == 'MESH':
-
-                    #Apply Axis conversion
-                    if global_matrix is not None:
-                        ob.data.transform(global_matrix)
-
                     if hasattr(ob, 'data'):
-                        me = ob.data
+                        depsgraph = bpy.context.evaluated_depsgraph_get()
+                        ob_for_convert = ob.evaluated_get(depsgraph)
 
-                        VertexList = GetVertexList(ob.data)
-                        UVList = GetUVList(ob.data)
-                        VertColList = GetVertexColorList(ob.data)
+                        try:
+                            me = ob_for_convert.to_mesh()
+                        except RuntimeError:
+                            me = None
+
+                        if me is None:
+                            continue
+
+                        print(global_matrix)
+                        #Apply Axis conversion
+                        if global_matrix is not None:
+                            me.transform(global_matrix)
+                        
+                        #if use_normals:
+                            me.calc_normals()
+                            
+                        me.flip_normals()
+                        
+                        VertexList = GetVertexList(me)
+                        UVList = GetUVList(me)
+                        VertColList = GetVertexColorList(me)
                         NumFaceLayers = len(me.uv_layers)
                         MatSlots = ob.material_slots
                         FaceFormat = 'V'
@@ -371,8 +358,6 @@ def save(context,
 
                     #Write PlaceNode
                     GetPlaceNode(ob)
-
-                bpy.data.objects.remove(ob, do_unlink=True)
 
     #*===============================================================================================
     #* Get GeomNode of each object
