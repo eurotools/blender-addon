@@ -385,29 +385,20 @@ def save(context,
             wl('  *NAME "%s"' % (ob.name))
             wl('  *MESH "%s"' % (ob.name))
             wl('  *WORLD_TM {')
-            print(global_matrix, ob.matrix_world, ob.location, global_matrix @ ob.matrix_world.translation)
+            
+            # swy: don't ask me, I only got this right at the 29th try
             RotationMatrix = global_matrix @ ob.matrix_world
-            RotationMatrix = global_matrix.to_3x3().inverted() @ RotationMatrix.to_3x3()
-            
-            TranslatMatrix = global_matrix @ ob.matrix_world.translation
-            #ob.matrix_world = RotationMatrix
-            print(RotationMatrix, TranslatMatrix)
-            #wl('    *TMROW0 %.6f %.6f %.6f 0' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
-            #wl('    *TMROW1 %.6f %.6f %.6f 0' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
-            #wl('    *TMROW2 %.6f %.6f %.6f 0' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
-            #wl('    *TMROW3 %.6f %.6f %.6f 1' % (TranslatMatrix.x,    TranslatMatrix.y,    TranslatMatrix.z))
-            
-            RotationMatrix = global_matrix @ ob.matrix_world #.inverted().transposed()
             RotationMatrix = global_matrix @ RotationMatrix.transposed()
+            
             wl('    *TMROW0 %.6f %.6f %.6f 0' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
             wl('    *TMROW1 %.6f %.6f %.6f 0' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
             wl('    *TMROW2 %.6f %.6f %.6f 0' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
             wl('    *TMROW3 %.6f %.6f %.6f 1' % (RotationMatrix[3].x, RotationMatrix[3].y, RotationMatrix[3].z))
             
             # swy: these aren't actually used or read by this version of the importer
-            #wl('    *POS    %.6f %.6f %.6f'   % (ob.location.x, ob.location.y, ob.location.z))
-            #wl('    *ROT    %.6f %.6f %.6f'   % (radians(ob.rotation_euler.x), radians(ob.rotation_euler.y), radians(ob.rotation_euler.z)))
-            #wl('    *SCL    %.6f %.6f %.6f'   % (ob.scale.x, ob.scale.y, ob.scale.z))
+            wl('    *POS    %.6f %.6f %.6f'   % (ob.location.x, ob.location.y, ob.location.z))
+            wl('    *ROT    %.6f %.6f %.6f'   % (radians(ob.rotation_euler.x), radians(ob.rotation_euler.y), radians(ob.rotation_euler.z)))
+            wl('    *SCL    %.6f %.6f %.6f'   % (ob.scale.x, ob.scale.y, ob.scale.z))
             wl(' }')
             wl('}')
         
