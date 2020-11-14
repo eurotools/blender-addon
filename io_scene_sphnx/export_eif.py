@@ -397,7 +397,8 @@ def save(context,
             #wl('    *TMROW2 %.6f %.6f %.6f 0' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
             #wl('    *TMROW3 %.6f %.6f %.6f 1' % (TranslatMatrix.x,    TranslatMatrix.y,    TranslatMatrix.z))
             
-            RotationMatrix = global_matrix @ ob.matrix_world.transposed()
+            RotationMatrix = global_matrix @ ob.matrix_world #.inverted().transposed()
+            RotationMatrix = global_matrix @ RotationMatrix.transposed()
             wl('    *TMROW0 %.6f %.6f %.6f 0' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
             wl('    *TMROW1 %.6f %.6f %.6f 0' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
             wl('    *TMROW2 %.6f %.6f %.6f 0' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
