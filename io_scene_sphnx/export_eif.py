@@ -317,27 +317,40 @@ def save(context,
                             PolygonVertices = poly.vertices
 
                             #Write vertices ---V
-                            ow('    %d ' % (len(PolygonVertices)))
+                            ow('    %d    ' % (len(PolygonVertices)))
                             for vert in PolygonVertices:
                                 ow('%d ' % vert)
-
+                                
+                            ow('   ')
+                            
                             #Write UVs ---T
                             if ('T' in FaceFormat):
                                 for vert_idx, loop_idx in enumerate(poly.loop_indices):
                                     for layer in me.uv_layers:
                                         uv_coords = layer.data[loop_idx].uv
                                         ow('%d ' % UVList.index((uv_coords.x, 1.0 - float(uv_coords.y))))
+                                    ow(' ')
+                                ow('   ')
 
                             #Write Colors ---C
                             if ('C' in FaceFormat):
                                 for color_idx, loop_idx in enumerate(poly.loop_indices):
+                                    # swy: this is wrong; it should be the same layer count as any other face format block, can't be a different size. me.vertex_colors != me.uv_layers
                                     for layerIndex in me.vertex_colors:
                                         vertex = layerIndex.data[loop_idx]
                                         ow('%d ' % VertColList.index((vertex.color[0] * .5, vertex.color[1] * .5, vertex.color[2] * .5, vertex.color[3])))
+                                    ow(' ')
+                                ow('   ')
 
+                            # swy: we're missing exporting (optional) face normals here
+                            
                             #Write Material Index ---M
                             if ('M' in FaceFormat):
-                                ow('%d ' % SearchMaterialIndex(MatSlots[poly.material_index]))
+                                for layer in me.uv_layers:
+                                    ow('%d ' % SearchMaterialIndex(MatSlots[poly.material_index]))
+                                ow('   ')
+                                
+                            # swy: we're missing exporting an optional shader index here
 
                             #Write Flags ---F
                             if ('F' in FaceFormat):
