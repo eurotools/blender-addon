@@ -66,6 +66,8 @@ def WriteFile():
     for SceneObj in ProjectContextScene.objects:
         if SceneObj.type == 'CAMERA':
             
+            ObjCameraData = SceneObj.data
+            
             CameraMatrixRot = SceneObj.rotation_euler.to_matrix()
             RotationMatrix = global_matrix @ CameraMatrixRot
             RotationMatrix = global_matrix @ RotationMatrix.transposed()
@@ -74,6 +76,10 @@ def WriteFile():
             out.write('*CAMERAOBJECT {\n')
             out.write('\t*NODE_NAME "%s"\n' % SceneObj.name)
             out.write('\t*CAMERA_TYPE %s\n' % "Target")
+            
+            #===============================================================================================
+            #  NODE TM
+            #=============================================================================================== 
             out.write('\t*NODE_TM {\n')
             out.write('\t\t*NODE_NAME "%s"\n' % SceneObj.name)
             out.write('\t\t*INHERIT_POS "%d %d %d"\n' % (0, 0, 0))
@@ -88,6 +94,18 @@ def WriteFile():
             out.write('\t\t*TM_SCALE %.4f %.4f %.4f\n' % (SceneObj.scale.x, SceneObj.scale.y,SceneObj.scale.z))            
             out.write('\t\t*TM_SCALEANGLE %.4f %.4f %.4f\n' % (0, 0, 0))
             out.write('\t}\n')
+            
+            #===============================================================================================
+            #  CAMERA SETTINGS
+            #=============================================================================================== 
+            #https://docs.blender.org/api/current/bpy.types.Camera.html
+            out.write('\t*NODE_TM {\n')
+            out.write('\t\t*TIMEVALUE %d\n' % 160) #needs checking
+            out.write('\t\t*CAMERA_NEAR %.4f\n' % ObjCameraData.clip_start)
+            out.write('\t\t*CAMERA_FAR %.4f\n'% ObjCameraData.clip_end)  
+            out.write('\t\t*CAMERA_FOV %.4f\n'% ObjCameraData.lens)
+            out.write('\t}\n')
+            
     
     #Close File
     out.close()
