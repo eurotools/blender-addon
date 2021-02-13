@@ -91,7 +91,7 @@ def WriteFile():
         bpy.ops.object.mode_set(mode='OBJECT')
     
     #Create new file
-    out = open(str(Path.home()) + "\\Desktop\\CameraExporter.ESE", "w")
+    out = open(str(Path.home()) + "\\Desktop\\_CameraExporter.ESE", "w")
     
     #Start writting
     out.write('*3DSMAX_EUROEXPORT	300\n')
@@ -145,19 +145,26 @@ def WriteFile():
             out.write('}\n')
             
     #===============================================================================================
-    #  Ligth Object
+    #  Light Object
     #===============================================================================================
     for SceneObj in ProjectContextScene.objects:
         if SceneObj.type == 'LIGHT':
             out.write('*LIGHTOBJECT {\n')
             out.write('\t*NODE_NAME "%s"\n' % SceneObj.name)
             out.write('\t*NODE_PARENT "%s"\n' % SceneObj.name)
-            out.write('\t*LIGHT_TYPE %s\n' % "Omni") #Seems that always used "Omni" lights in 3dsMax, in blender is called "Point"
+            
+            type_lut={}
+            type_lut['POINT']='Omni'
+            type_lut['SPOT' ]='TargetSpot'
+            type_lut['SUN'  ]='TargetDirect'
+            type_lut['AREA' ]='TargetDirect' # swy: this is sort of wrong ¯\_(ツ)_/¯
+            
+            out.write('\t*LIGHT_TYPE %s\n' % type_lut[SceneObj.data.type]) #Seems that always used "Omni" lights in 3dsMax, in blender is called "Point"
             
             PrintNODE_TM(out, SceneObj)
             
             #---------------------------------------------[Light Props]---------------------------------------------
-            out.write('\t*LIGHT_DECAY %s\n' % "None") #for now
+            out.write('\t*LIGHT_DECAY %s\n' % "InvSquare") # swy: this is the only supported mode
             out.write('\t*LIGHT_AFFECT_DIFFUSE %s\n' % "Off") #for now
             if (SceneObj.data.specular_factor > 0.001):
                 out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "On") #for now
@@ -168,8 +175,8 @@ def WriteFile():
             #---------------------------------------------[Light Settings]---------------------------------------------           
             out.write('\t*LIGHT_SETTINGS {\n')
             out.write('\t\t*TIMEVALUE %d\n' % 0)
-            out.write('\t\t*LIGHT_COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r * 255, SceneObj.data.color.g * 255, SceneObj.data.color.b * 255))
-            out.write('\t\t*FAR_ATTEN %d\n' % SceneObj.data.cutoff_distance)
+            out.write('\t\t*COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r * 255, SceneObj.data.color.g * 255, SceneObj.data.color.b * 255))
+            out.write('\t\t*FAR_ATTEN %.4f %.4f\n' % (SceneObj.data.distance, SceneObj.data.cutoff_distance))
             if (SceneObj.data.type == 'SUN'):
                 out.write('\t\t*HOTSPOT %d\n' % math.degrees(SceneObj.data.angle))
             else:
@@ -187,8 +194,8 @@ def WriteFile():
                 
                 out.write('\t\t*LIGHT_SETTINGS {\n')
                 out.write('\t\t\t*TIMEVALUE %d\n' % TimeValueCounter)
-                out.write('\t\t\t*LIGHT_COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r * 255, SceneObj.data.color.g * 255, SceneObj.data.color.b * 255))
-                out.write('\t\t\t*FAR_ATTEN %d\n' % SceneObj.data.cutoff_distance)
+                out.write('\t\t\t*COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r * 255, SceneObj.data.color.g * 255, SceneObj.data.color.b * 255))
+                out.write('\t\t\t*FAR_ATTEN %.4f %.4f\n' % (SceneObj.data.distance, SceneObj.data.cutoff_distance))
                 if (SceneObj.data.type == 'SUN'):
                     out.write('\t\t*HOTSPOT %d\n' % math.degrees(SceneObj.data.angle))
                 else:
@@ -204,8 +211,10 @@ def WriteFile():
             #===============================================================================================                         
             PrintTM_ANIMATION(out, SceneObj, TimeValue)
                         
-            #Close ligth object
+            #Close light object
             out.write('}\n')
     #Close File
+    out.flush()
     out.close()
+    del out
 WriteFile()
