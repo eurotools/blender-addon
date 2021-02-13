@@ -25,7 +25,7 @@ ProjectContextScene = bpy.context.scene
 #===============================================================================================
 #  FUNCTIONS
 #===============================================================================================
-def PrintNodeTM(OutputFile, SceneObject):
+def PrintNODE_TM(OutputFile, SceneObject):
         ProjectContextScene.frame_set(ProjectContextScene.frame_start)
         
         loc_conv = mtx_conv @ SceneObject.location
@@ -49,7 +49,7 @@ def PrintNodeTM(OutputFile, SceneObject):
         OutputFile.write('\t\t*TM_SCALEANGLE %.4f %.4f %.4f\n' % (0, 0, 0))
         OutputFile.write('\t}\n')
         
-def PrintNodeAnimation(OutputFile, SceneObject, TimeValue):
+def PrintTM_ANIMATION(OutputFile, SceneObject, TimeValue):
         OutputFile.write('\t*TM_ANIMATION {\n')
         OutputFile.write('\t\t*NODE_NAME "%s"\n' % SceneObject.name)
         OutputFile.write('\t\t*TM_ANIM_FRAMES {\n')
@@ -124,7 +124,7 @@ def WriteFile():
             out.write('\t*NODE_NAME "%s"\n' % SceneObj.name)
             out.write('\t*CAMERA_TYPE %s\n' % "Target")
             
-            PrintNodeTM(out, SceneObj)
+            PrintNODE_TM(out, SceneObj)
             
             #===============================================================================================
             #  CAMERA SETTINGS
@@ -141,7 +141,7 @@ def WriteFile():
             #===============================================================================================
             #  ANIMATION
             #===============================================================================================                         
-            PrintNodeAnimation(out, SceneObj, TimeValue)
+            PrintTM_ANIMATION(out, SceneObj, TimeValue)
             out.write('}\n')
             
     #===============================================================================================
@@ -154,12 +154,15 @@ def WriteFile():
             out.write('\t*NODE_PARENT "%s"\n' % SceneObj.name)
             out.write('\t*LIGHT_TYPE %s\n' % "Omni") #Seems that always used "Omni" lights in 3dsMax, in blender is called "Point"
             
-            PrintNodeTM(out, SceneObj)
+            PrintNODE_TM(out, SceneObj)
             
             #---------------------------------------------[Light Props]---------------------------------------------
             out.write('\t*LIGHT_DECAY %s\n' % "None") #for now
             out.write('\t*LIGHT_AFFECT_DIFFUSE %s\n' % "Off") #for now
-            out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "Off") #for now
+            if (SceneObj.data.specular_factor > 0.001):
+                out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "On") #for now
+            else:
+                out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "Off") #for now
             out.write('\t*LIGHT_AMBIENT_ONLY %s\n' % "Off") #for now
             
             #---------------------------------------------[Light Settings]---------------------------------------------           
@@ -167,13 +170,16 @@ def WriteFile():
             out.write('\t\t*TIMEVALUE %d\n' % 0)
             out.write('\t\t*LIGHT_COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r * 255, SceneObj.data.color.g * 255, SceneObj.data.color.b * 255))
             out.write('\t\t*FAR_ATTEN %d\n' % 0)
-            out.write('\t\t*HOTSPOT %d\n' % 0)
+            if (SceneObj.data.type == 'SUN'):
+                out.write('\t\t*HOTSPOT %d\n' % math.degrees(SceneObj.data.angle))
+            else:
+                out.write('\t\t*HOTSPOT %d\n' % 0)
             out.write('\t}\n')
             
             #===============================================================================================
             #  ANIMATION
             #===============================================================================================                         
-            PrintNodeAnimation(out, SceneObj, TimeValue)
+            PrintTM_ANIMATION(out, SceneObj, TimeValue)
             
             #===============================================================================================
             #  LIGHT ANIMATION
@@ -187,8 +193,11 @@ def WriteFile():
                 out.write('\t\t\t*TIMEVALUE %d\n' % TimeValueCounter)
                 out.write('\t\t\t*LIGHT_COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r * 255, SceneObj.data.color.g * 255, SceneObj.data.color.b * 255))
                 out.write('\t\t\t*FAR_ATTEN %d\n' % 0)
-                out.write('\t\t\t*HOTSPOT %d\n' % 0)
-                out.write('\t\t}\n')
+                if (SceneObj.data.type == 'SUN'):
+                    out.write('\t\t*HOTSPOT %d\n' % math.degrees(SceneObj.data.angle))
+                else:
+                    out.write('\t\t*HOTSPOT %d\n' % 0)
+                out.write('\t}\n')
                 TimeValueCounter += TimeValue
                 
             out.write('\t}\n')
