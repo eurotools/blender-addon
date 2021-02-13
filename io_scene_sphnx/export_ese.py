@@ -95,6 +95,7 @@ def WriteFile():
     #===============================================================================================
     #  SCENE INFO
     #=============================================================================================== 
+    BackgroundC = bpy.data.worlds["World"].node_tree.nodes["Background"].inputs[0].default_value
     AmbientValue = bpy.context.scene.world.light_settings.ao_factor
     TimeValue = 4800/ProjectContextScene.render.fps
     
@@ -104,7 +105,8 @@ def WriteFile():
     out.write('\t*SCENE_LASTFRAME %d\n' % ProjectContextScene.frame_end)
     out.write('\t*SCENE_FRAMESPEED %d\n' %  ProjectContextScene.render.fps)
     out.write('\t*SCENE_TICKSPERFRAME %d\n' % TimeValue)
-    out.write('\t*AMBIENTSTATIC %.4f %.4f %.4f\n' %(AmbientValue, AmbientValue, AmbientValue))
+    out.write('\t*SCENE_BACKGROUND_STATIC %d %d %d\n' %(BackgroundC[0], BackgroundC[1], BackgroundC[2]))    
+    out.write('\t*SCENE_AMBIENT_STATIC %.4f %.4f %.4f\n' %(AmbientValue, AmbientValue, AmbientValue))
     out.write('}\n')
 
     #===============================================================================================
@@ -126,7 +128,7 @@ def WriteFile():
                 
                 #Material
                 out.write('\t*MATERIAL %d {\n' % currentMat)
-                out.write('\t\t*MATERIAL_NAME %s\n' % MatData.name)
+                out.write('\t\t*MATERIAL_NAME "%s"\n' % MatData.name)
                 out.write('\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
                 out.write('\t\t*MATERIAL_SPECULAR %d %d %d\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
                 out.write('\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
@@ -138,6 +140,7 @@ def WriteFile():
                 out.write('\t\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
                 out.write('\t\t\t*MATERIAL_SPECULAR %d %d %d\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
                 out.write('\t\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
+                out.write('\t\t\t*MATERIAL_SELFILLUM %d\n' % int(MatData.use_preview_world))
                 
                 #Map Difuse
                 out.write('\t\t\t*MAP_DIFFUSE {\n')
@@ -149,6 +152,8 @@ def WriteFile():
                 out.write('\t\t\t}\n')
                 out.write('\t\t}\n')
                 out.write('\t}\n')
+                
+                currentMat += 1
             
     out.write('}\n')
   
