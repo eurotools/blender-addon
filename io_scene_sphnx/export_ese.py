@@ -36,13 +36,11 @@ def PrintNODE_TM(OutputFile, SceneObject):
         RotationMatrix = global_matrix @ ob.matrix_world
         RotationMatrix = global_matrix @ RotationMatrix.transposed()
 
-        OutputFile.write('\t*NODE_TM {\n')
         OutputFile.write('\t\t*NODE_NAME "%s"\n' % SceneObject.name)
         OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
         OutputFile.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
         OutputFile.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
         OutputFile.write('\t\t*TM_ROW3 %.4f %.4f %.4f\n' % (RotationMatrix[3].x, RotationMatrix[3].y, RotationMatrix[3].z))
-        OutputFile.write('\t}\n')
         
 def PrintTM_ANIMATION(OutputFile, SceneObject, TimeValue):
         OutputFile.write('\t*TM_ANIMATION {\n')
@@ -128,8 +126,9 @@ def WriteFile():
     for MatData in bpy.data.materials:
         DiffuseColor = MatData.diffuse_color
     
-        #Check if material has texture
         if hasattr(MatData.node_tree, 'nodes'):
+    
+            #Check if material has texture        
             ImageNode = MatData.node_tree.nodes.get('Image Texture', None)
             if (ImageNode is not None):
                 ImageName = ImageNode.image.name
@@ -139,6 +138,7 @@ def WriteFile():
                 out.write('\t\t*MATERIAL_NAME %s\n' % MatData.name)
                 out.write('\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
                 out.write('\t\t*MATERIAL_SPECULAR %d %d %d\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                out.write('\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
                 out.write('\t\t*NUMSUBMTLS %d \n' % 1)
                 
                 #Submaterial
@@ -146,6 +146,7 @@ def WriteFile():
                 out.write('\t\t\t*MATERIAL_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
                 out.write('\t\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
                 out.write('\t\t\t*MATERIAL_SPECULAR %d %d %d\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                out.write('\t\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
                 
                 #Map Difuse
                 out.write('\t\t\t*MAP_DIFFUSE {\n')
@@ -159,9 +160,20 @@ def WriteFile():
                 out.write('\t}\n')
             
     out.write('}\n')
-    
-    
-    
+  
+    #===============================================================================================
+    #  GEOM OBJECT
+    #=============================================================================================== 
+    for SceneObj in ProjectContextScene.objects:
+        if SceneObj.type == 'MESH':
+            out.write('*GEOMOBJECT {\n')
+            out.write('\t*NODE_NAME "%s"\n' % SceneObj.name)
+            
+            #Print Matrix Rotation
+            out.write('\t*NODE_TM {\n')
+            PrintNODE_TM(out, SceneObj)
+            out.write('\t}\n')
+            
     #===============================================================================================
     #  CAMERA OBJECT
     #=============================================================================================== 
@@ -171,7 +183,10 @@ def WriteFile():
             out.write('\t*NODE_NAME "%s"\n' % SceneObj.name)
             out.write('\t*CAMERA_TYPE %s\n' % "Target")
             
+            #Print Matrix Rotation
+            out.write('\t*NODE_TM {\n')
             PrintNODE_TM(out, SceneObj)
+            out.write('\t}\n')
             
             #===============================================================================================
             #  CAMERA SETTINGS
@@ -229,8 +244,11 @@ def WriteFile():
             type_lut['AREA' ]='TargetDirect' # swy: this is sort of wrong ¯\_(ツ)_/¯
             
             out.write('\t*LIGHT_TYPE %s\n' % type_lut[SceneObj.data.type]) #Seems that always used "Omni" lights in 3dsMax, in blender is called "Point"
-            
+
+            #Print Matrix Rotation
+            out.write('\t*NODE_TM {\n')
             PrintNODE_TM(out, SceneObj)
+            out.write('\t}\n')
             
             #---------------------------------------------[Light Props]---------------------------------------------
             out.write('\t*LIGHT_DECAY %s\n' % "InvSquare") # swy: this is the only supported mode
