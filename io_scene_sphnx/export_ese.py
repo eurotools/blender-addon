@@ -72,16 +72,7 @@ def PrintTM_ANIMATION(OutputFile, SceneObject, TimeValue):
             #Update counter
             TimeValueCounter += TimeValue            
         OutputFile.write('\t\t}\n')
-        OutputFile.write('\t}\n')
-        
-def GetMaterialCount():
-    NumberOfMaterials = 0
-    
-    for i in bpy.data.materials:
-        NumberOfMaterials += 1
-        
-    return NumberOfMaterials
-      
+        OutputFile.write('\t}\n')  
                 
 #===============================================================================================
 #  MAIN
@@ -120,7 +111,7 @@ def WriteFile():
     #  MATERIAL LIST
     #===============================================================================================
     out.write('*MATERIAL_LIST {\n')
-    out.write('\t*MATERIAL_COUNT %d\n' % GetMaterialCount())
+    out.write('\t*MATERIAL_COUNT %d\n' % len(bpy.data.materials))
     
     currentMat = 0
     for MatData in bpy.data.materials:
@@ -173,6 +164,26 @@ def WriteFile():
             out.write('\t*NODE_TM {\n')
             PrintNODE_TM(out, SceneObj)
             out.write('\t}\n')
+            
+            #Print Matrix Rotation again ¯\_(ツ)_/¯
+            out.write('\t*PIVOT_TM {\n')
+            PrintNODE_TM(out, SceneObj)
+            out.write('\t}\n')
+            
+            #MESH Section
+            out.write('\t*MESH {\n')
+            out.write('\t\t*TIMEVALUE %d\n' % 0)
+            out.write('\t\t*MESH_NUMVERTEX %d\n' % len(SceneObj.data.vertices))
+            out.write('\t\t*MESH_NUMFACES %d\n' % len(SceneObj.data.polygons))
+            out.write('\t\t*MESH_VERTEX_LIST {\n')
+            
+            for ObjVertex in SceneObj.data.vertices:
+                out.write('\t\t\t*MESH_VERTEX %d %.4f %.4f %.4f\n' % (ObjVertex.index, ObjVertex.co.x, ObjVertex.co.y, ObjVertex.co.z))
+                
+            
+            out.write('\t\t}\n')
+            out.write('\t}\n')
+            out.write('}\n')
             
     #===============================================================================================
     #  CAMERA OBJECT
