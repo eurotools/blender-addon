@@ -139,6 +139,28 @@ def WriteFile():
             out.write('\t}\n')
             
             #===============================================================================================
+            #  CAMERA ANIMATION
+            #===============================================================================================  
+            out.write('\t*CAMERA_ANIMATION {\n')
+
+            TimeValueCounter = 0
+            for f in range(ProjectContextScene.frame_start, ProjectContextScene.frame_end + 1):
+                ProjectContextScene.frame_set(f)
+                
+                FieldOfView = math.degrees(2 * math.atan(SceneObj.data.sensor_width /(2 * SceneObj.data.lens)))
+                out.write('\t\t*CAMERA_SETTINGS {\n')
+                out.write('\t\t\t*TIMEVALUE %d\n' % 0)
+                out.write('\t\t\t*CAMERA_NEAR %.4f\n' % SceneObj.data.clip_start)
+                out.write('\t\t\t*CAMERA_FAR %.4f\n'% SceneObj.data.clip_end)  
+                out.write('\t\t\t*CAMERA_FOV %.4f\n'% FieldOfView)
+                out.write('\t\t\t*CAMERA_TDIST %.4f\n'% 32.1137)
+                out.write('\t\t}\n')
+                
+                TimeValueCounter += TimeValue
+                
+            out.write('\t}\n')
+            
+            #===============================================================================================
             #  ANIMATION
             #===============================================================================================                         
             PrintTM_ANIMATION(out, SceneObj, TimeValue)
@@ -211,7 +233,7 @@ def WriteFile():
             #===============================================================================================                         
             PrintTM_ANIMATION(out, SceneObj, TimeValue)
                         
-            #Close Light object
+            #Close light object
             out.write('}\n')
     #Close File
     out.flush()
