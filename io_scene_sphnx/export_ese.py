@@ -197,7 +197,7 @@ def WriteFile():
             #---------------------------------------------[Light Settings]---------------------------------------------           
             out.write('\t*LIGHT_SETTINGS {\n')
             out.write('\t\t*TIMEVALUE %d\n' % 0)
-            out.write('\t\t*COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r * 255, SceneObj.data.color.g * 255, SceneObj.data.color.b * 255))
+            out.write('\t\t*COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r, SceneObj.data.color.g, SceneObj.data.color.b))
             out.write('\t\t*FAR_ATTEN %.4f %.4f\n' % (SceneObj.data.distance, SceneObj.data.cutoff_distance))
             if (SceneObj.data.type == 'SUN'):
                 out.write('\t\t*HOTSPOT %d\n' % math.degrees(SceneObj.data.angle))
@@ -216,7 +216,7 @@ def WriteFile():
                 
                 out.write('\t\t*LIGHT_SETTINGS {\n')
                 out.write('\t\t\t*TIMEVALUE %d\n' % TimeValueCounter)
-                out.write('\t\t\t*COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r * 255, SceneObj.data.color.g * 255, SceneObj.data.color.b * 255))
+                out.write('\t\t\t*COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r, SceneObj.data.color.g, SceneObj.data.color.b))
                 out.write('\t\t\t*FAR_ATTEN %.4f %.4f\n' % (SceneObj.data.distance, SceneObj.data.cutoff_distance))
                 if (SceneObj.data.type == 'SUN'):
                     out.write('\t\t\t*HOTSPOT %d\n' % math.degrees(SceneObj.data.angle))
