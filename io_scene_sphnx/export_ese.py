@@ -169,17 +169,12 @@ def WriteFile():
             out.write('\t*LIGHT_SETTINGS {\n')
             out.write('\t\t*TIMEVALUE %d\n' % 0)
             out.write('\t\t*LIGHT_COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r * 255, SceneObj.data.color.g * 255, SceneObj.data.color.b * 255))
-            out.write('\t\t*FAR_ATTEN %d\n' % 0)
+            out.write('\t\t*FAR_ATTEN %d\n' % SceneObj.data.cutoff_distance)
             if (SceneObj.data.type == 'SUN'):
                 out.write('\t\t*HOTSPOT %d\n' % math.degrees(SceneObj.data.angle))
             else:
                 out.write('\t\t*HOTSPOT %d\n' % 0)
             out.write('\t}\n')
-            
-            #===============================================================================================
-            #  ANIMATION
-            #===============================================================================================                         
-            PrintTM_ANIMATION(out, SceneObj, TimeValue)
             
             #===============================================================================================
             #  LIGHT ANIMATION
@@ -189,19 +184,26 @@ def WriteFile():
             TimeValueCounter = 0
             for f in range(ProjectContextScene.frame_start, ProjectContextScene.frame_end + 1):
                 ProjectContextScene.frame_set(f)
+                
                 out.write('\t\t*LIGHT_SETTINGS {\n')
                 out.write('\t\t\t*TIMEVALUE %d\n' % TimeValueCounter)
                 out.write('\t\t\t*LIGHT_COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r * 255, SceneObj.data.color.g * 255, SceneObj.data.color.b * 255))
-                out.write('\t\t\t*FAR_ATTEN %d\n' % 0)
+                out.write('\t\t\t*FAR_ATTEN %d\n' % SceneObj.data.cutoff_distance)
                 if (SceneObj.data.type == 'SUN'):
                     out.write('\t\t*HOTSPOT %d\n' % math.degrees(SceneObj.data.angle))
                 else:
                     out.write('\t\t*HOTSPOT %d\n' % 0)
                 out.write('\t}\n')
+                
                 TimeValueCounter += TimeValue
                 
             out.write('\t}\n')
             
+            #===============================================================================================
+            #  ANIMATION
+            #===============================================================================================                         
+            PrintTM_ANIMATION(out, SceneObj, TimeValue)
+                        
             #Close ligth object
             out.write('}\n')
     #Close File
