@@ -174,7 +174,13 @@ def WriteFile():
             out.write('*LIGHTOBJECT {\n')
             out.write('\t*NODE_NAME "%s"\n' % SceneObj.name)
             out.write('\t*NODE_PARENT "%s"\n' % SceneObj.name)
-            out.write('\t*LIGHT_TYPE %s\n' % "Omni") #Seems that always used "Omni" lights in 3dsMax, in blender is called "Point"
+            
+            if (SceneObj.data.type == 'POINT'):
+                out.write('\t*LIGHT_TYPE %s\n' % "Omni")
+            elif (SceneObj.data.type == 'Spot'):
+                out.write('\t*LIGHT_TYPE %s\n' % "FreeSpot")
+            else:
+                out.write('\t*LIGHT_TYPE %s\n' % "FreeDirect")
             
             PrintNODE_TM(out, SceneObj)
             
@@ -182,15 +188,15 @@ def WriteFile():
             out.write('\t*LIGHT_DECAY %s\n' % "None") #for now
             out.write('\t*LIGHT_AFFECT_DIFFUSE %s\n' % "Off") #for now
             if (SceneObj.data.specular_factor > 0.001):
-                out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "On") #for now
+                out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "On")
             else:
-                out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "Off") #for now
+                out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "Off")
             out.write('\t*LIGHT_AMBIENT_ONLY %s\n' % "Off") #for now
             
             #---------------------------------------------[Light Settings]---------------------------------------------           
             out.write('\t*LIGHT_SETTINGS {\n')
             out.write('\t\t*TIMEVALUE %d\n' % 0)
-            out.write('\t\t*LIGHT_COLOR %.4f %.4f %.4ff\n' % (SceneObj.data.color.r * 1, SceneObj.data.color.g * 1, SceneObj.data.color.b * 1))
+            out.write('\t\t*LIGHT_COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r, SceneObj.data.color.g, SceneObj.data.color.b))
             out.write('\t\t*FAR_ATTEN %d %d\n' % (SceneObj.data.distance, SceneObj.data.cutoff_distance))
             if (SceneObj.data.type == 'SUN'):
                 out.write('\t\t*HOTSPOT %d\n' % math.degrees(SceneObj.data.angle))
@@ -209,13 +215,13 @@ def WriteFile():
                 
                 out.write('\t\t*LIGHT_SETTINGS {\n')
                 out.write('\t\t\t*TIMEVALUE %d\n' % TimeValueCounter)
-                out.write('\t\t\t*LIGHT_COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r * 1, SceneObj.data.color.g * 1, SceneObj.data.color.b * 1))
-                out.write('\t\t*FAR_ATTEN %d %d\n' % (SceneObj.data.distance, SceneObj.data.cutoff_distance))
+                out.write('\t\t\t*LIGHT_COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r, SceneObj.data.color.g, SceneObj.data.color.b))
+                out.write('\t\t\t*FAR_ATTEN %d %d\n' % (SceneObj.data.distance, SceneObj.data.cutoff_distance))
                 if (SceneObj.data.type == 'SUN'):
-                    out.write('\t\t*HOTSPOT %d\n' % math.degrees(SceneObj.data.angle))
+                    out.write('\t\t\t*HOTSPOT %d\n' % math.degrees(SceneObj.data.angle))
                 else:
-                    out.write('\t\t*HOTSPOT %d\n' % 0)
-                out.write('\t}\n')
+                    out.write('\t\t\t*HOTSPOT %d\n' % 0)
+                out.write('\t\t}\n')
                 
                 TimeValueCounter += TimeValue
                 
