@@ -23,7 +23,7 @@ Heavily work in progress.
 
 # To develop
 
-For ease of development it's a good idea to install the plugin in some place where Blender can find it, otherwise you would have to change the Blender startup script to add your folder to the Python search parth, a good place to put it is:
+For ease of development it's a good idea to install the plugin in some place where Blender can find it, otherwise you would have to change the Blender startup script to add your folder to the Python search path, a good place to put it is:
 ```
 C:\Users\<user-name>\AppData\Roaming\Blender Foundation\Blender\2.90\scripts\addons\
 ```
