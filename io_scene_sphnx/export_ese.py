@@ -17,8 +17,6 @@ from bpy_extras.io_utils import axis_conversion
 #===============================================================================================
 #  GLOBAL VARIABLES
 #===============================================================================================
-mtx_conv = axis_conversion(to_forward='-Z', to_up='Y')
-global_matrix = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0)))
 ProjectContextScene = bpy.context.scene
 
 
@@ -28,25 +26,22 @@ ProjectContextScene = bpy.context.scene
 def PrintNODE_TM(OutputFile, SceneObject):
         ProjectContextScene.frame_set(ProjectContextScene.frame_start)
         
-        loc_conv = mtx_conv @ SceneObject.location
-        loc_conv.z = -loc_conv.z
-                    
-        CameraMatrixRot = SceneObject.rotation_euler.to_matrix()
-        RotationMatrix = global_matrix @ CameraMatrixRot
-       
+        ob = SceneObject
+        
+        global_matrix = Matrix(((1, 0, 0),
+                                (0, 0, 1),
+                                (0, 1, 0))).to_4x4()
+        
+        # swy: don't ask me, I only got this right at the 29th try
+        RotationMatrix = global_matrix @ ob.matrix_world
+        RotationMatrix = global_matrix @ RotationMatrix.transposed()
+
         OutputFile.write('\t*NODE_TM {\n')
         OutputFile.write('\t\t*NODE_NAME "%s"\n' % SceneObject.name)
-        OutputFile.write('\t\t*INHERIT_POS %d %d %d\n' % (0, 0, 0))
-        OutputFile.write('\t\t*INHERIT_ROT %d %d %d\n' % (0, 0, 0))
-        OutputFile.write('\t\t*INHERIT_SCL %d %d %d\n' % (1, 1, 1))    
         OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
         OutputFile.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
         OutputFile.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
-        OutputFile.write('\t\t*TM_ROW3 %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
-        OutputFile.write('\t\t*TM_POS %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
-        OutputFile.write('\t\t*TM_ROTANGLE %.4f %.4f %.4f\n' % (math.radians(SceneObject.rotation_euler.x), math.radians(SceneObject.rotation_euler.y),math.radians(SceneObject.rotation_euler.z)))
-        OutputFile.write('\t\t*TM_SCALE %.4f %.4f %.4f\n' % (SceneObject.scale.x, SceneObject.scale.y,SceneObject.scale.z))            
-        OutputFile.write('\t\t*TM_SCALEANGLE %.4f %.4f %.4f\n' % (0, 0, 0))
+        OutputFile.write('\t\t*TM_ROW3 %.4f %.4f %.4f\n' % (RotationMatrix[3].x, RotationMatrix[3].y, RotationMatrix[3].z))
         OutputFile.write('\t}\n')
         
 def PrintTM_ANIMATION(OutputFile, SceneObject, TimeValue):
@@ -58,24 +53,23 @@ def PrintTM_ANIMATION(OutputFile, SceneObject, TimeValue):
         for f in range(ProjectContextScene.frame_start, ProjectContextScene.frame_end + 1):
             ProjectContextScene.frame_set(f)
             
-            #---------------------------------------------[Get Position]---------------------------------------------
-            loc_conv = mtx_conv @ SceneObject.location
-            loc_conv.z = -loc_conv.z
-        
-            #---------------------------------------------[Get Rotation matrix]---------------------------------------------   
-            CameraMatrixRot = SceneObject.rotation_euler.to_matrix()
-            RotationMatrix = global_matrix @ CameraMatrixRot
+            ob = SceneObject
+            
+            global_matrix = Matrix(((1, 0, 0),
+                                    (0, 0, 1),
+                                    (0, 1, 0))).to_4x4()
+            
+            RotationMatrix = global_matrix @ ob.matrix_world
+            RotationMatrix = global_matrix @ RotationMatrix.transposed()
             
             #Write Time Value
             OutputFile.write('\t\t\t*TM_FRAME %d ' % TimeValueCounter)
             
             #Write Matrix
-            OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
-            OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
-            OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
-            
-            #Write Position
-            OutputFile.write('%.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
+            OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
+            OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
+            OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
+            OutputFile.write('%.4f %.4f %.4f\n' % (RotationMatrix[3].x, RotationMatrix[3].y, RotationMatrix[3].z))
             
             #Update counter
             TimeValueCounter += TimeValue            
@@ -91,7 +85,7 @@ def WriteFile():
         bpy.ops.object.mode_set(mode='OBJECT')
     
     #Create new file
-    out = open(str(Path.home()) + "\\Desktop\\CameraExporter.ESE", "w")
+    out = open(str(Path.home()) + "\\Desktop\\__CameraExporter.ESE", "w")
     
     #Start writting
     out.write('*3DSMAX_EUROEXPORT	300\n')
