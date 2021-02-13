@@ -74,10 +74,19 @@ def PrintTM_ANIMATION(OutputFile, SceneObject, TimeValue):
             #Update counter
             TimeValueCounter += TimeValue            
         OutputFile.write('\t\t}\n')
-        OutputFile.write('\t}\n')    
+        OutputFile.write('\t}\n')
+        
+def GetMaterialCount():
+    NumberOfMaterials = 0
+    
+    for i in bpy.data.materials:
+        NumberOfMaterials += 1
+        
+    return NumberOfMaterials
+      
                 
 #===============================================================================================
-#  Main Method
+#  MAIN
 #===============================================================================================
 def WriteFile():
     # Stop edit mode
@@ -108,9 +117,53 @@ def WriteFile():
     out.write('\t*SCENE_TICKSPERFRAME %d\n' % TimeValue)
     out.write('\t*AMBIENTSTATIC %.4f %.4f %.4f\n' %(AmbientValue, AmbientValue, AmbientValue))
     out.write('}\n')
+
+    #===============================================================================================
+    #  MATERIAL LIST
+    #===============================================================================================
+    out.write('*MATERIAL_LIST {\n')
+    out.write('\t*MATERIAL_COUNT %d\n' % GetMaterialCount())
+    
+    currentMat = 0
+    for MatData in bpy.data.materials:
+        DiffuseColor = MatData.diffuse_color
+    
+        #Check if material has texture
+        if hasattr(MatData.node_tree, 'nodes'):
+            ImageNode = MatData.node_tree.nodes.get('Image Texture', None)
+            if (ImageNode is not None):
+                ImageName = ImageNode.image.name
+                
+                #Material
+                out.write('\t*MATERIAL %d {\n' % currentMat)
+                out.write('\t\t*MATERIAL_NAME %s\n' % MatData.name)
+                out.write('\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                out.write('\t\t*MATERIAL_SPECULAR %d %d %d\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                out.write('\t\t*NUMSUBMTLS %d \n' % 1)
+                
+                #Submaterial
+                out.write('\t\t*SUBMATERIAL %d {\n' % currentMat)
+                out.write('\t\t\t*MATERIAL_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
+                out.write('\t\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                out.write('\t\t\t*MATERIAL_SPECULAR %d %d %d\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                
+                #Map Difuse
+                out.write('\t\t\t*MAP_DIFFUSE {\n')
+                out.write('\t\t\t\t*MAP_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
+                out.write('\t\t\t\t*MAP_CLASS "%s"\n' % "Bitmap")
+                out.write('\t\t\t\t*MAP_AMOUNT "%d"\n' % 1)
+                out.write('\t\t\t\t*BITMAP "%s"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
+                
+                out.write('\t\t\t}\n')
+                out.write('\t\t}\n')
+                out.write('\t}\n')
+            
+    out.write('}\n')
+    
+    
     
     #===============================================================================================
-    #  Camera Object
+    #  CAMERA OBJECT
     #=============================================================================================== 
     for SceneObj in ProjectContextScene.objects:
         if SceneObj.type == 'CAMERA':    
@@ -161,7 +214,7 @@ def WriteFile():
             out.write('}\n')
             
     #===============================================================================================
-    #  Light Object
+    #  LIGHT OBJECT
     #===============================================================================================
     for SceneObj in ProjectContextScene.objects:
         if SceneObj.type == 'LIGHT':
