@@ -145,7 +145,7 @@ def WriteFile():
             out.write('}\n')
             
     #===============================================================================================
-    #  Ligth Object
+    #  Light Object
     #===============================================================================================
     for SceneObj in ProjectContextScene.objects:
         if SceneObj.type == 'LIGHT':
@@ -157,14 +157,14 @@ def WriteFile():
             type_lut['POINT']='Omni'
             type_lut['SPOT' ]='TargetSpot'
             type_lut['SUN'  ]='TargetDirect'
-            type_lut['AREA' ]='TargetDirect' # swy: this is sort of wrong ¯\_(?)_/¯
+            type_lut['AREA' ]='TargetDirect' # swy: this is sort of wrong Â¯\_(ãƒ„)_/Â¯
             
             out.write('\t*LIGHT_TYPE %s\n' % type_lut[SceneObj.data.type]) #Seems that always used "Omni" lights in 3dsMax, in blender is called "Point"
             
             PrintNODE_TM(out, SceneObj)
             
             #---------------------------------------------[Light Props]---------------------------------------------
-            out.write('\t*LIGHT_DECAY %s\n' % "None") #for now
+            out.write('\t*LIGHT_DECAY %s\n' % "InvSquare") # swy: this is the only supported mode
             out.write('\t*LIGHT_AFFECT_DIFFUSE %s\n' % "Off") #for now
             if (SceneObj.data.specular_factor > 0.001):
                 out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "On") #for now
@@ -211,8 +211,10 @@ def WriteFile():
             #===============================================================================================                         
             PrintTM_ANIMATION(out, SceneObj, TimeValue)
                         
-            #Close ligth object
+            #Close Light object
             out.write('}\n')
     #Close File
+    out.flush()
     out.close()
+    del out
 WriteFile()
