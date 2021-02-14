@@ -19,7 +19,6 @@ from bpy_extras.io_utils import axis_conversion
 #===============================================================================================
 ProjectContextScene = bpy.context.scene
 
-
 #===============================================================================================
 #  FUNCTIONS
 #===============================================================================================
@@ -87,8 +86,8 @@ def WriteFile():
     
     #Start writting
     out.write('*3DSMAX_EUROEXPORT	300\n')
-    out.write('*COMMENT "Eurocom Export Version  3.00" - %s\n' % (datetime.datetime.utcnow()).strftime('%A %B %d %H:%M:%S %Y'))
-    out.write('*COMMENT "Version of Blender that output this file: %s\n' % bpy.app.version_string)
+    out.write('*COMMENT "Eurocom Export Version  3.00 - %s"\n' % (datetime.datetime.utcnow()).strftime('%A %B %d %H:%M:%S %Y'))
+    out.write('*COMMENT "Version of Blender that output this file: %s"\n' % bpy.app.version_string)
     out.write('*COMMENT "Version of ESE Plug-in: 5.0.0.13"\n')
     out.write("\n")
     
@@ -132,6 +131,8 @@ def WriteFile():
                 out.write('\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
                 out.write('\t\t*MATERIAL_SPECULAR %d %d %d\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
                 out.write('\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
+                if (os.path.exists(bpy.path.abspath(ImageNode.image.filepath))):
+                    out.write('\t\t*MATERIAL_TWOSIDED\n')
                 out.write('\t\t*NUMSUBMTLS %d \n' % 1)
                 
                 #Submaterial
@@ -162,6 +163,14 @@ def WriteFile():
     #=============================================================================================== 
     for SceneObj in ProjectContextScene.objects:
         if SceneObj.type == 'MESH':
+            #===========================================[Get Object Data]====================================================
+            #Get vertex list without duplicates
+            VertexList = []
+            for ObjVertex in SceneObj.data.vertices:
+                if ObjVertex not in VertexList:
+                    VertexList.append(ObjVertex.co)
+                    
+            #===========================================[Print Object Data]====================================================       
             out.write('*GEOMOBJECT {\n')
             out.write('\t*NODE_NAME "%s"\n' % SceneObj.name)
             
@@ -174,19 +183,33 @@ def WriteFile():
             out.write('\t*PIVOT_TM {\n')
             PrintNODE_TM(out, SceneObj)
             out.write('\t}\n')
-            
+                
             #MESH Section
             out.write('\t*MESH {\n')
             out.write('\t\t*TIMEVALUE %d\n' % 0)
-            out.write('\t\t*MESH_NUMVERTEX %d\n' % len(SceneObj.data.vertices))
+            out.write('\t\t*MESH_NUMVERTEX %d\n' % len(VertexList))
             out.write('\t\t*MESH_NUMFACES %d\n' % len(SceneObj.data.polygons))
+                                
+            #Print Vertex List
             out.write('\t\t*MESH_VERTEX_LIST {\n')
-            
-            for ObjVertex in SceneObj.data.vertices:
-                out.write('\t\t\t*MESH_VERTEX %d %.4f %.4f %.4f\n' % (ObjVertex.index, ObjVertex.co.x, ObjVertex.co.y, ObjVertex.co.z))
-                
-            
+            for ListItem in VertexList:
+                out.write('\t\t\t*MESH_VERTEX %d %.4f %.4f %.4f\n' % (VertexList.index(ListItem), ListItem[0], ListItem[1], ListItem[2]))
             out.write('\t\t}\n')
+            
+            #Face List
+            out.write('\t\t*MESH_FACE_LIST {\n')
+            for ObjFace in SceneObj.data.polygons:
+                #Get indices from Vertex List
+                v_indexA = VertexList.index(SceneObj.data.vertices[ObjFace.vertices[0]].co)
+                v_indexB = VertexList.index(SceneObj.data.vertices[ObjFace.vertices[1]].co)
+                v_indexC = VertexList.index(SceneObj.data.vertices[ObjFace.vertices[2]].co)
+                
+                #Print Info
+                out.write('\t\t\t*MESH_FACE %d: ' % (ObjFace.index))
+                out.write('A: %d B: %d C: %d AB: 1 BC: 0 CA: 1 ' % (v_indexA, v_indexB, v_indexC))
+                out.write('*MESH_SMOOTHING 1 *MESH_MTLID 0\n')
+            out.write('\t\t}\n')
+            
             out.write('\t}\n')
             out.write('}\n')
             
