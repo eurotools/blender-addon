@@ -146,6 +146,7 @@ def save(context,
                         
                         #===========================================[Apply Matrix]====================================================
                         MeshObject.transform(global_matrix)
+                        MeshObject.flip_normals()
                         
                         #===========================================[Get Object Data]====================================================
                         #Get vertex list without duplicates

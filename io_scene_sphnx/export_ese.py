@@ -8,6 +8,7 @@ Authors: Swyter and Jmarti856
 import bpy
 import os
 import math
+import bmesh
 import datetime
 from mathutils import *
 from math import *
@@ -115,11 +116,10 @@ def WriteFile():
     out.write('\t*MATERIAL_COUNT %d\n' % len(bpy.data.materials))
     
     currentMat = 0
-    for MatData in bpy.data.materials:
-        DiffuseColor = MatData.diffuse_color
-    
+    for MatData in bpy.data.materials:   
         if hasattr(MatData.node_tree, 'nodes'):
-    
+            DiffuseColor = MatData.diffuse_color
+            
             #Check if material has texture        
             ImageNode = MatData.node_tree.nodes.get('Image Texture', None)
             if (ImageNode is not None):
@@ -163,12 +163,18 @@ def WriteFile():
     #=============================================================================================== 
     for SceneObj in ProjectContextScene.objects:
         if SceneObj.type == 'MESH':
+            #===========================================[Triangulate Object]====================================================
+            me = SceneObj.data
+            bm = bmesh.new()
+            bm.from_mesh(me)
+            bmesh.ops.triangulate(bm, faces=bm.faces[:])
+         
             #===========================================[Get Object Data]====================================================
             #Get vertex list without duplicates
             VertexList = []
-            for ObjVertex in SceneObj.data.vertices:
-                if ObjVertex not in VertexList:
-                    VertexList.append(ObjVertex.co)
+            for face in bm.faces:
+                for ObjVert in face.verts:
+                    VertexList.append(ObjVert.co)
                     
             #===========================================[Print Object Data]====================================================       
             out.write('*GEOMOBJECT {\n')
@@ -188,9 +194,9 @@ def WriteFile():
             out.write('\t*MESH {\n')
             out.write('\t\t*TIMEVALUE %d\n' % 0)
             out.write('\t\t*MESH_NUMVERTEX %d\n' % len(VertexList))
-            out.write('\t\t*MESH_NUMFACES %d\n' % len(SceneObj.data.polygons))
+            out.write('\t\t*MESH_NUMFACES %d\n' % len(bm.faces))
                                 
-            #Print Vertex List
+            #Print Vertex Liste
             out.write('\t\t*MESH_VERTEX_LIST {\n')
             for ListItem in VertexList:
                 out.write('\t\t\t*MESH_VERTEX %d %.4f %.4f %.4f\n' % (VertexList.index(ListItem), ListItem[0], ListItem[1], ListItem[2]))
@@ -198,24 +204,31 @@ def WriteFile():
             
             #Face List
             out.write('\t\t*MESH_FACE_LIST {\n')
-            for ObjFace in SceneObj.data.polygons:
+            for face in bm.faces:
                 #Get indices from Vertex List
-                v_indexA = VertexList.index(SceneObj.data.vertices[ObjFace.vertices[0]].co)
-                v_indexB = VertexList.index(SceneObj.data.vertices[ObjFace.vertices[1]].co)
-                v_indexC = VertexList.index(SceneObj.data.vertices[ObjFace.vertices[2]].co)
+                v_indexA = VertexList.index(face.verts[0].co)
+                v_indexB = VertexList.index(face.verts[1].co)
+                v_indexC = VertexList.index(face.verts[2].co)
                 
                 #Print Info
-                out.write('\t\t\t*MESH_FACE %d: ' % (ObjFace.index))
+                out.write('\t\t\t*MESH_FACE %d: ' % (face.index))
                 out.write('A: %d B: %d C: %d AB: 1 BC: 0 CA: 1 ' % (v_indexA, v_indexB, v_indexC))
                 out.write('*MESH_SMOOTHING 1 *MESH_MTLID 0\n')
-            out.write('\t\t}\n')
+                
+            #Clear list
+            del VertexList
             
+            #Liberate BM Object
+            bm.free()
+            
+            #Close blocks
+            out.write('\t\t}\n')
             out.write('\t}\n')
             out.write('}\n')
             
     #===============================================================================================
     #  CAMERA OBJECT
-    #=============================================================================================== 
+    #===============================================================================================
     for SceneObj in ProjectContextScene.objects:
         if SceneObj.type == 'CAMERA':    
             out.write('*CAMERAOBJECT {\n')
