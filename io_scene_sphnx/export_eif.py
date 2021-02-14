@@ -36,396 +36,299 @@ def save(context,
          path_mode='AUTO'
          ):
 
-    with open(filepath, 'w') as out:
-        ow = out.write
-        
-        # swy: add a macro to write a whole line, carriage return included
-        def wl(line):
-            ow(line + '\n')
+    #===============================================================================================
+    #  GLOBAL VARIABLES
+    #===============================================================================================
+            
+    ProjectContextScene = bpy.context.scene
 
-        print('[i] exporting', filepath)
-        
+    # Get scene info
+    if use_selection:
+        SceneObjects = bpy.context.selected_objects
+    else:
+        SceneObjects = bpy.context.scene.objects
+
+    # Axis Conversion
+    global_matrix = axis_conversion(to_forward='Z', to_up='Y').to_4x4()
+
+    global_matrix = Matrix(((1, 0, 0),
+                            (0, 0, 1),
+                            (0, 1, 0))).to_4x4()
+
+    bpy.context.scene.world.light_settings.use_ambient_occlusion = True
+            
+    #===============================================================================================
+    #  MAIN
+    #===============================================================================================
+    def WriteFile():
         # Stop edit mode
         if bpy.ops.object.mode_set.poll():
             bpy.ops.object.mode_set(mode='OBJECT')
-
-        # Get scene info
-        scn = bpy.context.scene
         
-        if use_selection:
-            obs = bpy.context.selected_objects
-        else:
-            obs = bpy.context.scene.objects
+        #Create new file
+        with open(filepath, 'w') as out:
+                        
+            #Start writing
+            AmbientValue = bpy.context.scene.world.light_settings.ao_factor
+            out.write('*EUROCOM_INTERCHANGE_FILE 100\n')
+            out.write('*COMMENT Eurocom Interchange File Version 1.00 %s\n' % (datetime.datetime.utcnow()).strftime('%A %B %d %Y %H:%M'))
+            out.write('\n')
+            out.write('*SCENE {\n')
+            out.write('\t*FILENAME "%s"\n' % (bpy.data.filepath))
+            out.write('\t*FIRSTFRAME %d\n' % (ProjectContextScene.frame_start))
+            out.write('\t*LASTFRAME %d\n' % (ProjectContextScene.frame_end))
+            out.write('\t*FRAMESPEED %d\n' % (ProjectContextScene.render.fps))
+            out.write('\t*STATICFRAME %d\n' % (ProjectContextScene.frame_current))
+            out.write('\t*AMBIENTSTATIC %.6f %.6f %.6f\n' %(AmbientValue, AmbientValue, AmbientValue))
+            out.write('}\n')
+            out.write('\n')
             
-        # Axis Conversion
-        global_matrix = axis_conversion(to_forward='Z', to_up='Y').to_4x4()
-        
-        global_matrix = Matrix(((1, 0, 0),
-                                (0, 0, 1),
-                                (0, 1, 0))).to_4x4()
-        
-        
-        #global_matrix[0][0] *= -1
-        bpy.context.scene.world.light_settings.use_ambient_occlusion = True
-        
-        #*===============================================================================================
-        #* Write file header
-        #*===============================================================================================
-
-        # Script header
-        wl('*EUROCOM_INTERCHANGE_FILE 100')
-        wl('*COMMENT Eurocom Interchange File Version 1.00 %s' % (datetime.datetime.utcnow()).strftime('%A %B %d %Y %H:%M'))
-        wl('')
-        # print scene info
-        wl('*SCENE {')
-        wl('  *FILENAME   "%s"' % (bpy.data.filepath))
-        wl('  *FIRSTFRAME  %3d' % (scn.frame_start  ))
-        wl('  *LASTFRAME   %3d' % (scn.frame_end    ))
-        wl('  *FRAMESPEED  %3d' % (scn.render.fps   ))
-        wl('  *STATICFRAME %3d' % (scn.frame_current))
-        AmbientValue = bpy.context.scene.world.light_settings.ao_factor
-        wl('  *AMBIENTSTATIC %.6f %.6f %.6f' %(AmbientValue, AmbientValue, AmbientValue))
-        wl('}') 
-        wl('')
-        
-        Materials_Dict = dict()
-
-    #*===============================================================================================
-    #* Get data lists from the object
-    #*===============================================================================================
-        def GetVertexList(me):
-            VertexList = []
-
-            for vertex in me.vertices:
-                VertexList.append(
-                    (vertex.co.x, vertex.co.y, vertex.co.z)
-                )
-            return VertexList
-
-        def GetUVList(me):
-            UVList = []
-
-            if hasattr(me.uv_layers.active, 'data'):
-                if len(me.uv_layers):
-                    for layer in me.uv_layers:
-                        uv_layer = layer.data
-                        for pl_count, poly in enumerate(me.polygons):
-                            for li_count, loop_index in enumerate(poly.loop_indices):
-                                UVList.append(
-                                    (uv_layer[loop_index].uv.x, 1.0 - uv_layer[loop_index].uv.y)
-                                )
-                    UVList = list(dict.fromkeys(UVList))
-            return UVList
-
-        def GetVertexColorList(me):
-            VertColList = []
-
-            if len(me.vertex_colors):
-                if hasattr(me.vertex_colors.active, 'data'):
-                    for layer in me.vertex_colors:
-                        for vertex in layer.data:
-                            VertColList.append(
-                                (vertex.color[0] * .5, vertex.color[1] * .5, vertex.color[2] * .5, vertex.color[3])
-                            )
-                        VertColList = list(dict.fromkeys(VertColList))
-            return VertColList
-
-        def GetMaterialIndex(MaterialName):
-            for index, material in Materials_Dict.items():
-                if material == MaterialName:
-                    return index
-
-        def SearchMaterialIndex(mat):
-            if hasattr(mat.material.node_tree, 'nodes'):
-                ImageNode = mat.material.node_tree.nodes.get('Image Texture', None)
-                if (ImageNode is not None):
-                    ImageName = ImageNode.image.name
-                    MaterialIndex = GetMaterialIndex(os.path.splitext(ImageName)[0])
-                else:
-                    DiffuseColor = mat.material.diffuse_color
-                    MaterialIndex = GetMaterialIndex(DiffuseColor[0]+DiffuseColor[1]+DiffuseColor[2])
-                return MaterialIndex
-
-    #*===============================================================================================
-    #* Get materials and write data
-    #*===============================================================================================
-        def GetMaterials():
+            #===============================================================================================
+            #  MATERIAL LIST
+            #===============================================================================================
             MaterialIndex = 0
-
-            wl('*MATERIALS {')
-            for mat in bpy.data.materials:
-                DiffuseColor = mat.diffuse_color
-
-                #Check if material has texture
+            out.write('*MATERIALS {\n')
+            for mat in bpy.data.materials:            
                 if hasattr(mat.node_tree, 'nodes'):
+                    DiffuseColor = mat.diffuse_color
                     ImageNode = mat.node_tree.nodes.get('Image Texture', None)
+                    
+                    #Material has texture
                     if (ImageNode is not None):
                         ImageName = ImageNode.image.name
+                        out.write('\t*MATERIAL %d {\n' % (MaterialIndex))
+                        out.write('\t\t*NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
+                        out.write('\t\t*COL_DIFFUSE %.6f %.6f %.6f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
 
-                        if os.path.splitext(ImageName)[0] not in Materials_Dict.values():
-                            wl('  *MATERIAL %d {' % (MaterialIndex))
-                            wl('    *NAME "%s"' % (os.path.splitext(ImageName)[0]))
-                            wl('    *COL_DIFFUSE %.6f %.6f %.6f' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                        #Check if the texture exists
+                        if (os.path.exists(bpy.path.abspath(ImageNode.image.filepath))):
+                            out.write('\t\t*TWOSIDED\n')
+                            out.write('\t\t*MAP_DIFFUSE "%s"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
+                        out.write('\t\t*MAP_DIFFUSE_AMOUNT 1.0\n')
 
-                            #Check if the texture exists
-                            if (os.path.exists(bpy.path.abspath(ImageNode.image.filepath))):
-                                wl('    *MAP_DIFFUSE "%s"' % (bpy.path.abspath(ImageNode.image.filepath)))
-                                wl('    *TWOSIDED')
-                            wl('    *MAP_DIFFUSE_AMOUNT 1.0')
+                        #Check if use Alpha
+                        if mat.blend_method.startswith('ALPHA'):
+                            out.write('\t\t*MAP_HASALPHA\n')
 
-                            #Check if use Alpha (as a comment)
-                            if mat.blend_method.startswith('ALPHA'):
-                                wl('    *MAP_HASALPHA')
-
-                            #Add data to dictionary
-                            Materials_Dict[MaterialIndex] = os.path.splitext(ImageName)[0]
-                            MaterialIndex +=1
-
-                            #Add 1 to the materials index
-                            wl('  }')
+                        MaterialIndex +=1
+                        out.write('\t}\n')
 
                     #Material has no texture
                     else:
                         Color = DiffuseColor[0] + DiffuseColor[1] + DiffuseColor[2]
-                        if Color not in Materials_Dict.values():
-                            wl('  *MATERIAL %d {' % (MaterialIndex))
-                            wl('    *NAME \"%s\"' % (mat.name))
-                            wl('    *COL_DIFFUSE %.6f %.6f %.6f' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-
-                            #Add data to dictionary
-                            Materials_Dict[MaterialIndex] = DiffuseColor[0]+DiffuseColor[1]+DiffuseColor[2]
-                            MaterialIndex +=1
-
-                            #Add 1 to the materials index
-                            wl('  }')
-            wl('}')
-            wl('')
-            print('Dictionary Length: %d' % len(Materials_Dict))
-
-    #*===============================================================================================
-    #* Write object data to the file
-    #*===============================================================================================
-        def GetMesh():
-            for obj in obs:
-                #Duplicate object
-                ob = obj
-
-                # export cloned object
-                if ob.hide_viewport:
+                        out.write('\t*MATERIAL %d {\n' % (MaterialIndex))
+                        out.write('\t\t*NAME "%s"\n' % (mat.name))
+                        out.write('\t\t*COL_DIFFUSE %.6f %.6f %.6f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                        out.write('\t}\n')
+                        MaterialIndex +=1
+            out.write('}\n')
+            out.write('\n')
+            
+            #===============================================================================================
+            #  MESH DATA
+            #===============================================================================================
+            for obj in SceneObjects:            
+                if obj.hide_viewport:
                     continue
-
-                if ob.type == 'MESH':
-                    if hasattr(ob, 'data'):
+                if obj.type == 'MESH':
+                    if hasattr(obj, 'data'):
+                        #===========================================[Clone Object]====================================================
                         depsgraph = bpy.context.evaluated_depsgraph_get()
-                        ob_for_convert = ob.evaluated_get(depsgraph)
-
+                        ob_for_convert = obj.evaluated_get(depsgraph)
+        
                         try:
-                            me = ob_for_convert.to_mesh()
+                            MeshObject = ob_for_convert.to_mesh()
                         except RuntimeError:
-                            me = None
+                            MeshObject = None
 
-                        if me is None:
+                        if MeshObject is None:
                             continue
-
-                        print(global_matrix)
-                        #Apply Axis conversion
-                        #if global_matrix is not None:
-                        me.transform(global_matrix)
                         
-                        #if use_normals:
-                        #    me.calc_normals()
-                            
-                        me.flip_normals()
+                        #===========================================[Apply Matrix]====================================================
+                        MeshObject.transform(global_matrix)
                         
-                        VertexList = GetVertexList(me)
-                        UVList = GetUVList(me)
-                        VertColList = GetVertexColorList(me)
-                        NumFaceLayers = len(me.uv_layers)
-                        MatSlots = ob.material_slots
+                        #===========================================[Get Object Data]====================================================
+                        #Get vertex list without duplicates
+                        VertexList = []
+                        for ObjVertex in MeshObject.vertices:
+                            VertexList.append(ObjVertex.co)
+                        
+                        #Get UVs list without duplicates
+                        UVList = []
+                        if hasattr(MeshObject.uv_layers.active, 'data'):
+                            if len(MeshObject.uv_layers):
+                                for layer in MeshObject.uv_layers:
+                                    uv_layer = layer.data
+                                    for pl_count, poly in enumerate(MeshObject.polygons):
+                                        for li_count, loop_index in enumerate(poly.loop_indices):
+                                            UVList.append(
+                                                (uv_layer[loop_index].uv.x, 1.0 - uv_layer[loop_index].uv.y)
+                                            )
+                                UVList = list(dict.fromkeys(UVList))
+                                            
+                        #Get vertex color list without duplicates
+                        VertexColList = []
+                        if len(MeshObject.vertex_colors):
+                            if hasattr(MeshObject.vertex_colors.active, 'data'):
+                                for layer in MeshObject.vertex_colors:
+                                    for vertex in layer.data:
+                                        VertexColList.append(
+                                            (vertex.color[0] * .5, vertex.color[1] * .5, vertex.color[2] * .5, vertex.color[3])
+                                        )
+                                VertexColList = list(dict.fromkeys(VertexColList))
+                      
                         FaceFormat = 'V'
-
-                        #==================PRINT DATA==============================
-                        wl('*MESH {')
-                        wl('  *NAME "%s"' % (ob.name))
-                        wl('  *VERTCOUNT    %3d' % (len(VertexList)))
-                        wl('  *UVCOUNT      %3d' % (len(UVList)))
-                        wl('  *VERTCOLCOUNT %3d' % (len(VertColList)))
-                        wl('  *FACECOUNT    %3d' % (len(me.polygons)))
-                        wl('  *TRIFACECOUNT %3d' % (sum(len(p.vertices) - 2 for p in me.polygons)))
-
-                        if NumFaceLayers > 0:
-                            wl('  *FACELAYERSCOUNT %d' % (NumFaceLayers))
+                        #===========================================[Print Object Data]==================================================== 
+                        out.write('*MESH {\n')
+                        out.write('\t*NAME "%s"\n' % obj.name)
+                        out.write('\t*VERTCOUNT %d\n' % len(VertexList))
+                        out.write('\t*UVCOUNT %d\n' % len(UVList))
+                        out.write('\t*VERTCOLCOUNT %d\n' % len(VertexColList))
+                        out.write('\t*FACECOUNT %d\n' % len(MeshObject.polygons))
+                        out.write('\t*TRIFACECOUNT %d\n' % sum(len(p.vertices) - 2 for p in MeshObject.polygons))
+                        
+                        if len(MeshObject.uv_layers) > 0:
+                            out.write('\t*FACELAYERSCOUNT %d\n' % len(MeshObject.uv_layers))
                         else:
-                            wl('  *FACELAYERSCOUNT %d' % (NumFaceLayers + 1))
-
-                        #Check if there are more than one layer
-                        if (len(me.uv_layers) > 1):
-                            wl('  *FACESHADERCOUNT %d' % len(MatSlots))
-
-                        #Print Vertex data
-                        wl('  *VERTEX_LIST {')
-                        for vtx in VertexList:
-                            wl('    %.6f %.6f %.6f' % (vtx[0], vtx[1], vtx[2]))
-                        wl('  }')
-
+                            out.write('\t*FACELAYERSCOUNT %d\n' % 1)
+                            
+                        if len(MeshObject.uv_layers) > 1:
+                            out.write('\t*FACESHADERCOUNT %d\n' % len(MeshObject.material_slots))
+                        
+                        #Print Vertex List
+                        out.write('\t*VERTEX_LIST {\n')
+                        for VertexData in VertexList:
+                            out.write('\t\t%.6f %.6f %.6f\n' % (VertexData.x, VertexData.y, VertexData.z))
+                        out.write('\t}\n')
+                            
                         #Print UV data
-                        wl('  *UV_LIST {')
+                        out.write('\t*UV_LIST {\n')
                         if (len(UVList) > 0):
                             FaceFormat += 'T'
                             for uv in UVList:
-                                wl('    %.6f %.6f' % (uv[0], uv[1]))
-                        wl('  }')
-
-                        #Check if the vertex colors layer is active
-                        wl('  *VERTCOL_LIST {')
-                        if(len(VertColList) > 0):
+                                out.write('\t\t%.6f %.6f\n' % (uv[0], uv[1]))
+                        out.write('\t}\n')
+         
+                        #Print Vertex Color List
+                        out.write('\t*VERTCOL_LIST {\n')
+                        if(len(VertexColList) > 0):
                             FaceFormat += 'C'
-                            for col in VertColList:
-                                wl('    %.6f %.6f %.6f %.6f' % (col[0], col[1], col[2], col[3]))
-                        wl('  }')
-
-                        if len(MatSlots) > 0:
+                            for col in VertexColList:
+                                out.write('\t\t%.6f %.6f %.6f %.6f\n' % (col[0], col[1], col[2], col[3]))
+                        out.write('\t}\n')
+                        
+                        if len(obj.material_slots) > 0:
                             FaceFormat += 'M'
-
-                        #Flags
-                        if len(MatSlots) > 0:
                             FaceFormat += 'F'
 
                         #Print Shader faces
-                        if (len(me.uv_layers) > 1):
+                        if (len(MeshObject.uv_layers) > 1):
                             ShaderIndex = 0
                             MaterialIndex = 0
-                            wl(' *FACESHADERS {')
-                            for mat in MatSlots:
-                                wl('  *SHADER %d {' % ShaderIndex)
+                            out.write('\t*FACESHADERS {\n')
+                            for mat in MeshObject.material_slots:
+                                out.write('\t\t*SHADER %d {\n' % ShaderIndex)
+                                
                                 if mat.material.blend_method == 'OPAQUE':
-                                    wl('   %d %s' % (SearchMaterialIndex(mat),"Non"))
-                                    wl('  }')
+                                    out.write('\t\t\t%d %s\n' % (bpy.data.materials.find(mat.name),"Non"))
                                 else:
-                                    wl('   %d %s' % (SearchMaterialIndex(mat),"Alp"))
-                                    wl('  }')
+                                    out.write('\t\t\t%d %s\n' % (bpy.data.materials.find(mat.name),"Alp"))
+                                out.write('\t\t}\n')
+                                
+                                #update Counter
                                 MaterialIndex +=1
-                            wl(' }')
+                            out.write('\t}\n')
 
                         #Get FaceFormat
-                        wl(' *FACEFORMAT %s' % FaceFormat)
-
-                        #Print Face list
-                        wl(' *FACE_LIST {')
-                        for poly in me.polygons:
-                            #Get polygon vertices
-                            PolygonVertices = poly.vertices
-
+                        out.write('\t*FACEFORMAT %s\n' % FaceFormat)
+                        
+                        #Print Face List, the difficult part ;P
+                        out.write('\t*FACE_LIST {\n')
+                        for MeshPolys in MeshObject.polygons:
                             #Write vertices ---V
-                            ow('    %d    ' % (len(PolygonVertices)))
-                            for vert in PolygonVertices:
-                                ow('%d ' % vert)
+                            out.write('\t\t%d ' % (len(MeshPolys.vertices)))
+                            for vert in MeshPolys.vertices:
+                                out.write('%d ' % vert)
                                 
-                            ow('   ')
-                            
                             #Write UVs ---T
                             if ('T' in FaceFormat):
-                                for vert_idx, loop_idx in enumerate(poly.loop_indices):
-                                    for layer in me.uv_layers:
+                                for vert_idx, loop_idx in enumerate(MeshPolys.loop_indices):
+                                    for layer in MeshObject.uv_layers:
                                         uv_coords = layer.data[loop_idx].uv
-                                        ow('%d ' % UVList.index((uv_coords.x, 1.0 - float(uv_coords.y))))
-                                    ow(' ')
-                                ow('   ')
-
+                                        out.write('%d ' % UVList.index((uv_coords.x, 1.0 - float(uv_coords.y))))
+                                        
                             #Write Colors ---C
                             if ('C' in FaceFormat):
-                                for color_idx, loop_idx in enumerate(poly.loop_indices):
+                                for color_idx, loop_idx in enumerate(MeshPolys.loop_indices):
                                     # swy: this is wrong; it should be the same layer count as any other face format block, can't be a different size. me.vertex_colors != me.uv_layers
-                                    for layerIndex in me.vertex_colors:
+                                    for layerIndex in MeshObject.vertex_colors:
                                         vertex = layerIndex.data[loop_idx]
-                                        ow('%d ' % VertColList.index((vertex.color[0] * .5, vertex.color[1] * .5, vertex.color[2] * .5, vertex.color[3])))
-                                    ow(' ')
-                                ow('   ')
-
+                                        out.write('%d ' % VertexColList.index((vertex.color[0] * .5, vertex.color[1] * .5, vertex.color[2] * .5, vertex.color[3])))
                             # swy: we're missing exporting (optional) face normals here
                             
-                            #Write Material Index ---M
                             if ('M' in FaceFormat):
-                                for layer in me.uv_layers:
-                                    ow('%d ' % SearchMaterialIndex(MatSlots[poly.material_index]))
-                                ow('   ')
-                                
+                                for layer in MeshObject.uv_layers:
+                                    out.write('%d ' % MeshPolys.material_index)
+                                    
                             # swy: we're missing exporting an optional shader index here
 
                             #Write Flags ---F
                             if ('F' in FaceFormat):
-                                flags = 0
+                                flags = 0                             
                                 
-                                if MatSlots[poly.material_index].material.use_backface_culling:
+                                if obj.material_slots[MeshPolys.material_index].material.use_backface_culling:
                                     flags |= 1 << 16
-   
-                                ow('%d ' % flags)
-                            ow('\n')
-                        wl(' }')
-
-                    #Close Tag
-                    wl('}')
-
-                    #Write GeomNode
-                    GetGeomNode(ob)
-
-                    #Write PlaceNode
-                    GetPlaceNode(ob)
-
-    #*===============================================================================================
-    #* Get GeomNode of each object
-    #*===============================================================================================
-        def GetGeomNode(ob):
-            wl('*GEOMNODE {')
-            wl('  *NAME "%s"' % (ob.name))
-            wl('  *MESH "%s"' % (ob.name))
-            wl('  *WORLD_TM {')
-            wl('    *TMROW0 1 0 0 0')
-            wl('    *TMROW1 0 1 0 0')
-            wl('    *TMROW2 0 0 1 0')
-            wl('    *TMROW3 0 0 0 1')
-            wl('    *POS    0 0 0')
-            wl('    *ROT   -0 0 0')
-            wl('    *SCL    1 1 1')
-            wl('  }')
-            wl('}')
-
-    #*===============================================================================================
-    #* Get Place node of each object
-    #*===============================================================================================
-        def GetPlaceNode(ob):
-            wl('*PLACENODE {')
-            wl('  *NAME "%s"' % (ob.name))
-            wl('  *MESH "%s"' % (ob.name))
-            wl('  *WORLD_TM {')
-            
-            # swy: don't ask me, I only got this right at the 29th try
-            RotationMatrix = global_matrix @ ob.matrix_world
-            RotationMatrix = global_matrix @ RotationMatrix.transposed()
-            
-            wl('    *TMROW0 %.6f %.6f %.6f 0' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
-            wl('    *TMROW1 %.6f %.6f %.6f 0' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
-            wl('    *TMROW2 %.6f %.6f %.6f 0' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
-            wl('    *TMROW3 %.6f %.6f %.6f 1' % (RotationMatrix[3].x, RotationMatrix[3].y, RotationMatrix[3].z))
-            
-            # swy: these aren't actually used or read by this version of the importer
-            wl('    *POS    %.6f %.6f %.6f'   % (ob.location.x, ob.location.y, ob.location.z))
-            wl('    *ROT    %.6f %.6f %.6f'   % (radians(ob.rotation_euler.x), radians(ob.rotation_euler.y), radians(ob.rotation_euler.z)))
-            wl('    *SCL    %.6f %.6f %.6f'   % (ob.scale.x, ob.scale.y, ob.scale.z))
-            wl(' }')
-            wl('}')
-        
-        #Write materials
-        GetMaterials()
-
-        #Write Meshes
-        GetMesh()
-
-        #Close writer
-        print('[i] done')
-
+                                out.write('%d ' % flags)
+                                
+                            out.write('\n')
+                        out.write('\t}\n')
+                    out.write('}\n')
+                    out.write('\n')
+                    #===============================================================================================
+                    #  GEOM NODE
+                    #===============================================================================================
+                    out.write('*GEOMNODE {\n')
+                    out.write('\t*NAME "%s"\n' % (obj.name))
+                    out.write('\t*MESH "%s"\n' % (obj.name))
+                    out.write('\t*WORLD_TM {\n')
+                    out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (1,0,0,0))
+                    out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (0,1,0,0))
+                    out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (0,0,1,0))
+                    out.write('\t\t*TMROW3 %.6f %.6f %.6f %.6f\n' % (0,0,0,1))
+                    out.write('\t\t*POS %.6f %.6f %.6f\n' % (0,0,0))
+                    out.write('\t\t*ROT %.6f %.6f %.6f\n' % (-0,0,0))
+                    out.write('\t\t*SCL %.6f %.6f %.6f\n' % (1,1,1))
+                    out.write('\t}\n')
+                    out.write('}\n')
+                    out.write('\n')
+                    
+                    #===============================================================================================
+                    #  PLACE NODE
+                    #===============================================================================================
+                    out.write('*PLACENODE {\n')
+                    out.write('\t*NAME "%s"\n' % (obj.name))
+                    out.write('\t*MESH "%s"\n' % (obj.name))
+                    out.write('\t*WORLD_TM {\n')
+                    
+                    # swy: don't ask me, I only got this right at the 29th try
+                    RotationMatrix = global_matrix @ obj.matrix_world
+                    RotationMatrix = global_matrix @ RotationMatrix.transposed()
+                    
+                    out.write('\t\t*TMROW0 %.6f %.6f %.6f\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
+                    out.write('\t\t*TMROW1 %.6f %.6f %.6f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
+                    out.write('\t\t*TMROW2 %.6f %.6f %.6f\n' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
+                    out.write('\t\t*TMROW3 %.6f %.6f %.6f\n' % (RotationMatrix[3].x, RotationMatrix[3].y, RotationMatrix[3].z))
+                    
+                    # swy: these aren't actually used or read by this version of the importer
+                    out.write('\t\t*POS %.6f %.6f %.6f\n' % (obj.location.x, obj.location.y, obj.location.z))
+                    out.write('\t\t*ROT %.6f %.6f %.6f\n' % (radians(obj.rotation_euler.x), radians(obj.rotation_euler.y), radians(obj.rotation_euler.z)))
+                    out.write('\t\t*SCL %.6f %.6f %.6f\n' % (obj.scale.x, obj.scale.y, obj.scale.z))
+                    out.write('\t}\n')
+                    out.write('}\n')
+                    out.write('\n')
+                
+    WriteFile()
+    
     return {'FINISHED'}
-
-
 if __name__ == '__main__':
     save({}, str(Path.home()) + '/Desktop/testEIF_d.eif')
