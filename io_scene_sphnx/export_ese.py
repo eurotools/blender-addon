@@ -96,7 +96,7 @@ def WriteFile():
     #  SCENE INFO
     #=============================================================================================== 
     BackgroundC = bpy.data.worlds["World"].node_tree.nodes["Background"].inputs[0].default_value
-    AmbientValue = bpy.context.scene.world.light_settings.ao_factor
+    AmbientValue = ProjectContextScene.world.light_settings.ao_factor
     TimeValue = 4800/ProjectContextScene.render.fps
 
     out.write('*SCENE {\n')
@@ -155,7 +155,6 @@ def WriteFile():
                 out.write('\t}\n')
 
                 currentMat += 1
-
     out.write('}\n')
   
     #===============================================================================================
@@ -163,36 +162,38 @@ def WriteFile():
     #=============================================================================================== 
     for SceneObj in ProjectContextScene.objects:
         if SceneObj.type == 'MESH':
-            #===========================================[Triangulate Object]====================================================            
+            #===========================================[Triangulate Object]====================================================
+            dg = bpy.context.evaluated_depsgraph_get()          
             bm = bmesh.new()
-            bm.from_mesh(SceneObj.to_mesh())
-            bmesh.ops.triangulate(bm, faces=bm.faces, quad_method='BEAUTY', ngon_method='BEAUTY')
+            bm.from_object(SceneObj, dg)
+            tris = bm.calc_loop_triangles()
 
             #===========================================[Get Object Data]====================================================
+            #Info from: https://blender.stackexchange.com/a/211855/117003
             #Get vertex list without duplicates
             VertexList = []
-            for face in bm.faces:
-                for ObjVert in face.verts:
-                    if ObjVert.co not in VertexList:
-                        VertexList.append(ObjVert.co)
+            for tri in tris:
+                for loop in tri:
+                    if loop.vert.co not in VertexList:
+                        VertexList.append(loop.vert.co)              
             
             #Get UV Layer Active
-            UVVertexList = []
-            uv_lay = bm.loops.layers.uv.active
-            for face in bm.faces:
-                for loop in face.loops:
-                    DataToAppend = [loop[uv_lay].uv[0], loop[uv_lay].uv[1]]
-                    if DataToAppend not in UVVertexList:
-                        UVVertexList.append(DataToAppend)
+            UVVertexList = []                    
+            for name, uvl in bm.loops.layers.uv.items():
+                for i, tri in enumerate(tris):
+                    for loop in tri:
+                        DataToAppend = loop[uvl].uv
+                        if DataToAppend not in UVVertexList:
+                            UVVertexList.append(DataToAppend)
             
-            #Get Vertex Colors List (https://blender.stackexchange.com/questions/211852/list-vertex-colors-from-a-bmesh/211854)
+            #Get Vertex Colors List 
             VertexColorList = []
-            layer = bm.loops.layers.color[0]
-            for face in bm.faces:
-                for loop in face.loops:
-                    color = loop[layer]  # gives a Vector((R, G, B, A))
-                    if color not in VertexColorList:
-                        VertexColorList.append(color)
+            for name, cl in bm.loops.layers.color.items():
+                for tri in tris:
+                    for loop in tri:
+                        color = loop[cl] # gives a Vector((R, G, B, A))
+                        if color not in VertexColorList:
+                            VertexColorList.append(color)
             
             #===========================================[Print Object Data]====================================================       
             out.write('*GEOMOBJECT {\n')
@@ -212,7 +213,7 @@ def WriteFile():
             out.write('\t*MESH {\n')
             out.write('\t\t*TIMEVALUE %u\n' % 0)
             out.write('\t\t*MESH_NUMVERTEX %u\n' % len(VertexList))
-            out.write('\t\t*MESH_NUMFACES %u\n' % len(bm.faces))
+            out.write('\t\t*MESH_NUMFACES %u\n' % len(tris))
 
             #Print Vertex List
             out.write('\t\t*MESH_VERTEX_LIST {\n')
@@ -221,13 +222,13 @@ def WriteFile():
             out.write('\t\t}\n')
 
             #Face Vertex Index
-            out.write('\t\t*MESH_FACE_LIST {\n')
-            for face in bm.faces:
-                out.write('\t\t\t*MESH_FACE %u: ' % (face.index))
-                out.write('A: %u B: %u C: %u ' % (VertexList.index(face.verts[0].co), VertexList.index(face.verts[1].co), VertexList.index(face.verts[2].co)))
-                out.write('AB: %u BC: %u CA: %u ' % (not face.verts[0].hide, not face.verts[1].hide, not face.verts[2].hide))
+            out.write('\t\t*MESH_FACE_LIST {\n')   
+            for i, tri in enumerate(tris):
+                out.write('\t\t\t*MESH_FACE %u: ' % i)
+                out.write('A: %u B: %u C: %u ' % (VertexList.index(tri[0].vert.co), VertexList.index(tri[1].vert.co), VertexList.index(tri[2].vert.co)))
+                out.write('AB: %u BC: %u CA: %u ' % (not tri[0].vert.hide, not tri[0].vert.hide, not tri[0].vert.hide))
                 out.write('*MESH_SMOOTHING 1 ')
-                out.write('*MESH_MTLID %u\n' % face.material_index)
+                out.write('*MESH_MTLID %u\n' % tri[0].face.material_index)
             out.write('\t\t}\n')
             
             #Texture UVs
@@ -238,18 +239,21 @@ def WriteFile():
             out.write('\t\t}\n')
 
             #Face Layers UVs Index
-            out.write('\t\t*MESH_NUMTFACELAYERS %u\n' % len(SceneObj.data.uv_layers))
-            out.write('\t\t*MESH_TFACELAYER %u {\n' % (0))
-            out.write('\t\t\t*MESH_NUMTVFACES %u \n' % len(bm.faces))
-            out.write('\t\t\t*MESH_TFACELIST {\n')
-            for face in bm.faces:
-                out.write('\t\t\t\t*MESH_TFACE %u ' % face.index)
-                for loop in face.loops:
-                    out.write('%u ' % UVVertexList.index([loop[uv_lay].uv[0], loop[uv_lay].uv[1]]))
-                out.write('\n')
-            out.write('\t\t\t}\n')
-            out.write('\t\t}\n')
-                                    
+            layerIndex = 0
+            out.write('\t\t*MESH_NUMTFACELAYERS %u\n' % len(bm.loops.layers.uv.items()))
+            for name, uv_lay in bm.loops.layers.uv.items():
+                out.write('\t\t*MESH_TFACELAYER %u {\n' % layerIndex)
+                out.write('\t\t\t*MESH_NUMTVFACES %u \n' % len(bm.faces))
+                out.write('\t\t\t*MESH_TFACELIST {\n')           
+                for i, tri in enumerate(tris):
+                    out.write('\t\t\t\t*MESH_TFACE %u ' % i)
+                    for loop in tri:
+                        out.write('%u ' % UVVertexList.index(loop[uv_lay].uv))
+                    out.write('\n')
+                out.write('\t\t\t}\n')
+                out.write('\t\t}\n')
+                layerIndex += 1
+
             #Vertex Colors List
             out.write('\t\t*MESH_NUMCVERTEX %u\n' % len(VertexColorList))
             out.write('\t\t*MESH_CVERTLIST {\n')
@@ -259,19 +263,22 @@ def WriteFile():
                 ColorB = (ColorArray[2] * ColorArray[3]) + (0.7 - ColorArray[3])
                 out.write('\t\t\t*MESH_VERTCOL %u %.4f %.4f %.4f\n' % (idx, ColorR, ColorG, ColorB))
             out.write('\t\t}\n')
-            
+
             #Face Color Vertex Index
-            out.write('\t\t*MESH_NUMCFACELAYERS %u\n' % len(SceneObj.data.uv_layers))
-            out.write('\t\t*MESH_CFACELAYER %u {\n' % (0))
-            out.write('\t\t\t*MESH_NUMCVFACES %u \n' % len(bm.faces))
-            out.write('\t\t\t*MESH_CFACELIST {\n')
-            for face in bm.faces:
-                out.write('\t\t\t\t*MESH_CFACE %u ' % face.index)
-                for loop in face.loops:
-                    out.write('%u ' % VertexColorList.index(loop[layer]))
-                out.write('\n')
-            out.write('\t\t\t}\n')
-            out.write('\t\t}\n')
+            layerIndex = 0
+            out.write('\t\t*MESH_NUMCFACELAYERS %u\n' % len(bm.loops.layers.color.items()))
+            for name, cl in bm.loops.layers.color.items():
+                out.write('\t\t*MESH_CFACELAYER %u {\n' % layerIndex)
+                out.write('\t\t\t*MESH_NUMCVFACES %u \n' % len(tris))
+                out.write('\t\t\t*MESH_CFACELIST {\n')
+                for i, tri in enumerate(tris):
+                    out.write('\t\t\t\t*MESH_CFACE %u ' % i)
+                    for loop in tri:
+                        out.write('%u ' % VertexColorList.index(loop[cl]))
+                    out.write('\n')
+                out.write('\t\t\t}\n')
+                out.write('\t\t}\n')
+                layerIndex +=1
 
             #Clear lists
             del VertexList
