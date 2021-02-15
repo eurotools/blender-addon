@@ -20,6 +20,10 @@ from bpy_extras.io_utils import axis_conversion
 #===============================================================================================
 ProjectContextScene = bpy.context.scene
 
+global_EntitiesMatrix = axis_conversion(to_forward='Z', to_up='Y').to_4x4()
+global_EntitiesMatrix = Matrix(((1, 0, 0),
+                        (0, 0, 1),
+                        (0, 1, 0))).to_4x4()
 #===============================================================================================
 #  FUNCTIONS
 #===============================================================================================
@@ -166,6 +170,7 @@ def WriteFile():
             dg = bpy.context.evaluated_depsgraph_get()          
             bm = bmesh.new()
             bm.from_object(SceneObj, dg)
+            bm.transform(global_EntitiesMatrix)
             tris = bm.calc_loop_triangles()
 
             #===========================================[Get Object Data]====================================================
@@ -225,8 +230,8 @@ def WriteFile():
             out.write('\t\t*MESH_FACE_LIST {\n')   
             for i, tri in enumerate(tris):
                 out.write('\t\t\t*MESH_FACE %u: ' % i)
-                out.write('A: %u B: %u C: %u ' % (VertexList.index(tri[0].vert.co), VertexList.index(tri[1].vert.co), VertexList.index(tri[2].vert.co)))
-                out.write('AB: %u BC: %u CA: %u ' % (not tri[0].vert.hide, not tri[0].vert.hide, not tri[0].vert.hide))
+                out.write('A: %u B: %u C: %u ' % (VertexList.index(tri[2].vert.co), VertexList.index(tri[1].vert.co), VertexList.index(tri[0].vert.co)))
+                out.write('AB: %u BC: %u CA: %u ' % (not tri[2].vert.hide, not tri[1].vert.hide, not tri[0].vert.hide))
                 out.write('*MESH_SMOOTHING 1 ')
                 out.write('*MESH_MTLID %u\n' % tri[0].face.material_index)
             out.write('\t\t}\n')
@@ -247,8 +252,7 @@ def WriteFile():
                 out.write('\t\t\t*MESH_TFACELIST {\n')           
                 for i, tri in enumerate(tris):
                     out.write('\t\t\t\t*MESH_TFACE %u ' % i)
-                    for loop in tri:
-                        out.write('%u ' % UVVertexList.index(loop[uv_lay].uv))
+                    out.write('%u %u %u\n' % (UVVertexList.index(tri[2][uv_lay].uv), UVVertexList.index(tri[1][uv_lay].uv), UVVertexList.index(tri[0][uv_lay].uv)))
                     out.write('\n')
                 out.write('\t\t\t}\n')
                 out.write('\t\t}\n')
