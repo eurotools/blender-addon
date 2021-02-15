@@ -193,27 +193,39 @@ class ExportESE(bpy.types.Operator, ExportHelper):
             options={'HIDDEN'},
             )
     
-    #Polygons Group
+    #Output Options
     Flip_Polygons: BoolProperty(
-            name="Flip",
-            description="Flip polygons direction in which polygon faces",
+            name="Flip Polygons",
+            description="Flip polygons direction in which polygon faces.",
             default=True,
             )
             
-    #Include Group
+    Output_Materials: BoolProperty(
+            name="Materials",
+            description="Output scene materials.",
+            default=True,
+            )
+            
+    Output_CameraLightAnims: BoolProperty(
+            name="Animated Camera/Light settings",
+            description="Export animations from Camera and Light object types.",
+            default=False,
+            )   
+            
+    #Output Types
     Include_Cameras: BoolProperty(
             name="Cameras",
-            description="Export cameras from scene",
+            description="Export cameras from scene.",
             default=False,
             )
     Include_Geometric: BoolProperty(
             name="Geometric",
-            description="Export geometry from scene",
+            description="Export geometry from scene.",
             default=False,
             )
     Include_Lights: BoolProperty(
             name="Lights",
-            description="Export lights from scene",
+            description="Export lights from scene.",
             default=False,
             )
             
@@ -239,7 +251,7 @@ class ExportESE(bpy.types.Operator, ExportHelper):
 class ESE_Export_Polys(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
-    bl_label = "Polygons"
+    bl_label = "Output Options"
     bl_parent_id = "FILE_PT_operator"
 
     @classmethod
@@ -258,11 +270,13 @@ class ESE_Export_Polys(bpy.types.Panel):
         operator = sfile.active_operator
 
         layout.prop(operator, 'Flip_Polygons')
+        layout.prop(operator, 'Output_Materials')
+        layout.prop(operator, 'Output_CameraLightAnims')
 
 class ESE_Export_Include(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
-    bl_label = "Inlcude"
+    bl_label = "Object Types"
     bl_parent_id = "FILE_PT_operator"
 
     @classmethod

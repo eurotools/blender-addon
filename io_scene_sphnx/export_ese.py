@@ -21,6 +21,8 @@ def _write(context, filepath,
             EXPORT_CAMERAS,
             EXPORT_GEOMETRIC,
             EXPORT_LIGHTS,
+            EXPORT_MATERIALS,
+            EXPORT_CAMERALIGHTANIMS,
             EXPORT_ANIMATION,
             EXPORT_GLOBAL_MATRIX,
             EXPORT_PATH_MODE='AUTO',
@@ -130,46 +132,47 @@ def _write(context, filepath,
             out.write('\t*MATERIAL_COUNT %u\n' % len(bpy.data.materials))
 
             currentMat = 0
-            for MatData in bpy.data.materials:   
-                if hasattr(MatData.node_tree, 'nodes'):
-                    DiffuseColor = MatData.diffuse_color
+            if EXPORT_MATERIALS:
+                for MatData in bpy.data.materials:   
+                    if hasattr(MatData.node_tree, 'nodes'):
+                        DiffuseColor = MatData.diffuse_color
 
-                    #Check if material has texture        
-                    ImageNode = MatData.node_tree.nodes.get('Image Texture', None)
-                    if (ImageNode is not None):
-                        ImageName = ImageNode.image.name
+                        #Check if material has texture        
+                        ImageNode = MatData.node_tree.nodes.get('Image Texture', None)
+                        if (ImageNode is not None):
+                            ImageName = ImageNode.image.name
 
-                        #Material
-                        out.write('\t*MATERIAL %u {\n' % currentMat)
-                        out.write('\t\t*MATERIAL_NAME "%s"\n' % MatData.name)
-                        out.write('\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-                        out.write('\t\t*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
-                        out.write('\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
-                        if (os.path.exists(bpy.path.abspath(ImageNode.image.filepath))):
-                            out.write('\t\t*MATERIAL_TWOSIDED\n')
-                        out.write('\t\t*NUMSUBMTLS %u \n' % 1)
+                            #Material
+                            out.write('\t*MATERIAL %u {\n' % currentMat)
+                            out.write('\t\t*MATERIAL_NAME "%s"\n' % MatData.name)
+                            out.write('\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                            out.write('\t\t*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                            out.write('\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
+                            if (os.path.exists(bpy.path.abspath(ImageNode.image.filepath))):
+                                out.write('\t\t*MATERIAL_TWOSIDED\n')
+                            out.write('\t\t*NUMSUBMTLS %u \n' % 1)
 
-                        #Submaterial
-                        out.write('\t\t*SUBMATERIAL %u {\n' % currentMat)
-                        out.write('\t\t\t*MATERIAL_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
-                        out.write('\t\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-                        out.write('\t\t\t*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
-                        out.write('\t\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
-                        out.write('\t\t\t*MATERIAL_SELFILLUM %u\n' % int(MatData.use_preview_world))
+                            #Submaterial
+                            out.write('\t\t*SUBMATERIAL %u {\n' % currentMat)
+                            out.write('\t\t\t*MATERIAL_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
+                            out.write('\t\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                            out.write('\t\t\t*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                            out.write('\t\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
+                            out.write('\t\t\t*MATERIAL_SELFILLUM %u\n' % int(MatData.use_preview_world))
 
-                        #Map Difuse
-                        out.write('\t\t\t*MAP_DIFFUSE {\n')
-                        out.write('\t\t\t\t*MAP_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
-                        out.write('\t\t\t\t*MAP_CLASS "%s"\n' % "Bitmap")
-                        out.write('\t\t\t\t*MAP_AMOUNT "%u"\n' % 1)
-                        out.write('\t\t\t\t*BITMAP "%s"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
+                            #Map Difuse
+                            out.write('\t\t\t*MAP_DIFFUSE {\n')
+                            out.write('\t\t\t\t*MAP_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
+                            out.write('\t\t\t\t*MAP_CLASS "%s"\n' % "Bitmap")
+                            out.write('\t\t\t\t*MAP_AMOUNT "%u"\n' % 1)
+                            out.write('\t\t\t\t*BITMAP "%s"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
 
-                        out.write('\t\t\t}\n')
-                        out.write('\t\t}\n')
-                        out.write('\t}\n')
+                            out.write('\t\t\t}\n')
+                            out.write('\t\t}\n')
+                            out.write('\t}\n')
 
-                        currentMat += 1
-            out.write('}\n')
+                            currentMat += 1
+                out.write('}\n')
           
             #===============================================================================================
             #  GEOM OBJECT
@@ -241,8 +244,12 @@ def _write(context, filepath,
                         out.write('\t\t*MESH_FACE_LIST {\n')   
                         for i, tri in enumerate(tris):
                             out.write('\t\t\t*MESH_FACE %u: ' % i)
-                            out.write('A: %u B: %u C: %u ' % (VertexList.index(tri[2].vert.co), VertexList.index(tri[1].vert.co), VertexList.index(tri[0].vert.co)))
-                            out.write('AB: %u BC: %u CA: %u ' % (not tri[2].vert.hide, not tri[1].vert.hide, not tri[0].vert.hide))
+                            if EXPORT_FLIP_POLYGONS:
+                                out.write('A: %u B: %u C: %u ' % (VertexList.index(tri[2].vert.co), VertexList.index(tri[1].vert.co), VertexList.index(tri[0].vert.co)))
+                                out.write('AB: %u BC: %u CA: %u ' % (not tri[2].vert.hide, not tri[1].vert.hide, not tri[0].vert.hide))
+                            else:
+                                out.write('A: %u B: %u C: %u ' % (VertexList.index(tri[0].vert.co), VertexList.index(tri[1].vert.co), VertexList.index(tri[2].vert.co)))
+                                out.write('AB: %u BC: %u CA: %u ' % (not tri[0].vert.hide, not tri[1].vert.hide, not tri[2].vert.hide))                                
                             out.write('*MESH_SMOOTHING 1 ')
                             out.write('*MESH_MTLID %u\n' % tri[0].face.material_index)
                         out.write('\t\t}\n')
@@ -263,7 +270,10 @@ def _write(context, filepath,
                             out.write('\t\t\t*MESH_TFACELIST {\n')           
                             for i, tri in enumerate(tris):
                                 out.write('\t\t\t\t*MESH_TFACE %u ' % i)
-                                out.write('%u %u %u\n' % (UVVertexList.index(tri[2][uv_lay].uv), UVVertexList.index(tri[1][uv_lay].uv), UVVertexList.index(tri[0][uv_lay].uv)))
+                                if EXPORT_FLIP_POLYGONS:
+                                    out.write('%u %u %u\n' % (UVVertexList.index(tri[2][uv_lay].uv), UVVertexList.index(tri[1][uv_lay].uv), UVVertexList.index(tri[0][uv_lay].uv)))
+                                else:
+                                    out.write('%u %u %u\n' % (UVVertexList.index(tri[0][uv_lay].uv), UVVertexList.index(tri[1][uv_lay].uv), UVVertexList.index(tri[2][uv_lay].uv)))
                             out.write('\t\t\t}\n')
                             out.write('\t\t}\n')
                             layerIndex += 1
@@ -335,25 +345,26 @@ def _write(context, filepath,
 
                         #===============================================================================================
                         #  CAMERA ANIMATION
-                        #===============================================================================================  
-                        out.write('\t*CAMERA_ANIMATION {\n')
-                        
-                        TimeValueCounter = 0
-                        for f in range(ProjectContextScene.frame_start, ProjectContextScene.frame_end + 1):
-                            ProjectContextScene.frame_set(f)
+                        #===============================================================================================
+                        if EXPORT_CAMERALIGHTANIMS:
+                            out.write('\t*CAMERA_ANIMATION {\n')
+                            
+                            TimeValueCounter = 0
+                            for f in range(ProjectContextScene.frame_start, ProjectContextScene.frame_end + 1):
+                                ProjectContextScene.frame_set(f)
 
-                            FieldOfView = math.degrees(2 * math.atan(SceneObj.data.sensor_width /(2 * SceneObj.data.lens)))
-                            out.write('\t\t*CAMERA_SETTINGS {\n')
-                            out.write('\t\t\t*TIMEVALUE %u\n' % 0)
-                            out.write('\t\t\t*CAMERA_NEAR %.4f\n' % SceneObj.data.clip_start)
-                            out.write('\t\t\t*CAMERA_FAR %.4f\n'% SceneObj.data.clip_end)  
-                            out.write('\t\t\t*CAMERA_FOV %.4f\n'% FieldOfView)
-                            out.write('\t\t\t*CAMERA_TDIST %.4f\n'% 32.1137)
-                            out.write('\t\t}\n')
+                                FieldOfView = math.degrees(2 * math.atan(SceneObj.data.sensor_width /(2 * SceneObj.data.lens)))
+                                out.write('\t\t*CAMERA_SETTINGS {\n')
+                                out.write('\t\t\t*TIMEVALUE %u\n' % 0)
+                                out.write('\t\t\t*CAMERA_NEAR %.4f\n' % SceneObj.data.clip_start)
+                                out.write('\t\t\t*CAMERA_FAR %.4f\n'% SceneObj.data.clip_end)  
+                                out.write('\t\t\t*CAMERA_FOV %.4f\n'% FieldOfView)
+                                out.write('\t\t\t*CAMERA_TDIST %.4f\n'% 32.1137)
+                                out.write('\t\t}\n')
 
-                            TimeValueCounter += TimeValue
+                                TimeValueCounter += TimeValue
 
-                        out.write('\t}\n')
+                            out.write('\t}\n')
 
                         #===============================================================================================
                         #  ANIMATION
@@ -406,26 +417,27 @@ def _write(context, filepath,
 
                         #===============================================================================================
                         #  LIGHT ANIMATION
-                        #===============================================================================================  
-                        out.write('\t*LIGHT_ANIMATION {\n')
+                        #=============================================================================================== 
+                        if EXPORT_CAMERALIGHTANIMS:
+                            out.write('\t*LIGHT_ANIMATION {\n')
 
-                        TimeValueCounter = 0
-                        for f in range(ProjectContextScene.frame_start, ProjectContextScene.frame_end + 1):
-                            ProjectContextScene.frame_set(f)
+                            TimeValueCounter = 0
+                            for f in range(ProjectContextScene.frame_start, ProjectContextScene.frame_end + 1):
+                                ProjectContextScene.frame_set(f)
 
-                            out.write('\t\t*LIGHT_SETTINGS {\n')
-                            out.write('\t\t\t*TIMEVALUE %u\n' % TimeValueCounter)
-                            out.write('\t\t\t*COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r, SceneObj.data.color.g, SceneObj.data.color.b))
-                            out.write('\t\t\t*FAR_ATTEN %.4f %.4f\n' % (SceneObj.data.distance, SceneObj.data.cutoff_distance))
-                            if (SceneObj.data.type == 'SUN'):
-                                out.write('\t\t\t*HOTSPOT %u\n' % math.degrees(SceneObj.data.angle))
-                            else:
-                                out.write('\t\t\t*HOTSPOT %u\n' % 0)
-                            out.write('\t\t}\n')
+                                out.write('\t\t*LIGHT_SETTINGS {\n')
+                                out.write('\t\t\t*TIMEVALUE %u\n' % TimeValueCounter)
+                                out.write('\t\t\t*COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r, SceneObj.data.color.g, SceneObj.data.color.b))
+                                out.write('\t\t\t*FAR_ATTEN %.4f %.4f\n' % (SceneObj.data.distance, SceneObj.data.cutoff_distance))
+                                if (SceneObj.data.type == 'SUN'):
+                                    out.write('\t\t\t*HOTSPOT %u\n' % math.degrees(SceneObj.data.angle))
+                                else:
+                                    out.write('\t\t\t*HOTSPOT %u\n' % 0)
+                                out.write('\t\t}\n')
 
-                            TimeValueCounter += TimeValue
+                                TimeValueCounter += TimeValue
 
-                        out.write('\t}\n')
+                            out.write('\t}\n')
 
                         #===============================================================================================
                         #  ANIMATION
@@ -447,6 +459,8 @@ def save(context,
          Include_Cameras=False,
          Include_Geometric=False,
          Include_Lights=False,
+         Output_Materials=True,
+         Output_CameraLightAnims=False,
          use_animation=False,
          global_matrix=None,
          path_mode='AUTO'
@@ -458,6 +472,8 @@ def save(context,
            EXPORT_GEOMETRIC=Include_Geometric,
            EXPORT_LIGHTS=Include_Lights,
            EXPORT_ANIMATION=use_animation,
+           EXPORT_MATERIALS=Output_Materials,
+           EXPORT_CAMERALIGHTANIMS=Output_CameraLightAnims,
            EXPORT_GLOBAL_MATRIX=global_matrix,
            EXPORT_PATH_MODE=path_mode,
            )
