@@ -61,7 +61,7 @@ def PrintTM_ANIMATION(OutputFile, SceneObject, TimeValue):
             RotationMatrix = global_matrix @ RotationMatrix.transposed()
             
             #Write Time Value
-            OutputFile.write('\t\t\t*TM_FRAME %d ' % TimeValueCounter)
+            OutputFile.write('\t\t\t*TM_FRAME %u ' % TimeValueCounter)
             
             #Write Matrix
             OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
@@ -72,8 +72,17 @@ def PrintTM_ANIMATION(OutputFile, SceneObject, TimeValue):
             #Update counter
             TimeValueCounter += TimeValue            
         OutputFile.write('\t\t}\n')
-        OutputFile.write('\t}\n')  
-                
+        OutputFile.write('\t}\n')
+        
+def dedup(lst):
+    seen = set()
+    result = []
+    for item in lst:
+        fs = frozenset(item)
+        if fs not in seen:
+            result.append(item)
+            seen.add(fs)
+    return result               
 #===============================================================================================
 #  MAIN
 #===============================================================================================
@@ -101,11 +110,11 @@ def WriteFile():
     
     out.write('*SCENE {\n')
     out.write('\t*SCENE_FILENAME "%s"\n' % os.path.basename(bpy.data.filepath))
-    out.write('\t*SCENE_FIRSTFRAME %d\n' % ProjectContextScene.frame_start)
-    out.write('\t*SCENE_LASTFRAME %d\n' % ProjectContextScene.frame_end)
-    out.write('\t*SCENE_FRAMESPEED %d\n' %  ProjectContextScene.render.fps)
-    out.write('\t*SCENE_TICKSPERFRAME %d\n' % TimeValue)
-    out.write('\t*SCENE_BACKGROUND_STATIC %d %d %d\n' %(BackgroundC[0], BackgroundC[1], BackgroundC[2]))    
+    out.write('\t*SCENE_FIRSTFRAME %u\n' % ProjectContextScene.frame_start)
+    out.write('\t*SCENE_LASTFRAME %u\n' % ProjectContextScene.frame_end)
+    out.write('\t*SCENE_FRAMESPEED %u\n' %  ProjectContextScene.render.fps)
+    out.write('\t*SCENE_TICKSPERFRAME %u\n' % TimeValue)
+    out.write('\t*SCENE_BACKGROUND_STATIC %u %u %u\n' %(BackgroundC[0], BackgroundC[1], BackgroundC[2]))    
     out.write('\t*SCENE_AMBIENT_STATIC %.4f %.4f %.4f\n' %(AmbientValue, AmbientValue, AmbientValue))
     out.write('}\n')
 
@@ -113,7 +122,7 @@ def WriteFile():
     #  MATERIAL LIST
     #===============================================================================================
     out.write('*MATERIAL_LIST {\n')
-    out.write('\t*MATERIAL_COUNT %d\n' % len(bpy.data.materials))
+    out.write('\t*MATERIAL_COUNT %u\n' % len(bpy.data.materials))
     
     currentMat = 0
     for MatData in bpy.data.materials:   
@@ -126,28 +135,28 @@ def WriteFile():
                 ImageName = ImageNode.image.name
                 
                 #Material
-                out.write('\t*MATERIAL %d {\n' % currentMat)
+                out.write('\t*MATERIAL %u {\n' % currentMat)
                 out.write('\t\t*MATERIAL_NAME "%s"\n' % MatData.name)
                 out.write('\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-                out.write('\t\t*MATERIAL_SPECULAR %d %d %d\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                out.write('\t\t*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
                 out.write('\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
                 if (os.path.exists(bpy.path.abspath(ImageNode.image.filepath))):
                     out.write('\t\t*MATERIAL_TWOSIDED\n')
-                out.write('\t\t*NUMSUBMTLS %d \n' % 1)
+                out.write('\t\t*NUMSUBMTLS %u \n' % 1)
                 
                 #Submaterial
-                out.write('\t\t*SUBMATERIAL %d {\n' % currentMat)
+                out.write('\t\t*SUBMATERIAL %u {\n' % currentMat)
                 out.write('\t\t\t*MATERIAL_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
                 out.write('\t\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-                out.write('\t\t\t*MATERIAL_SPECULAR %d %d %d\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                out.write('\t\t\t*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
                 out.write('\t\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
-                out.write('\t\t\t*MATERIAL_SELFILLUM %d\n' % int(MatData.use_preview_world))
+                out.write('\t\t\t*MATERIAL_SELFILLUM %u\n' % int(MatData.use_preview_world))
                 
                 #Map Difuse
                 out.write('\t\t\t*MAP_DIFFUSE {\n')
                 out.write('\t\t\t\t*MAP_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
                 out.write('\t\t\t\t*MAP_CLASS "%s"\n' % "Bitmap")
-                out.write('\t\t\t\t*MAP_AMOUNT "%d"\n' % 1)
+                out.write('\t\t\t\t*MAP_AMOUNT "%u"\n' % 1)
                 out.write('\t\t\t\t*BITMAP "%s"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
                 
                 out.write('\t\t\t}\n')
@@ -176,6 +185,15 @@ def WriteFile():
                 for ObjVert in face.verts:
                     VertexList.append(ObjVert.co)
                     
+            #Get UV Layer Active
+            UVVertexList = []
+            uv_lay = bm.loops.layers.uv.active
+            for face in bm.faces:
+                for loop in face.loops:
+                    DataToAppend = [loop[uv_lay].uv[0], loop[uv_lay].uv[1]]
+                    UVVertexList.append(DataToAppend)
+                        
+            FinalUVVertexList = dedup(UVVertexList)
             #===========================================[Print Object Data]====================================================       
             out.write('*GEOMOBJECT {\n')
             out.write('\t*NODE_NAME "%s"\n' % SceneObj.name)
@@ -192,29 +210,47 @@ def WriteFile():
                 
             #MESH Section
             out.write('\t*MESH {\n')
-            out.write('\t\t*TIMEVALUE %d\n' % 0)
-            out.write('\t\t*MESH_NUMVERTEX %d\n' % len(VertexList))
-            out.write('\t\t*MESH_NUMFACES %d\n' % len(bm.faces))
+            out.write('\t\t*TIMEVALUE %u\n' % 0)
+            out.write('\t\t*MESH_NUMVERTEX %u\n' % len(VertexList))
+            out.write('\t\t*MESH_NUMFACES %u\n' % len(bm.faces))
                                 
-            #Print Vertex Liste
+            #Print Vertex List
             out.write('\t\t*MESH_VERTEX_LIST {\n')
             for ListItem in VertexList:
-                out.write('\t\t\t*MESH_VERTEX %d %.4f %.4f %.4f\n' % (VertexList.index(ListItem), ListItem[0], ListItem[1], ListItem[2]))
+                out.write('\t\t\t*MESH_VERTEX %u %.4f %.4f %.4f\n' % (VertexList.index(ListItem), ListItem[0], ListItem[1], ListItem[2]))
             out.write('\t\t}\n')
             
             #Face List
             out.write('\t\t*MESH_FACE_LIST {\n')
             for face in bm.faces:
-                #Get indices from Vertex List
-                v_indexA = VertexList.index(face.verts[0].co)
-                v_indexB = VertexList.index(face.verts[1].co)
-                v_indexC = VertexList.index(face.verts[2].co)
-                
-                #Print Info
-                out.write('\t\t\t*MESH_FACE %d: ' % (face.index))
-                out.write('A: %d B: %d C: %d AB: 1 BC: 0 CA: 1 ' % (v_indexA, v_indexB, v_indexC))
-                out.write('*MESH_SMOOTHING 1 *MESH_MTLID 0\n')
-                
+                out.write('\t\t\t*MESH_FACE %u: ' % (face.index))
+                out.write('A: %u B: %u C: %u AB: 1 BC: 0 CA: 1 ' % (VertexList.index(face.verts[0].co), VertexList.index(face.verts[1].co), VertexList.index(face.verts[2].co)))
+                out.write('*MESH_SMOOTHING 1 ')
+                out.write('*MESH_MTLID %u\n' % face.material_index)
+            out.write('\t\t}\n')
+
+            #Texture Vertex List
+            out.write('\t\t*MESH_NUMTVERTEX %u\n' % len(FinalUVVertexList))
+            out.write('\t\t*MESH_TVERTLIST {\n')
+            for idx, TextUV in enumerate(FinalUVVertexList):
+                out.write('\t\t\t*MESH_TVERT %u %.4f %.4f\n' % (idx, TextUV[0], TextUV[1]))
+            out.write('\t\t}\n')
+            
+            #Face layers List
+            uv_lay = bm.loops.layers.uv.active
+            out.write('\t\t*MESH_NUMTFACELAYERS %u\n' % 1)
+            
+            out.write('\t\t*MESH_TFACELAYER %u {\n' % (0))
+            out.write('\t\t\t*MESH_NUMTVFACES %u \n' % len(bm.faces))
+            out.write('\t\t\t*MESH_TFACELIST {\n')
+            for face in bm.faces:
+                out.write('\t\t\t\t*MESH_TFACE %u ' % face.index)
+                for loop in face.loops:
+                    out.write('%u ' % FinalUVVertexList.index([loop[uv_lay].uv[0], loop[uv_lay].uv[1]]))
+                out.write('\n')
+            out.write('\t\t\t}\n')
+            out.write('\t\t}\n')
+                 
             #Clear list
             del VertexList
             
@@ -222,7 +258,7 @@ def WriteFile():
             bm.free()
             
             #Close blocks
-            out.write('\t\t}\n')
+
             out.write('\t}\n')
             out.write('}\n')
             
@@ -245,7 +281,7 @@ def WriteFile():
             #=============================================================================================== 
             FieldOfView = math.degrees(2 * math.atan(SceneObj.data.sensor_width /(2 * SceneObj.data.lens)))
             out.write('\t*CAMERA_SETTINGS {\n')
-            out.write('\t\t*TIMEVALUE %d\n' % 0)
+            out.write('\t\t*TIMEVALUE %u\n' % 0)
             out.write('\t\t*CAMERA_NEAR %.4f\n' % SceneObj.data.clip_start)
             out.write('\t\t*CAMERA_FAR %.4f\n'% SceneObj.data.clip_end)  
             out.write('\t\t*CAMERA_FOV %.4f\n'% FieldOfView)
@@ -263,7 +299,7 @@ def WriteFile():
                 
                 FieldOfView = math.degrees(2 * math.atan(SceneObj.data.sensor_width /(2 * SceneObj.data.lens)))
                 out.write('\t\t*CAMERA_SETTINGS {\n')
-                out.write('\t\t\t*TIMEVALUE %d\n' % 0)
+                out.write('\t\t\t*TIMEVALUE %u\n' % 0)
                 out.write('\t\t\t*CAMERA_NEAR %.4f\n' % SceneObj.data.clip_start)
                 out.write('\t\t\t*CAMERA_FAR %.4f\n'% SceneObj.data.clip_end)  
                 out.write('\t\t\t*CAMERA_FOV %.4f\n'% FieldOfView)
@@ -313,13 +349,13 @@ def WriteFile():
             
             #---------------------------------------------[Light Settings]---------------------------------------------           
             out.write('\t*LIGHT_SETTINGS {\n')
-            out.write('\t\t*TIMEVALUE %d\n' % 0)
+            out.write('\t\t*TIMEVALUE %u\n' % 0)
             out.write('\t\t*COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r, SceneObj.data.color.g, SceneObj.data.color.b))
             out.write('\t\t*FAR_ATTEN %.4f %.4f\n' % (SceneObj.data.distance, SceneObj.data.cutoff_distance))
             if (SceneObj.data.type == 'SUN'):
-                out.write('\t\t*HOTSPOT %d\n' % math.degrees(SceneObj.data.angle))
+                out.write('\t\t*HOTSPOT %u\n' % math.degrees(SceneObj.data.angle))
             else:
-                out.write('\t\t*HOTSPOT %d\n' % 0)
+                out.write('\t\t*HOTSPOT %u\n' % 0)
             out.write('\t}\n')
             
             #===============================================================================================
@@ -332,13 +368,13 @@ def WriteFile():
                 ProjectContextScene.frame_set(f)
                 
                 out.write('\t\t*LIGHT_SETTINGS {\n')
-                out.write('\t\t\t*TIMEVALUE %d\n' % TimeValueCounter)
+                out.write('\t\t\t*TIMEVALUE %u\n' % TimeValueCounter)
                 out.write('\t\t\t*COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r, SceneObj.data.color.g, SceneObj.data.color.b))
                 out.write('\t\t\t*FAR_ATTEN %.4f %.4f\n' % (SceneObj.data.distance, SceneObj.data.cutoff_distance))
                 if (SceneObj.data.type == 'SUN'):
-                    out.write('\t\t\t*HOTSPOT %d\n' % math.degrees(SceneObj.data.angle))
+                    out.write('\t\t\t*HOTSPOT %u\n' % math.degrees(SceneObj.data.angle))
                 else:
-                    out.write('\t\t\t*HOTSPOT %d\n' % 0)
+                    out.write('\t\t\t*HOTSPOT %u\n' % 0)
                 out.write('\t\t}\n')
                 
                 TimeValueCounter += TimeValue
