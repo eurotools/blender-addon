@@ -192,19 +192,98 @@ class ExportESE(bpy.types.Operator, ExportHelper):
             default="*.ese",
             options={'HIDDEN'},
             )
-
+    
+    #Polygons Group
+    Flip_Polygons: BoolProperty(
+            name="Flip",
+            description="Flip polygons direction in which polygon faces",
+            default=True,
+            )
+            
+    #Include Group
+    Include_Cameras: BoolProperty(
+            name="Cameras",
+            description="Export cameras from scene",
+            default=False,
+            )
+    Include_Geometric: BoolProperty(
+            name="Geometric",
+            description="Export geometry from scene",
+            default=False,
+            )
+    Include_Lights: BoolProperty(
+            name="Lights",
+            description="Export lights from scene",
+            default=False,
+            )
+            
     path_mode: path_reference_mode
 
     check_extension = True
-
+            
     def execute(self, context):
         from . import export_ese
-        return export_ese.save(context, self.filepath)
+
+        keywords = self.as_keywords(ignore=("axis_forward",
+                                            "axis_up",
+                                            "global_scale",
+                                            "check_existing",
+                                            "filter_glob",
+                                            ))
+        
+        return export_ese.save(context, **keywords)
 
     def draw(self, context):
         pass
         
+class ESE_Export_Polys(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Polygons"
+    bl_parent_id = "FILE_PT_operator"
 
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        return operator.bl_idname == "EXPORT_SCENE_OT_ese"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        layout.prop(operator, 'Flip_Polygons')
+
+class ESE_Export_Include(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Inlcude"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        return operator.bl_idname == "EXPORT_SCENE_OT_ese"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        layout.prop(operator, 'Include_Cameras')
+        layout.prop(operator, 'Include_Geometric')
+        layout.prop(operator, 'Include_Lights')
+        
 class ReloadAddon(bpy.types.Operator):
     """Reloads the whole Eurocom 3D tools, for development """
     bl_idname = "wm.reload_sphnx"
@@ -235,7 +314,7 @@ def menu_func_ese_import(self, context):
 def menu_func_ese_export(self, context):
     self.layout.operator(ExportESE.bl_idname, text="Eurocom Scene Export (.ese)")
 
-
+        
 classes = (
     ImportEIF,
     ImportRTG,
@@ -244,6 +323,8 @@ classes = (
     ExportEIF,
     ExportRTG,
     ExportESE,
+    ESE_Export_Polys,
+    ESE_Export_Include,
 )
 
 def register():
