@@ -193,13 +193,7 @@ class ExportESE(bpy.types.Operator, ExportHelper):
             options={'HIDDEN'},
             )
     
-    #Output Options
-    Flip_Polygons: BoolProperty(
-            name="Flip Polygons",
-            description="Flip polygons direction in which polygon faces.",
-            default=True,
-            )
-            
+    #Output Options            
     Output_Materials: BoolProperty(
             name="Materials",
             description="Output scene materials.",
@@ -229,6 +223,18 @@ class ExportESE(bpy.types.Operator, ExportHelper):
             default=False,
             )
             
+    #Mesh Options
+    Output_VertexColors : BoolProperty(
+            name="Vertex Colors",
+            description="Export vertex colors from each mesh",
+            default=True,
+            )
+    Flip_Polygons: BoolProperty(
+            name="Flip Polygons",
+            description="Flip polygons direction in which polygon faces.",
+            default=False,
+            )
+            
     path_mode: path_reference_mode
 
     check_extension = True
@@ -242,13 +248,12 @@ class ExportESE(bpy.types.Operator, ExportHelper):
                                             "check_existing",
                                             "filter_glob",
                                             ))
-        
         return export_ese.save(context, **keywords)
 
     def draw(self, context):
         pass
         
-class ESE_Export_Polys(bpy.types.Panel):
+class ESE_Export_OutputOptions(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
     bl_label = "Output Options"
@@ -269,11 +274,34 @@ class ESE_Export_Polys(bpy.types.Panel):
         sfile = context.space_data
         operator = sfile.active_operator
 
-        layout.prop(operator, 'Flip_Polygons')
         layout.prop(operator, 'Output_Materials')
         layout.prop(operator, 'Output_CameraLightAnims')
+        
+class ESE_Export_MeshOptions(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Mesh Options"
+    bl_parent_id = "FILE_PT_operator"
 
-class ESE_Export_Include(bpy.types.Panel):
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        return operator.bl_idname == "EXPORT_SCENE_OT_ese"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        layout.prop(operator, 'Flip_Polygons')
+        layout.prop(operator, 'Output_VertexColors')
+
+class ESE_Export_ObjectTypes(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
     bl_label = "Object Types"
@@ -337,8 +365,9 @@ classes = (
     ExportEIF,
     ExportRTG,
     ExportESE,
-    ESE_Export_Polys,
-    ESE_Export_Include,
+    ESE_Export_OutputOptions,
+    ESE_Export_MeshOptions,
+    ESE_Export_ObjectTypes,
 )
 
 def register():

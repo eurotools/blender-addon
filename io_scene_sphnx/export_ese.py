@@ -23,6 +23,7 @@ def _write(context, filepath,
             EXPORT_LIGHTS,
             EXPORT_MATERIALS,
             EXPORT_CAMERALIGHTANIMS,
+            EXPORT_VERTEXCOLORS,
             EXPORT_ANIMATION,
             EXPORT_GLOBAL_MATRIX,
             EXPORT_PATH_MODE='AUTO',
@@ -205,14 +206,15 @@ def _write(context, filepath,
                                     if DataToAppend not in UVVertexList:
                                         UVVertexList.append(DataToAppend)
                         
-                        #Get Vertex Colors List 
-                        VertexColorList = []
-                        for name, cl in bm.loops.layers.color.items():
-                            for tri in tris:
-                                for loop in tri:
-                                    color = loop[cl] # gives a Vector((R, G, B, A))
-                                    if color not in VertexColorList:
-                                        VertexColorList.append(color)
+                        if EXPORT_VERTEXCOLORS:
+                            #Get Vertex Colors List 
+                            VertexColorList = []
+                            for name, cl in bm.loops.layers.color.items():
+                                for tri in tris:
+                                    for loop in tri:
+                                        color = loop[cl] # gives a Vector((R, G, B, A))
+                                        if color not in VertexColorList:
+                                            VertexColorList.append(color)
                         
                         #===========================================[Print Object Data]====================================================       
                         out.write('*GEOMOBJECT {\n')
@@ -277,43 +279,41 @@ def _write(context, filepath,
                             out.write('\t\t\t}\n')
                             out.write('\t\t}\n')
                             layerIndex += 1
-
-                        #Vertex Colors List
-                        out.write('\t\t*MESH_NUMCVERTEX %u\n' % len(VertexColorList))
-                        out.write('\t\t*MESH_CVERTLIST {\n')
-                        for idx, ColorArray in enumerate(VertexColorList):
-                            ColorR = (ColorArray[0] * ColorArray[3]) + (0.7 - ColorArray[3])
-                            ColorG = (ColorArray[1] * ColorArray[3]) + (0.7 - ColorArray[3])
-                            ColorB = (ColorArray[2] * ColorArray[3]) + (0.7 - ColorArray[3])
-                            out.write('\t\t\t*MESH_VERTCOL %u %.4f %.4f %.4f\n' % (idx, ColorR, ColorG, ColorB))
-                        out.write('\t\t}\n')
-
-                        #Face Color Vertex Index
-                        layerIndex = 0
-                        out.write('\t\t*MESH_NUMCFACELAYERS %u\n' % len(bm.loops.layers.color.items()))
-                        for name, cl in bm.loops.layers.color.items():
-                            out.write('\t\t*MESH_CFACELAYER %u {\n' % layerIndex)
-                            out.write('\t\t\t*MESH_NUMCVFACES %u \n' % len(tris))
-                            out.write('\t\t\t*MESH_CFACELIST {\n')
-                            for i, tri in enumerate(tris):
-                                out.write('\t\t\t\t*MESH_CFACE %u ' % i)
-                                for loop in tri:
-                                    out.write('%u ' % VertexColorList.index(loop[cl]))
-                                out.write('\n')
-                            out.write('\t\t\t}\n')
+                        
+                        if EXPORT_VERTEXCOLORS:
+                            #Vertex Colors List
+                            out.write('\t\t*MESH_NUMCVERTEX %u\n' % len(VertexColorList))
+                            out.write('\t\t*MESH_CVERTLIST {\n')
+                            for idx, ColorArray in enumerate(VertexColorList):
+                                out.write('\t\t\t*MESH_VERTCOL %u %.4f %.4f %.4f %u\n' % (idx, (ColorArray[0] * .5), (ColorArray[1] * .5), (ColorArray[2] * .5), 1))
                             out.write('\t\t}\n')
-                            layerIndex +=1
 
-                        #Clear lists
-                        del VertexList
-                        del UVVertexList
+                            #Face Color Vertex Index
+                            layerIndex = 0
+                            out.write('\t\t*MESH_NUMCFACELAYERS %u\n' % len(bm.loops.layers.color.items()))
+                            for name, cl in bm.loops.layers.color.items():
+                                out.write('\t\t*MESH_CFACELAYER %u {\n' % layerIndex)
+                                out.write('\t\t\t*MESH_NUMCVFACES %u \n' % len(tris))
+                                out.write('\t\t\t*MESH_CFACELIST {\n')
+                                for i, tri in enumerate(tris):
+                                    out.write('\t\t\t\t*MESH_CFACE %u ' % i)
+                                    for loop in tri:
+                                        out.write('%u ' % VertexColorList.index(loop[cl]))
+                                    out.write('\n')
+                                out.write('\t\t\t}\n')
+                                out.write('\t\t}\n')
+                                layerIndex +=1
+
+                            #Clear lists
+                            del VertexList
+                            del UVVertexList
 
                         #Liberate BM Object
                         bm.free()
 
                         #Close blocks
-
                         out.write('\t}\n')
+                        out.write('\t*MATERIAL_REF %u\n' % 0)
                         out.write('}\n')
 
             #===============================================================================================
@@ -456,11 +456,12 @@ def save(context,
          filepath,
          *,
          Flip_Polygons=True,
-         Include_Cameras=False,
-         Include_Geometric=False,
-         Include_Lights=False,
+         Include_Cameras=True,
+         Include_Geometric=True,
+         Include_Lights=True,
          Output_Materials=True,
-         Output_CameraLightAnims=False,
+         Output_CameraLightAnims=True,
+         Output_VertexColors=True,
          use_animation=False,
          global_matrix=None,
          path_mode='AUTO'
@@ -474,6 +475,7 @@ def save(context,
            EXPORT_ANIMATION=use_animation,
            EXPORT_MATERIALS=Output_Materials,
            EXPORT_CAMERALIGHTANIMS=Output_CameraLightAnims,
+           EXPORT_VERTEXCOLORS=Output_VertexColors,
            EXPORT_GLOBAL_MATRIX=global_matrix,
            EXPORT_PATH_MODE=path_mode,
            )
