@@ -26,14 +26,14 @@ def _write(context, filepath,
             EXPORT_GLOBAL_MATRIX,
             EXPORT_PATH_MODE='AUTO',
          ):
-         
+
     #===============================================================================================
     #  GLOBAL VARIABLES
     #===============================================================================================
     ProjectContextScene = bpy.context.scene
     InvertAxisRotationMatrix = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0)))
     EXPORT_GLOBAL_MATRIX = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4()
-    
+
     #===============================================================================================
     #  FUNCTIONS
     #===============================================================================================
@@ -43,7 +43,7 @@ def _write(context, filepath,
             ConvertedMatrix = SceneObject.rotation_euler.to_matrix()
             rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
             RotationMatrix = rot_mtx.transposed()
-            
+
             OutputFile.write('\t\t*NODE_NAME "%s"\n' % SceneObject.name)
             OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
             OutputFile.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
@@ -67,20 +67,16 @@ def _write(context, filepath,
                 OutputFile.write('\t\t\t*TM_FRAME %u ' % TimeValueCounter)
 
                 #Write Matrix
-                #OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
-                #OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
-                #OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
-                #OutputFile.write('%.4f %.4f %.4f\n' % (RotationMatrix[3].x, RotationMatrix[3].y, RotationMatrix[3].z))
                 OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[0].x, (RotationMatrix[0].y * -1), RotationMatrix[0].z))
                 OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
                 OutputFile.write('%.4f %.4f %.4f ' % ((RotationMatrix[2].x * -1), (RotationMatrix[2].y * -1), (RotationMatrix[2].z) * -1))
                 OutputFile.write('%.4f %.4f %.4f\n' % (SceneObject.location.x, SceneObject.location.z, SceneObject.location.y))
-            
+
                 #Update counter
                 TimeValueCounter += TimeValue            
             OutputFile.write('\t\t}\n')
             OutputFile.write('\t}\n')
-                 
+
     #===============================================================================================
     #  MAIN
     #===============================================================================================
@@ -122,7 +118,7 @@ def _write(context, filepath,
                 out.write('*MATERIAL_LIST {\n')
                 out.write('\t*MATERIAL_COUNT %u\n' % len(bpy.data.materials))
                 currentMat = 0
-                
+
                 for MatData in bpy.data.materials:   
                     if hasattr(MatData.node_tree, 'nodes'):
                         DiffuseColor = MatData.diffuse_color
@@ -163,7 +159,7 @@ def _write(context, filepath,
 
                             currentMat += 1
                 out.write('}\n')
-          
+
             #===============================================================================================
             #  GEOM OBJECT
             #=============================================================================================== 
@@ -185,7 +181,7 @@ def _write(context, filepath,
                             for loop in tri:
                                 if loop.vert.co not in VertexList:
                                     VertexList.append(loop.vert.co)              
-                        
+
                         #Get UV Layer Active
                         UVVertexList = []                    
                         for name, uvl in bm.loops.layers.uv.items():
@@ -194,7 +190,7 @@ def _write(context, filepath,
                                     DataToAppend = loop[uvl].uv
                                     if DataToAppend not in UVVertexList:
                                         UVVertexList.append(DataToAppend)
-                        
+
                         if EXPORT_VERTEXCOLORS:
                             #Get Vertex Colors List 
                             VertexColorList = []
@@ -204,7 +200,7 @@ def _write(context, filepath,
                                         color = loop[cl] # gives a Vector((R, G, B, A))
                                         if color not in VertexColorList:
                                             VertexColorList.append(color)
-                        
+
                         #===========================================[Print Object Data]====================================================       
                         out.write('*GEOMOBJECT {\n')
                         out.write('\t*NODE_NAME "%s"\n' % SceneObj.name)
@@ -244,7 +240,7 @@ def _write(context, filepath,
                             out.write('*MESH_SMOOTHING 1 ')
                             out.write('*MESH_MTLID %u\n' % tri[0].face.material_index)
                         out.write('\t\t}\n')
-                        
+
                         #Texture UVs
                         out.write('\t\t*MESH_NUMTVERTEX %u\n' % len(UVVertexList))
                         out.write('\t\t*MESH_TVERTLIST {\n')
@@ -268,7 +264,7 @@ def _write(context, filepath,
                             out.write('\t\t\t}\n')
                             out.write('\t\t}\n')
                             layerIndex += 1
-                        
+
                         if EXPORT_VERTEXCOLORS:
                             #Vertex Colors List
                             out.write('\t\t*MESH_NUMCVERTEX %u\n' % len(VertexColorList))
@@ -310,12 +306,12 @@ def _write(context, filepath,
             #===============================================================================================
             if 'CAMERA' in EXPORT_OBJECTTYPES:
                 CamerasList = []
-                
+
                 for SceneObj in ProjectContextScene.objects:
                     if SceneObj.type == 'CAMERA':
                         CamerasList.append(SceneObj)
                 CamerasList.sort(key = lambda o: o.name)
-                
+
                 for CameraObj in CamerasList:
                     if CameraObj.type == 'CAMERA':    
                         out.write('*CAMERAOBJECT {\n')
@@ -364,7 +360,7 @@ def _write(context, filepath,
                         #  ANIMATION
                         #===============================================================================================
                         PrintTM_ANIMATION(out, CameraObj, TimeValue)
-                        
+
                         #===============================================================================================
                         #  USER DATA (ONLY FOR SCRIPTS)
                         #===============================================================================================
@@ -373,7 +369,7 @@ def _write(context, filepath,
                             out.write('\t\tCameraScript = %u\n' % 1)
                             out.write('\t\tCameraScript_numCameras = %u\n' % len(CamerasList))
                             out.write('\t\tCameraScript_globalOffset = %u\n' % 0)
-                            
+
                             #Print Cameras Info
                             CameraNumber = 1
                             CamStart = 0
@@ -396,7 +392,7 @@ def _write(context, filepath,
                                             CamStart += Keyframe_Points_list[-1] + 1
                                             CameraNumber += 1
                             out.write('\t}\n')
-                        
+
                         out.write('}\n')
 
             #===============================================================================================
@@ -416,7 +412,7 @@ def _write(context, filepath,
                         type_lut['AREA' ]='TargetDirect' # swy: this is sort of wrong ¯\_(ツ)_/¯
 
                         out.write('\t*LIGHT_TYPE %s\n' % type_lut[SceneObj.data.type]) #Seems that always used "Omni" lights in 3dsMax, in blender is called "Point"
-                        
+
                         #Print Matrix Rotation
                         out.write('\t*NODE_TM {\n')
                         PrintNODE_TM(out, SceneObj)
@@ -470,7 +466,7 @@ def _write(context, filepath,
                         #  ANIMATION
                         #===============================================================================================                         
                         PrintTM_ANIMATION(out, SceneObj, TimeValue)
-                                    
+
                         #Close light object
                         out.write('}\n')
             #Close File
@@ -491,7 +487,7 @@ def save(context,
          global_matrix=None,
          path_mode='AUTO'
          ):
-         
+
     _write(context, filepath,
            EXPORT_FLIP_POLYGONS=Flip_Polygons,           
            EXPORT_OBJECTTYPES=object_types,
@@ -502,7 +498,7 @@ def save(context,
            EXPORT_GLOBAL_MATRIX=global_matrix,
            EXPORT_PATH_MODE=path_mode,
            )
-           
+
     return {'FINISHED'}
 if __name__ == '__main__':
     save({}, str(Path.home()) + '/Desktop/EurocomESE.ese')
