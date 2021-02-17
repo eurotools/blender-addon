@@ -206,23 +206,18 @@ class ExportESE(bpy.types.Operator, ExportHelper):
             default=False,
             )   
             
-    #Output Types
-    Include_Cameras: BoolProperty(
-            name="Cameras",
-            description="Export cameras from scene.",
-            default=False,
+    #Output Types 
+    object_types: EnumProperty(
+            name="Output Types",
+            options={'ENUM_FLAG'},
+            items=(('CAMERA', "Cameras", ""),
+                   ('LIGHT', "Lights", ""),
+                   ('MESH', "Mesh", ""),
+                   ),
+            description="Which kind of object to export",
+            default={'MESH'}
             )
-    Include_Geometric: BoolProperty(
-            name="Geometric",
-            description="Export geometry from scene.",
-            default=False,
-            )
-    Include_Lights: BoolProperty(
-            name="Lights",
-            description="Export lights from scene.",
-            default=False,
-            )
-            
+ 
     #Mesh Options
     Output_VertexColors : BoolProperty(
             name="Vertex Colors",
@@ -234,12 +229,20 @@ class ExportESE(bpy.types.Operator, ExportHelper):
             description="Flip polygons direction in which polygon faces.",
             default=False,
             )
-            
+    #Scale Options
+    global_scale: FloatProperty(
+        name="Scale",
+        min=0.01,
+        max=1000.0,
+        default=1.0,
+    )
+    
     path_mode: path_reference_mode
 
     check_extension = True
             
     def execute(self, context):
+        from mathutils import Matrix
         from . import export_ese
 
         keywords = self.as_keywords(ignore=("axis_forward",
@@ -248,6 +251,10 @@ class ExportESE(bpy.types.Operator, ExportHelper):
                                             "check_existing",
                                             "filter_glob",
                                             ))
+                                            
+        global_matrix = (Matrix.Scale(self.global_scale, 4) @Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4())
+        keywords["global_matrix"] = global_matrix
+        
         return export_ese.save(context, **keywords)
 
     def draw(self, context):
@@ -304,7 +311,31 @@ class ESE_Export_MeshOptions(bpy.types.Panel):
 class ESE_Export_ObjectTypes(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
-    bl_label = "Object Types"
+    bl_label = ""
+    bl_parent_id = "FILE_PT_operator"
+    bl_options = {'HIDE_HEADER'}
+
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        return operator.bl_idname == "EXPORT_SCENE_OT_ese"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        layout.column().prop(operator, "object_types")
+
+class ESE_Export_Scale(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Transform"
     bl_parent_id = "FILE_PT_operator"
 
     @classmethod
@@ -322,9 +353,9 @@ class ESE_Export_ObjectTypes(bpy.types.Panel):
         sfile = context.space_data
         operator = sfile.active_operator
 
-        layout.prop(operator, 'Include_Cameras')
-        layout.prop(operator, 'Include_Geometric')
-        layout.prop(operator, 'Include_Lights')
+        layout.prop(operator, "global_scale")
+        #layout.prop(operator, "axis_forward")
+        #layout.prop(operator, "axis_up")
         
 class ReloadAddon(bpy.types.Operator):
     """Reloads the whole Eurocom 3D tools, for development """
@@ -365,9 +396,10 @@ classes = (
     ExportEIF,
     ExportRTG,
     ExportESE,
+    ESE_Export_ObjectTypes,
     ESE_Export_OutputOptions,
     ESE_Export_MeshOptions,
-    ESE_Export_ObjectTypes,
+    ESE_Export_Scale,
 )
 
 def register():

@@ -18,9 +18,7 @@ from bpy_extras.io_utils import axis_conversion
 
 def _write(context, filepath,
             EXPORT_FLIP_POLYGONS,
-            EXPORT_CAMERAS,
-            EXPORT_GEOMETRIC,
-            EXPORT_LIGHTS,
+            EXPORT_OBJECTTYPES,
             EXPORT_MATERIALS,
             EXPORT_CAMERALIGHTANIMS,
             EXPORT_VERTEXCOLORS,
@@ -33,32 +31,24 @@ def _write(context, filepath,
     #  GLOBAL VARIABLES
     #===============================================================================================
     ProjectContextScene = bpy.context.scene
-
-    global_EntitiesMatrix = axis_conversion(to_forward='Z', to_up='Y').to_4x4()
-    global_EntitiesMatrix = Matrix(((1, 0, 0),
-                            (0, 0, 1),
-                            (0, 1, 0))).to_4x4()
+    InvertAxisRotationMatrix = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0)))
+    EXPORT_GLOBAL_MATRIX = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4()
+    
     #===============================================================================================
     #  FUNCTIONS
     #===============================================================================================
     def PrintNODE_TM(OutputFile, SceneObject):
             ProjectContextScene.frame_set(ProjectContextScene.frame_start)
 
-            ob = SceneObject
-
-            global_matrix = Matrix(((1, 0, 0),
-                                    (0, 0, 1),
-                                    (0, 1, 0))).to_4x4()
-
-            # swy: don't ask me, I only got this right at the 29th try
-            RotationMatrix = global_matrix @ ob.matrix_world
-            RotationMatrix = global_matrix @ RotationMatrix.transposed()
+            ConvertedMatrix = SceneObject.rotation_euler.to_matrix()
+            rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
+            RotationMatrix = rot_mtx.transposed()
             
             OutputFile.write('\t\t*NODE_NAME "%s"\n' % SceneObject.name)
             OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
             OutputFile.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
             OutputFile.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
-            OutputFile.write('\t\t*TM_ROW3 %.4f %.4f %.4f\n' % (RotationMatrix[3].x, RotationMatrix[3].y, RotationMatrix[3].z))
+            OutputFile.write('\t\t*TM_ROW3 %.4f %.4f %.4f\n' % (SceneObject.location.x, SceneObject.location.z, SceneObject.location.y))
 
     def PrintTM_ANIMATION(OutputFile, SceneObject, TimeValue):
             OutputFile.write('\t*TM_ANIMATION {\n')
@@ -69,24 +59,23 @@ def _write(context, filepath,
             for f in range(ProjectContextScene.frame_start, ProjectContextScene.frame_end + 1):
                 ProjectContextScene.frame_set(f)
 
-                ob = SceneObject
-
-                global_matrix = Matrix(((1, 0, 0),
-                                        (0, 0, 1),
-                                        (0, 1, 0))).to_4x4()
-
-                RotationMatrix = global_matrix @ ob.matrix_world
-                RotationMatrix = global_matrix @ RotationMatrix.transposed()
+                ConvertedMatrix = SceneObject.rotation_euler.to_matrix()
+                rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
+                RotationMatrix = rot_mtx.transposed()
 
                 #Write Time Value
                 OutputFile.write('\t\t\t*TM_FRAME %u ' % TimeValueCounter)
 
                 #Write Matrix
-                OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
-                OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
-                OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
-                OutputFile.write('%.4f %.4f %.4f\n' % (RotationMatrix[3].x, RotationMatrix[3].y, RotationMatrix[3].z))
-
+                #OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
+                #OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
+                #OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
+                #OutputFile.write('%.4f %.4f %.4f\n' % (RotationMatrix[3].x, RotationMatrix[3].y, RotationMatrix[3].z))
+                OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[0].x, (RotationMatrix[0].y * -1), RotationMatrix[0].z))
+                OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
+                OutputFile.write('%.4f %.4f %.4f ' % ((RotationMatrix[2].x * -1), (RotationMatrix[2].y * -1), (RotationMatrix[2].z) * -1))
+                OutputFile.write('%.4f %.4f %.4f\n' % (SceneObject.location.x, SceneObject.location.z, SceneObject.location.y))
+            
                 #Update counter
                 TimeValueCounter += TimeValue            
             OutputFile.write('\t\t}\n')
@@ -129,11 +118,11 @@ def _write(context, filepath,
             #===============================================================================================
             #  MATERIAL LIST
             #===============================================================================================
-            out.write('*MATERIAL_LIST {\n')
-            out.write('\t*MATERIAL_COUNT %u\n' % len(bpy.data.materials))
-
-            currentMat = 0
             if EXPORT_MATERIALS:
+                out.write('*MATERIAL_LIST {\n')
+                out.write('\t*MATERIAL_COUNT %u\n' % len(bpy.data.materials))
+                currentMat = 0
+                
                 for MatData in bpy.data.materials:   
                     if hasattr(MatData.node_tree, 'nodes'):
                         DiffuseColor = MatData.diffuse_color
@@ -178,14 +167,14 @@ def _write(context, filepath,
             #===============================================================================================
             #  GEOM OBJECT
             #=============================================================================================== 
-            if EXPORT_GEOMETRIC:
+            if 'MESH' in EXPORT_OBJECTTYPES:
                 for SceneObj in ProjectContextScene.objects:
                     if SceneObj.type == 'MESH':
                         #===========================================[Triangulate Object]====================================================
                         dg = bpy.context.evaluated_depsgraph_get()          
                         bm = bmesh.new()
                         bm.from_object(SceneObj, dg)
-                        bm.transform(global_EntitiesMatrix)
+                        bm.transform(EXPORT_GLOBAL_MATRIX)
                         tris = bm.calc_loop_triangles()
 
                         #===========================================[Get Object Data]====================================================
@@ -251,7 +240,7 @@ def _write(context, filepath,
                                 out.write('AB: %u BC: %u CA: %u ' % (not tri[2].vert.hide, not tri[1].vert.hide, not tri[0].vert.hide))
                             else:
                                 out.write('A: %u B: %u C: %u ' % (VertexList.index(tri[0].vert.co), VertexList.index(tri[1].vert.co), VertexList.index(tri[2].vert.co)))
-                                out.write('AB: %u BC: %u CA: %u ' % (not tri[0].vert.hide, not tri[1].vert.hide, not tri[2].vert.hide))                                
+                                out.write('AB: %u BC: %u CA: %u ' % (not tri[0].vert.hide, not tri[1].vert.hide, not tri[2].vert.hide))   
                             out.write('*MESH_SMOOTHING 1 ')
                             out.write('*MESH_MTLID %u\n' % tri[0].face.material_index)
                         out.write('\t\t}\n')
@@ -319,7 +308,7 @@ def _write(context, filepath,
             #===============================================================================================
             #  CAMERA OBJECT
             #===============================================================================================
-            if EXPORT_CAMERAS:
+            if 'CAMERA' in EXPORT_OBJECTTYPES:
                 for SceneObj in ProjectContextScene.objects:
                     if SceneObj.type == 'CAMERA':    
                         out.write('*CAMERAOBJECT {\n')
@@ -334,13 +323,12 @@ def _write(context, filepath,
                         #===============================================================================================
                         #  CAMERA SETTINGS
                         #=============================================================================================== 
-                        FieldOfView = math.degrees(2 * math.atan(SceneObj.data.sensor_width /(2 * SceneObj.data.lens)))
                         out.write('\t*CAMERA_SETTINGS {\n')
                         out.write('\t\t*TIMEVALUE %u\n' % 0)
                         out.write('\t\t*CAMERA_NEAR %.4f\n' % SceneObj.data.clip_start)
                         out.write('\t\t*CAMERA_FAR %.4f\n'% SceneObj.data.clip_end)  
-                        out.write('\t\t*CAMERA_FOV %.4f\n'% FieldOfView)
-                        out.write('\t\t*CAMERA_TDIST %.4f\n'% 32.1137)
+                        out.write('\t\t*CAMERA_FOV %.4f\n'% SceneObj.data.angle)
+                        out.write('\t\t*CAMERA_TDIST %.4f\n'% 15.9229)
                         out.write('\t}\n')
 
                         #===============================================================================================
@@ -353,13 +341,12 @@ def _write(context, filepath,
                             for f in range(ProjectContextScene.frame_start, ProjectContextScene.frame_end + 1):
                                 ProjectContextScene.frame_set(f)
 
-                                FieldOfView = math.degrees(2 * math.atan(SceneObj.data.sensor_width /(2 * SceneObj.data.lens)))
                                 out.write('\t\t*CAMERA_SETTINGS {\n')
                                 out.write('\t\t\t*TIMEVALUE %u\n' % 0)
                                 out.write('\t\t\t*CAMERA_NEAR %.4f\n' % SceneObj.data.clip_start)
                                 out.write('\t\t\t*CAMERA_FAR %.4f\n'% SceneObj.data.clip_end)  
-                                out.write('\t\t\t*CAMERA_FOV %.4f\n'% FieldOfView)
-                                out.write('\t\t\t*CAMERA_TDIST %.4f\n'% 32.1137)
+                                out.write('\t\t\t*CAMERA_FOV %.4f\n'% SceneObj.data.angle)
+                                out.write('\t\t\t*CAMERA_TDIST %.4f\n'% 15.9229)
                                 out.write('\t\t}\n')
 
                                 TimeValueCounter += TimeValue
@@ -375,7 +362,7 @@ def _write(context, filepath,
             #===============================================================================================
             #  LIGHT OBJECT
             #===============================================================================================
-            if EXPORT_LIGHTS:
+            if 'LIGHT' in EXPORT_OBJECTTYPES:
                 for SceneObj in ProjectContextScene.objects:
                     if SceneObj.type == 'LIGHT':
                         out.write('*LIGHTOBJECT {\n')
@@ -456,9 +443,7 @@ def save(context,
          filepath,
          *,
          Flip_Polygons=True,
-         Include_Cameras=True,
-         Include_Geometric=True,
-         Include_Lights=True,
+         object_types={'CAMERA', 'LIGHT', 'MESH'},         
          Output_Materials=True,
          Output_CameraLightAnims=True,
          Output_VertexColors=True,
@@ -468,10 +453,8 @@ def save(context,
          ):
          
     _write(context, filepath,
-           EXPORT_FLIP_POLYGONS=Flip_Polygons,
-           EXPORT_CAMERAS=Include_Cameras,
-           EXPORT_GEOMETRIC=Include_Geometric,
-           EXPORT_LIGHTS=Include_Lights,
+           EXPORT_FLIP_POLYGONS=Flip_Polygons,           
+           EXPORT_OBJECTTYPES=object_types,
            EXPORT_ANIMATION=use_animation,
            EXPORT_MATERIALS=Output_Materials,
            EXPORT_CAMERALIGHTANIMS=Output_CameraLightAnims,
