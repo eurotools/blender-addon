@@ -309,15 +309,22 @@ def _write(context, filepath,
             #  CAMERA OBJECT
             #===============================================================================================
             if 'CAMERA' in EXPORT_OBJECTTYPES:
+                CamerasList = []
+                
                 for SceneObj in ProjectContextScene.objects:
-                    if SceneObj.type == 'CAMERA':    
+                    if SceneObj.type == 'CAMERA':
+                        CamerasList.append(SceneObj)
+                CamerasList.sort(key = lambda o: o.name)
+                
+                for CameraObj in CamerasList:
+                    if CameraObj.type == 'CAMERA':    
                         out.write('*CAMERAOBJECT {\n')
-                        out.write('\t*NODE_NAME "%s"\n' % SceneObj.name)
+                        out.write('\t*NODE_NAME "%s"\n' % CameraObj.name)
                         out.write('\t*CAMERA_TYPE %s\n' % "Target")
 
                         #Print Matrix Rotation
                         out.write('\t*NODE_TM {\n')
-                        PrintNODE_TM(out, SceneObj)
+                        PrintNODE_TM(out, CameraObj)
                         out.write('\t}\n')
 
                         #===============================================================================================
@@ -325,9 +332,9 @@ def _write(context, filepath,
                         #=============================================================================================== 
                         out.write('\t*CAMERA_SETTINGS {\n')
                         out.write('\t\t*TIMEVALUE %u\n' % 0)
-                        out.write('\t\t*CAMERA_NEAR %.4f\n' % SceneObj.data.clip_start)
-                        out.write('\t\t*CAMERA_FAR %.4f\n'% SceneObj.data.clip_end)  
-                        out.write('\t\t*CAMERA_FOV %.4f\n'% SceneObj.data.angle)
+                        out.write('\t\t*CAMERA_NEAR %.4f\n' % CameraObj.data.clip_start)
+                        out.write('\t\t*CAMERA_FAR %.4f\n'% CameraObj.data.clip_end)  
+                        out.write('\t\t*CAMERA_FOV %.4f\n'% CameraObj.data.angle)
                         out.write('\t\t*CAMERA_TDIST %.4f\n'% 15.9229)
                         out.write('\t}\n')
 
@@ -343,9 +350,9 @@ def _write(context, filepath,
 
                                 out.write('\t\t*CAMERA_SETTINGS {\n')
                                 out.write('\t\t\t*TIMEVALUE %u\n' % 0)
-                                out.write('\t\t\t*CAMERA_NEAR %.4f\n' % SceneObj.data.clip_start)
-                                out.write('\t\t\t*CAMERA_FAR %.4f\n'% SceneObj.data.clip_end)  
-                                out.write('\t\t\t*CAMERA_FOV %.4f\n'% SceneObj.data.angle)
+                                out.write('\t\t\t*CAMERA_NEAR %.4f\n' % CameraObj.data.clip_start)
+                                out.write('\t\t\t*CAMERA_FAR %.4f\n'% CameraObj.data.clip_end)  
+                                out.write('\t\t\t*CAMERA_FOV %.4f\n'% CameraObj.data.angle)
                                 out.write('\t\t\t*CAMERA_TDIST %.4f\n'% 15.9229)
                                 out.write('\t\t}\n')
 
@@ -355,8 +362,41 @@ def _write(context, filepath,
 
                         #===============================================================================================
                         #  ANIMATION
-                        #===============================================================================================                         
-                        PrintTM_ANIMATION(out, SceneObj, TimeValue)
+                        #===============================================================================================
+                        PrintTM_ANIMATION(out, CameraObj, TimeValue)
+                        
+                        #===============================================================================================
+                        #  USER DATA (ONLY FOR SCRIPTS)
+                        #===============================================================================================
+                        if CameraObj == CamerasList[-1] and len(CamerasList) > 1:
+                            out.write('\t*USER_DATA %u {\n' % 0)
+                            out.write('\t\tCameraScript = %u\n' % 1)
+                            out.write('\t\tCameraScript_numCameras = %u\n' % len(CamerasList))
+                            out.write('\t\tCameraScript_globalOffset = %u\n' % 0)
+                            
+                            #Print Cameras Info
+                            CameraNumber = 1
+                            CamStart = 0
+                            CamEnd = 0
+                            for ob in CamerasList:
+                                if ob.type == 'CAMERA':
+                                    #Get Camera Keyframes
+                                    if ob.animation_data:
+                                        if ob.animation_data.action is not None:
+                                            Keyframe_Points_list = []
+                                            for curve in ob.animation_data.action.fcurves:
+                                                for key in curve.keyframe_points:
+                                                    key_idx = int(key.co[0])
+                                                    if key_idx not in Keyframe_Points_list:
+                                                        Keyframe_Points_list.append(key_idx)
+                                            #Calculate EuroLand Start
+                                            CamEnd = CamStart + (Keyframe_Points_list[-1] - Keyframe_Points_list[0])
+                                            out.write('\t\tCameraScript_camera%u = %s %u %u %u %u\n' % (CameraNumber, ob.name, Keyframe_Points_list[0], Keyframe_Points_list[-1], CamStart, CamEnd))
+                                            #Calculate EuroLand End
+                                            CamStart += Keyframe_Points_list[-1] + 1
+                                            CameraNumber += 1
+                            out.write('\t}\n')
+                        
                         out.write('}\n')
 
             #===============================================================================================
@@ -442,9 +482,9 @@ def _write(context, filepath,
 def save(context,
          filepath,
          *,
-         Flip_Polygons=True,
-         object_types={'CAMERA', 'LIGHT', 'MESH'},         
-         Output_Materials=True,
+         Flip_Polygons=False,
+         object_types={'CAMERA'},         
+         Output_Materials=False,
          Output_CameraLightAnims=True,
          Output_VertexColors=True,
          use_animation=False,
