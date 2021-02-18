@@ -1,3 +1,10 @@
+"""
+Name: 'Eurocom Interchange File'
+Blender: 2.90.1
+Group: 'Export'
+Tooltip: 'Blender EIF Exporter for EuroLand'
+Authors: Swyter and Jmarti856
+"""
 import bpy
 import os
 import math
@@ -12,51 +19,17 @@ from pprint import pprint
 from decimal import Decimal
 from mathutils import Euler
 
-def save(context,
-         filepath,
-         *,
-         use_triangles=False,
-         use_edges=True,
-         use_normals=True,
-         use_smooth_groups=False,
-         use_smooth_groups_bitflags=False,
-         use_uvs=True,
-         use_materials=True,
-         use_mesh_modifiers=True,
-         use_mesh_modifiers_render=False,
-         use_blen_objects=True,
-         group_by_object=False,
-         group_by_material=False,
-         keep_vertex_order=False,
-         use_vertex_groups=False,
-         use_nurbs=True,
-         use_selection=False,
-         use_animation=False,
-         global_matrix=None,
-         path_mode='AUTO'
-         ):
+def _write(context, filepath,
+            EXPORT_GLOBAL_MATRIX,
+        ):
 
     #===============================================================================================
     #  GLOBAL VARIABLES
     #===============================================================================================
-            
     ProjectContextScene = bpy.context.scene
-
-    # Get scene info
-    if use_selection:
-        SceneObjects = bpy.context.selected_objects
-    else:
-        SceneObjects = bpy.context.scene.objects
-
-    # Axis Conversion
-    global_matrix = axis_conversion(to_forward='Z', to_up='Y').to_4x4()
-
-    global_matrix = Matrix(((1, 0, 0),
-                            (0, 0, 1),
-                            (0, 1, 0))).to_4x4()
-
-    bpy.context.scene.world.light_settings.use_ambient_occlusion = True
-            
+    InvertAxisRotationMatrix = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0)))
+    global_matrix = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4()
+    
     #===============================================================================================
     #  MAIN
     #===============================================================================================
@@ -64,14 +37,17 @@ def save(context,
         # Stop edit mode
         if bpy.ops.object.mode_set.poll():
             bpy.ops.object.mode_set(mode='OBJECT')
-        
+
         #Create new file
         with open(filepath, 'w') as out:
-                        
             #Start writing
             AmbientValue = bpy.context.scene.world.light_settings.ao_factor
             out.write('*EUROCOM_INTERCHANGE_FILE 100\n')
             out.write('*COMMENT Eurocom Interchange File Version 1.00 %s\n' % (datetime.datetime.utcnow()).strftime('%A %B %d %Y %H:%M'))
+            out.write('\n')
+            out.write('*OPTIONS {\n')
+            out.write('\t*COORD_SYSTEM %s\n' % "LH")
+            out.write('}\n')
             out.write('\n')
             out.write('*SCENE {\n')
             out.write('\t*FILENAME "%s"\n' % (bpy.data.filepath))
@@ -127,7 +103,7 @@ def save(context,
             #===============================================================================================
             #  MESH DATA
             #===============================================================================================
-            for obj in SceneObjects:            
+            for obj in ProjectContextScene.objects:            
                 if obj.hide_viewport:
                     continue
                 if obj.type == 'MESH':
@@ -145,7 +121,7 @@ def save(context,
                             continue
                         
                         #===========================================[Apply Matrix]====================================================
-                        MeshObject.transform(global_matrix)
+                        MeshObject.transform(EXPORT_GLOBAL_MATRIX)
                         MeshObject.flip_normals()
                         
                         #===========================================[Get Object Data]====================================================
@@ -311,25 +287,44 @@ def save(context,
                     out.write('\t*MESH "%s"\n' % (obj.name))
                     out.write('\t*WORLD_TM {\n')
                     
-                    # swy: don't ask me, I only got this right at the 29th try
-                    RotationMatrix = global_matrix @ obj.matrix_world
-                    RotationMatrix = global_matrix @ RotationMatrix.transposed()
+                    #Jump to the first frame
+                    ProjectContextScene.frame_set(ProjectContextScene.frame_start)
                     
-                    out.write('\t\t*TMROW0 %.6f %.6f %.6f\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
-                    out.write('\t\t*TMROW1 %.6f %.6f %.6f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
-                    out.write('\t\t*TMROW2 %.6f %.6f %.6f\n' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
-                    out.write('\t\t*TMROW3 %.6f %.6f %.6f\n' % (RotationMatrix[3].x, RotationMatrix[3].y, RotationMatrix[3].z))
+                    ConvertedMatrix = obj.rotation_euler.to_matrix()
+                    rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
+                    RotationMatrix = rot_mtx.transposed()
+                                        
+                    #Print Roation matrix
+                    out.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, (RotationMatrix[0].y * -1), RotationMatrix[0].z))
+                    out.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
+                    out.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % ((RotationMatrix[2].x * -1), (RotationMatrix[2].y * -1), (RotationMatrix[2].z) * -1))
+                    
+                    #Flip location axis
+                    loc_conv = InvertAxisRotationMatrix @ obj.location
+                    out.write('\t\t*TM_ROW3 %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
                     
                     # swy: these aren't actually used or read by this version of the importer
-                    out.write('\t\t*POS %.6f %.6f %.6f\n' % (obj.location.x, obj.location.y, obj.location.z))
+                    out.write('\t\t*POS %.6f %.6f %.6f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
                     out.write('\t\t*ROT %.6f %.6f %.6f\n' % (radians(obj.rotation_euler.x), radians(obj.rotation_euler.y), radians(obj.rotation_euler.z)))
                     out.write('\t\t*SCL %.6f %.6f %.6f\n' % (obj.scale.x, obj.scale.y, obj.scale.z))
                     out.write('\t}\n')
                     out.write('}\n')
                     out.write('\n')
-                
+            #Close File
+            out.flush()
+            out.close()
     WriteFile()
-    
+
+def save(context,
+            filepath,
+            *,
+            global_matrix=None,
+        ):
+
+    _write(context, filepath,
+            EXPORT_GLOBAL_MATRIX=global_matrix,
+        )
+
     return {'FINISHED'}
 if __name__ == '__main__':
-    save({}, str(Path.home()) + '/Desktop/testEIF_d.eif')
+    save({}, str(Path.home()) + '/Desktop/EurocomEIF.eif')

@@ -24,15 +24,13 @@ def _write(context, filepath,
             EXPORT_VERTEXCOLORS,
             EXPORT_ANIMATION,
             EXPORT_GLOBAL_MATRIX,
-            EXPORT_PATH_MODE='AUTO',
-         ):
+        ):
 
     #===============================================================================================
     #  GLOBAL VARIABLES
     #===============================================================================================
     ProjectContextScene = bpy.context.scene
     InvertAxisRotationMatrix = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0)))
-    EXPORT_GLOBAL_MATRIX = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4()
 
     #===============================================================================================
     #  FUNCTIONS
@@ -44,11 +42,19 @@ def _write(context, filepath,
             rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
             RotationMatrix = rot_mtx.transposed()
 
+            #Write Matrix
             OutputFile.write('\t\t*NODE_NAME "%s"\n' % SceneObject.name)
-            OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
+            OutputFile.write('\t\t*INHERIT_POS %u %u %u\n' % (0,0,0))
+            OutputFile.write('\t\t*INHERIT_ROT %u %u %u\n' % (0,0,0))
+            OutputFile.write('\t\t*INHERIT_SCL %u %u %u\n' % (1,1,1))
+            OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, (RotationMatrix[0].y * -1), RotationMatrix[0].z))
             OutputFile.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
-            OutputFile.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
-            OutputFile.write('\t\t*TM_ROW3 %.4f %.4f %.4f\n' % (SceneObject.location.x, SceneObject.location.z, SceneObject.location.y))
+            OutputFile.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % ((RotationMatrix[2].x * -1), (RotationMatrix[2].y * -1), (RotationMatrix[2].z) * -1))
+            
+            #Flip location axis
+            loc_conv = InvertAxisRotationMatrix @ SceneObject.location
+            OutputFile.write('\t\t*TM_ROW3 %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
+            OutputFile.write('\t\t*TM_POS %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
 
     def PrintTM_ANIMATION(OutputFile, SceneObject, TimeValue):
             OutputFile.write('\t*TM_ANIMATION {\n')
@@ -70,7 +76,10 @@ def _write(context, filepath,
                 OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[0].x, (RotationMatrix[0].y * -1), RotationMatrix[0].z))
                 OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
                 OutputFile.write('%.4f %.4f %.4f ' % ((RotationMatrix[2].x * -1), (RotationMatrix[2].y * -1), (RotationMatrix[2].z) * -1))
-                OutputFile.write('%.4f %.4f %.4f\n' % (SceneObject.location.x, SceneObject.location.z, SceneObject.location.y))
+                
+                #Flip location axis
+                loc_conv = InvertAxisRotationMatrix @ SceneObject.location
+                OutputFile.write('%.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
 
                 #Update counter
                 TimeValueCounter += TimeValue            
@@ -328,7 +337,8 @@ def _write(context, filepath,
                         #=============================================================================================== 
                         out.write('\t*CAMERA_SETTINGS {\n')
                         out.write('\t\t*TIMEVALUE %u\n' % 0)
-                        out.write('\t\t*CAMERA_NEAR %.4f\n' % CameraObj.data.clip_start)
+                        #out.write('\t\t*CAMERA_NEAR %.4f\n' % CameraObj.data.clip_start)
+                        out.write('\t\t*CAMERA_NEAR %.4f\n' % 0)
                         out.write('\t\t*CAMERA_FAR %.4f\n'% CameraObj.data.clip_end)  
                         out.write('\t\t*CAMERA_FOV %.4f\n'% CameraObj.data.angle)
                         out.write('\t\t*CAMERA_TDIST %.4f\n'% 15.9229)
@@ -345,8 +355,9 @@ def _write(context, filepath,
                                 ProjectContextScene.frame_set(f)
 
                                 out.write('\t\t*CAMERA_SETTINGS {\n')
-                                out.write('\t\t\t*TIMEVALUE %u\n' % 0)
-                                out.write('\t\t\t*CAMERA_NEAR %.4f\n' % CameraObj.data.clip_start)
+                                out.write('\t\t\t*TIMEVALUE %u\n' % TimeValueCounter)
+                                #out.write('\t\t\t*CAMERA_NEAR %.4f\n' % CameraObj.data.clip_start)
+                                out.write('\t\t\t*CAMERA_NEAR %.4f\n' % 0)
                                 out.write('\t\t\t*CAMERA_FAR %.4f\n'% CameraObj.data.clip_end)  
                                 out.write('\t\t\t*CAMERA_FOV %.4f\n'% CameraObj.data.angle)
                                 out.write('\t\t\t*CAMERA_TDIST %.4f\n'% 15.9229)
@@ -359,7 +370,8 @@ def _write(context, filepath,
                         #===============================================================================================
                         #  ANIMATION
                         #===============================================================================================
-                        PrintTM_ANIMATION(out, CameraObj, TimeValue)
+                        if EXPORT_ANIMATION:
+                            PrintTM_ANIMATION(out, CameraObj, TimeValue)
 
                         #===============================================================================================
                         #  USER DATA (ONLY FOR SCRIPTS)
@@ -464,8 +476,9 @@ def _write(context, filepath,
 
                         #===============================================================================================
                         #  ANIMATION
-                        #===============================================================================================                         
-                        PrintTM_ANIMATION(out, SceneObj, TimeValue)
+                        #===============================================================================================
+                        if EXPORT_ANIMATION:
+                            PrintTM_ANIMATION(out, SceneObj, TimeValue)
 
                         #Close light object
                         out.write('}\n')
@@ -476,28 +489,26 @@ def _write(context, filepath,
     WriteFile()
 
 def save(context,
-         filepath,
-         *,
-         Flip_Polygons=False,
-         object_types={'CAMERA'},         
-         Output_Materials=False,
-         Output_CameraLightAnims=True,
-         Output_VertexColors=True,
-         use_animation=False,
-         global_matrix=None,
-         path_mode='AUTO'
-         ):
+            filepath,
+            *,
+            Flip_Polygons=False,
+            object_types={'CAMERA'},         
+            Output_Materials=False,
+            Output_CameraLightAnims=True,
+            Output_VertexColors=True,
+            Output_Animations=False,
+            global_matrix=None,
+        ):
 
     _write(context, filepath,
-           EXPORT_FLIP_POLYGONS=Flip_Polygons,           
-           EXPORT_OBJECTTYPES=object_types,
-           EXPORT_ANIMATION=use_animation,
-           EXPORT_MATERIALS=Output_Materials,
-           EXPORT_CAMERALIGHTANIMS=Output_CameraLightAnims,
-           EXPORT_VERTEXCOLORS=Output_VertexColors,
-           EXPORT_GLOBAL_MATRIX=global_matrix,
-           EXPORT_PATH_MODE=path_mode,
-           )
+            EXPORT_FLIP_POLYGONS=Flip_Polygons,           
+            EXPORT_OBJECTTYPES=object_types,
+            EXPORT_ANIMATION=Output_Animations,
+            EXPORT_MATERIALS=Output_Materials,
+            EXPORT_CAMERALIGHTANIMS=Output_CameraLightAnims,
+            EXPORT_VERTEXCOLORS=Output_VertexColors,
+            EXPORT_GLOBAL_MATRIX=global_matrix,
+        )
 
     return {'FINISHED'}
 if __name__ == '__main__':
