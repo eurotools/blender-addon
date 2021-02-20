@@ -27,8 +27,9 @@ def _write(context, filepath,
     #  GLOBAL VARIABLES
     #===============================================================================================
     ProjectContextScene = bpy.context.scene
+
+    # Axis Conversion
     InvertAxisRotationMatrix = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0)))
-    global_matrix = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4()
     
     #===============================================================================================
     #  MAIN
@@ -103,9 +104,7 @@ def _write(context, filepath,
             #===============================================================================================
             #  MESH DATA
             #===============================================================================================
-            for obj in ProjectContextScene.objects:            
-                if obj.hide_viewport:
-                    continue
+            for obj in ProjectContextScene.objects:
                 if obj.type == 'MESH':
                     if hasattr(obj, 'data'):
                         #===========================================[Clone Object]====================================================
@@ -261,55 +260,62 @@ def _write(context, filepath,
                         out.write('\t}\n')
                     out.write('}\n')
                     out.write('\n')
-                    #===============================================================================================
-                    #  GEOM NODE
-                    #===============================================================================================
-                    out.write('*GEOMNODE {\n')
-                    out.write('\t*NAME "%s"\n' % (obj.name))
-                    out.write('\t*MESH "%s"\n' % (obj.name))
-                    out.write('\t*WORLD_TM {\n')
-                    out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (1,0,0,0))
-                    out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (0,1,0,0))
-                    out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (0,0,1,0))
-                    out.write('\t\t*TMROW3 %.6f %.6f %.6f %.6f\n' % (0,0,0,1))
-                    out.write('\t\t*POS %.6f %.6f %.6f\n' % (0,0,0))
-                    out.write('\t\t*ROT %.6f %.6f %.6f\n' % (-0,0,0))
-                    out.write('\t\t*SCL %.6f %.6f %.6f\n' % (1,1,1))
-                    out.write('\t}\n')
-                    out.write('}\n')
-                    out.write('\n')
-                    
-                    #===============================================================================================
-                    #  PLACE NODE
-                    #===============================================================================================
-                    out.write('*PLACENODE {\n')
-                    out.write('\t*NAME "%s"\n' % (obj.name))
-                    out.write('\t*MESH "%s"\n' % (obj.name))
-                    out.write('\t*WORLD_TM {\n')
-                    
-                    #Jump to the first frame
-                    ProjectContextScene.frame_set(ProjectContextScene.frame_start)
-                    
-                    ConvertedMatrix = obj.rotation_euler.to_matrix()
-                    rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
-                    RotationMatrix = rot_mtx.transposed()
-                                        
-                    #Print Roation matrix
-                    out.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, (RotationMatrix[0].y * -1), RotationMatrix[0].z))
-                    out.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
-                    out.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % ((RotationMatrix[2].x * -1), (RotationMatrix[2].y * -1), (RotationMatrix[2].z) * -1))
-                    
-                    #Flip location axis
-                    loc_conv = InvertAxisRotationMatrix @ obj.location
-                    out.write('\t\t*TM_ROW3 %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
-                    
-                    # swy: these aren't actually used or read by this version of the importer
-                    out.write('\t\t*POS %.6f %.6f %.6f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
-                    out.write('\t\t*ROT %.6f %.6f %.6f\n' % (radians(obj.rotation_euler.x), radians(obj.rotation_euler.y), radians(obj.rotation_euler.z)))
-                    out.write('\t\t*SCL %.6f %.6f %.6f\n' % (obj.scale.x, obj.scale.y, obj.scale.z))
-                    out.write('\t}\n')
-                    out.write('}\n')
-                    out.write('\n')
+
+            for obj in ProjectContextScene.objects:
+                if obj.type == 'MESH':
+                    if hasattr(obj, 'data'):        
+                        #===============================================================================================
+                        #  GEOM NODE
+                        #===============================================================================================
+                        out.write('*GEOMNODE {\n')
+                        out.write('\t*NAME "%s"\n' % (obj.name))
+                        out.write('\t*MESH "%s"\n' % (obj.name))
+                        out.write('\t*WORLD_TM {\n')
+                        out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (1,0,0,0))
+                        out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (0,1,0,0))
+                        out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (0,0,1,0))
+                        out.write('\t\t*TMROW3 %.6f %.6f %.6f %.6f\n' % (0,0,0,1))
+                        out.write('\t\t*POS %.6f %.6f %.6f\n' % (0,0,0))
+                        out.write('\t\t*ROT %.6f %.6f %.6f\n' % (0,0,0))
+                        out.write('\t\t*SCL %.6f %.6f %.6f\n' % (1,1,1))
+                        out.write('\t}\n')
+                        out.write('\t*USER_FLAGS_COUNT %u\n' % 1)
+                        out.write('\t*USER_FLAGS {\n')
+                        out.write('\t\t*SET 0 0x00000000\n')
+                        out.write('\t}\n')
+                        out.write('}\n')
+
+            for obj in ProjectContextScene.objects:
+                if obj.type == 'MESH':
+                    if hasattr(obj, 'data'):                     
+                        #===============================================================================================
+                        #  PLACE NODE
+                        #===============================================================================================
+                        out.write('*PLACENODE {\n')
+                        out.write('\t*NAME "%s"\n' % (obj.name))
+                        out.write('\t*MESH "%s"\n' % (obj.name))
+                        out.write('\t*WORLD_TM {\n')
+                        
+                        #Jump to the first frame
+                        ProjectContextScene.frame_set(ProjectContextScene.frame_start)
+                        
+                        ConvertedMatrix = obj.rotation_euler.to_matrix()
+                        rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
+                        RotationMatrix = rot_mtx.transposed()
+                        loc_conv = InvertAxisRotationMatrix @ obj.location
+                                            
+                        #Print Roation matrix
+                        out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (RotationMatrix[0].x, (RotationMatrix[0].y * -1), RotationMatrix[0].z, 0))
+                        out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z, 0))
+                        out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % ((RotationMatrix[2].x * -1), (RotationMatrix[2].y * -1), (RotationMatrix[2].z) * -1, 0))
+                        out.write('\t\t*TMROW3 %.6f %.6f %.6f %.6f\n' % (loc_conv.x, loc_conv.y, loc_conv.z, 1))
+                        
+                        # swy: these aren't actually used or read by this version of the importer
+                        out.write('\t\t*POS %.6f %.6f %.6f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
+                        out.write('\t\t*ROT %.6f %.6f %.6f\n' % (radians(obj.rotation_euler.x), radians(obj.rotation_euler.y), radians(obj.rotation_euler.z)))
+                        out.write('\t\t*SCL %.6f %.6f %.6f\n' % (obj.scale.x, obj.scale.y, obj.scale.z))
+                        out.write('\t}\n')
+                        out.write('}\n')
             #Close File
             out.flush()
             out.close()
