@@ -67,7 +67,7 @@ def save(context,
     for ob in sce.objects:
         if ob.type == 'CAMERA':
             out.write("*SCENE_HIERARCHY {"+"\n")
-            out.write(" Camera" + str(camera_num) +" 1 CAMERA "+ ob.name + "\n")
+            out.write("\tCamera" + str(camera_num) +" 1 CAMERA "+ ob.name + "\n")
             out.write("}" + "\n")
             out.write("\n")
             
@@ -113,75 +113,32 @@ def save(context,
             keyframes=sorted(set(keyframes))
             print(keyframes)
             
+            InvertAxisRotationMatrix = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0)))
+            
             #for f in keyframes_obj:
             for f in range(sce.frame_start, sce.frame_end + 1):
-                # swy: restrict the keyframes to those within bounds 
-                #if f < sce.frame_start or f > sce.frame_end:
-                #    continue
-                
                 sce.frame_set(f)
                 
-                mtx_conv = axis_conversion(to_forward='-Z', to_up='Y')
-                
-                rot_thing = ob.rotation_euler
-                #rot_thing = rot_thing.to_quaternion().inverted().to_euler()
-                rot_thing = rot_thing.to_quaternion()
-                #rot_thing.negate()
-                ##rot_thing.z = -rot_thing.z
-                ##rot_thing.w = -rot_thing.w
-                rot_thing = rot_thing.to_euler()
-                rot_thing.z = -rot_thing.z
-                
-                rot_thing.rotate_axis('X', radians(90))
-                #rot_thing.rotate_axis('Y', radians(-90))
-                #rot_thing.rotate_axis('Z', radians(-90))
-                
-                #rot_thing.x = -rot_thing.x
-                #rot_thing.y = -rot_thing.y
-                #rot_thing.z = -rot_thing.z
-                
-                #rot_thing = rot_thing.to_quaternion().inverted().to_euler()
-                
-                
-                print(f, "rot_eul", degrees(rot_thing.x), degrees(rot_thing.y), degrees(rot_thing.z), rot_thing)
-                
-                #rot_mtx = rot_thing.to_matrix()
-                rot_mtx = mtx_conv @ rot_thing.to_matrix() @ mtx_conv
-                
-                rot_thing = rot_mtx.to_euler()
-                print(f, "rot_eul", degrees(rot_thing.x), degrees(rot_thing.y), degrees(rot_thing.z), rot_thing)
-                
-                
-                flip_remaining_axis=Matrix(([-1,0,0],[0,1,0],[0,0,-1]))
-                
-                #rot_mtx = flip_remaining_axis @ rot_thing.to_matrix() @ flip_remaining_axis
-                
-                rot_thing = rot_mtx.to_euler()
-                print(f, "rot_eul", degrees(rot_thing.x), degrees(rot_thing.y), degrees(rot_thing.z), rot_thing)
-                
-                
-                
+                ConvertedMatrix = ob.rotation_euler.to_matrix()
+                rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
+                RotationMatrix = rot_mtx.transposed()         
 
-                loc_conv = mtx_conv @ ob.location
+                loc_conv = InvertAxisRotationMatrix @ ob.location
                 
                 out.write("*SCENE_FRAME %u {\n" % f)
-                out.write(" Camera" + str(camera_num) + " %g %g %g %g %g %g %g %g %g  %g %g %g \n" %
-                (
-                    rot_mtx[0][0], rot_mtx[0][1], rot_mtx[0][2],
-                    rot_mtx[1][0], rot_mtx[1][1], rot_mtx[1][2],
-                    rot_mtx[2][0], rot_mtx[2][1], rot_mtx[2][2],
-                    loc_conv.x, loc_conv.y, loc_conv.z # +X +Z -Y // 1,2,3 -> 1,3,-2 (for some reason 3rd one appears reversed; Z is flipped at .RTG matrix import time)
-                ))
+                out.write('\tCamera' + str(camera_num) + ' %.6f %.6f %.6f'% (RotationMatrix[0].x, (RotationMatrix[0].y * -1), RotationMatrix[0].z))
+                out.write(' %.6f %.6f %.6f' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
+                out.write(' %.6f %.6f %.6f' % ((RotationMatrix[2].x * -1), (RotationMatrix[2].y * -1), (RotationMatrix[2].z) * -1))
+                out.write(' %.6f %.6f %.6f\n' % (loc_conv.x, loc_conv.y, (loc_conv.z * -1))) 
                 out.write("}" + "\n")
                 out.write("\n")
                 
             out.write("*CAMERA_LIST {" + "\n")
-            #out.write(" Camera0 %g %g  %g  %g %g  1" % (ob.data.sensor_width, ob.data.sensor_height, ob.data.lens, ob.data.clip_start, ob.data.clip_end) + "\n")
             out.write(" Camera0 %g %g  %g  %g %g  1" % (.4, .1, ob.data.lens, ob.data.clip_start, ob.data.clip_end) + "\n")
             out.write("}" + "\n")
             if keyframes:
                 out.write("*CAMERA_ANIMATION {"+"\n")
-                out.write(" Camera" + str(camera_num) + " focalLength ")
+                out.write("\tCamera" + str(camera_num) + " focalLength ")
                 #for f in keyframes:
                 for f in range(sce.frame_start, sce.frame_end):
                     sce.frame_set(f)
@@ -195,8 +152,6 @@ def save(context,
     out.close()
 
     return {'FINISHED'}
-
-
 
 if __name__ == "__main__":
     save({}, str(Path.home()) + "\\Desktop\\Camera9.rtg")
