@@ -21,6 +21,36 @@ Heavily work in progress.
 [RTG]: https://sphinxandthecursedmummy.fandom.com/wiki/RTG
 [ESE]: https://sphinxandthecursedmummy.fandom.com/wiki/ESE
 
+# Current status
+EIF (Eurocom Interchange Format)
+- [x] Arbitrary polygons
+- [x] Vertex colors
+- [ ] Layers
+- [X] Maps: Issues with rotations
+
+ESE (Eurocom Export Scene)
+- [x] Arbitrary polygons: Visible vertex edges is not implemented yet
+- [x] Vertex colors
+- [ ] Layers
+- [ ] Maps
+- [ ] Animations + Skins
+- [ ] Scripts
+
+RTG (Real Time Game)
+- [ ] Arbitrary polygons: Visible vertex edges is not implemented yet
+- [ ] Vertex colors
+- [ ] LODs
+- [ ] Layers
+- [ ] Hard edges
+- [ ] Maps
+- [ ] Animations + Skins
+- [ ] Scripts: Only Animated cameras, but need fixes in the rotations
+
+For more info, you can look at the [wiki].
+
+[wiki]: https://sphinxandthecursedmummy.fandom.com/wiki/EuroLand#Intermediate_formats
+
+
 # To develop
 
 For ease of development it's a good idea to install the plugin in some place where Blender can find it, otherwise you would have to change the Blender startup script to add your folder to the Python search path, a good place to put it is:
