@@ -47,9 +47,15 @@ def _write(context, filepath,
             OutputFile.write('\t\t*INHERIT_POS %u %u %u\n' % (0,0,0))
             OutputFile.write('\t\t*INHERIT_ROT %u %u %u\n' % (0,0,0))
             OutputFile.write('\t\t*INHERIT_SCL %u %u %u\n' % (1,1,1))
-            OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, (RotationMatrix[0].y * -1), RotationMatrix[0].z))
-            OutputFile.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
-            OutputFile.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % ((RotationMatrix[2].x * -1), (RotationMatrix[2].y * -1), (RotationMatrix[2].z) * -1))
+
+            if SceneObject.type == 'CAMERA':
+                OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, (RotationMatrix[0].y * -1), RotationMatrix[0].z))
+                OutputFile.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
+                OutputFile.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % ((RotationMatrix[2].x * -1), (RotationMatrix[2].y * -1), (RotationMatrix[2].z) * -1))
+            else:
+                OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
+                OutputFile.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, (RotationMatrix[1].z) * -1))
+                OutputFile.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x, (RotationMatrix[2].y * -1), (RotationMatrix[2].z) * -1))
             
             #Flip location axis
             loc_conv = InvertAxisRotationMatrix @ SceneObject.location
@@ -126,189 +132,195 @@ def _write(context, filepath,
             if EXPORT_MATERIALS:
                 out.write('*MATERIAL_LIST {\n')
                 out.write('\t*MATERIAL_COUNT %u\n' % len(bpy.data.materials))
-                currentMat = 0
-
-                for MatData in bpy.data.materials:   
-                    if hasattr(MatData.node_tree, 'nodes'):
-                        DiffuseColor = MatData.diffuse_color
-
-                        #Check if material has texture        
-                        ImageNode = MatData.node_tree.nodes.get('Image Texture', None)
-                        if (ImageNode is not None):
-                            ImageName = ImageNode.image.name
-
+                for indx, MeshObj in enumerate(ProjectContextScene.objects):
+                        if MeshObj.type == 'MESH':
                             #Material
-                            out.write('\t*MATERIAL %u {\n' % currentMat)
-                            out.write('\t\t*MATERIAL_NAME "%s"\n' % MatData.name)
-                            out.write('\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-                            out.write('\t\t*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
-                            out.write('\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
-                            if (os.path.exists(bpy.path.abspath(ImageNode.image.filepath))):
-                                out.write('\t\t*MATERIAL_TWOSIDED\n')
-                            out.write('\t\t*NUMSUBMTLS %u \n' % 1)
+                            out.write('\t*MATERIAL %u {\n' % indx)
 
-                            #Submaterial
-                            out.write('\t\t*SUBMATERIAL %u {\n' % currentMat)
-                            out.write('\t\t\t*MATERIAL_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
-                            out.write('\t\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-                            out.write('\t\t\t*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
-                            out.write('\t\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
-                            out.write('\t\t\t*MATERIAL_SELFILLUM %u\n' % int(MatData.use_preview_world))
+                            #Mesh Materials
+                            if len(MeshObj.material_slots) > 0:
+                                currentSubMat = 0
 
-                            #Map Difuse
-                            out.write('\t\t\t*MAP_DIFFUSE {\n')
-                            out.write('\t\t\t\t*MAP_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
-                            out.write('\t\t\t\t*MAP_CLASS "%s"\n' % "Bitmap")
-                            out.write('\t\t\t\t*MAP_AMOUNT "%u"\n' % 1)
-                            out.write('\t\t\t\t*BITMAP "%s"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
+                                #Material Info                                    
+                                MatData = bpy.data.materials[0]
+                                DiffuseColor = MatData.diffuse_color
+                                out.write('\t\t*MATERIAL_NAME "%s"\n' % MatData.name)
+                                out.write('\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                                out.write('\t\t*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                                out.write('\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
+                                out.write('\t\t*NUMSUBMTLS %u \n' % len(MeshObj.material_slots))
 
-                            out.write('\t\t\t}\n')
-                            out.write('\t\t}\n')
+                                #Loop Trought Submaterials
+                                for indx, Material_Data in enumerate(MeshObj.material_slots):
+                                    MatData = bpy.data.materials[Material_Data.name]
+                                    DiffuseColor = MatData.diffuse_color
+                                    ImageNode = MatData.node_tree.nodes.get('Image Texture', None)
+                                    ImageName = ImageNode.image.name
+
+                                    #Submaterial
+                                    out.write('\t\t*SUBMATERIAL %u {\n' % currentSubMat)
+                                    out.write('\t\t\t*MATERIAL_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
+                                    out.write('\t\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                                    out.write('\t\t\t*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                                    out.write('\t\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
+                                    out.write('\t\t\t*MATERIAL_SELFILLUM %u\n' % int(MatData.use_preview_world))
+
+                                    #Map Difuse
+                                    out.write('\t\t\t*MAP_DIFFUSE {\n')
+                                    out.write('\t\t\t\t*MAP_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
+                                    out.write('\t\t\t\t*MAP_CLASS "%s"\n' % "Bitmap")
+                                    out.write('\t\t\t\t*MAP_AMOUNT "%u"\n' % 1)
+                                    out.write('\t\t\t\t*BITMAP "%s"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
+
+                                    out.write('\t\t\t}\n')
+                                    out.write('\t\t}\n')
+                                    currentSubMat += 1
                             out.write('\t}\n')
-
-                            currentMat += 1
                 out.write('}\n')
 
             #===============================================================================================
             #  GEOM OBJECT
             #=============================================================================================== 
             if 'MESH' in EXPORT_OBJECTTYPES:
-                for SceneObj in ProjectContextScene.objects:
+                for indx, SceneObj in enumerate(ProjectContextScene.objects):
                     if SceneObj.type == 'MESH':
-                        #===========================================[Triangulate Object]====================================================
-                        dg = bpy.context.evaluated_depsgraph_get()          
-                        bm = bmesh.new()
-                        bm.from_object(SceneObj, dg)
-                        bm.transform(EXPORT_GLOBAL_MATRIX)
-                        tris = bm.calc_loop_triangles()
+                        if hasattr(SceneObj, 'data'):
+                            #===========================================[Clone Object]====================================================
+                            depsgraph = bpy.context.evaluated_depsgraph_get()
+                            ob_for_convert = SceneObj.evaluated_get(depsgraph)
 
-                        #===========================================[Get Object Data]====================================================
-                        #Info from: https://blender.stackexchange.com/a/211855/117003
-                        #Get vertex list without duplicates
-                        VertexList = []
-                        for tri in tris:
-                            for loop in tri:
-                                if loop.vert.co not in VertexList:
-                                    VertexList.append(loop.vert.co)              
+                            try:
+                                MeshObject = ob_for_convert.to_mesh()
+                            except RuntimeError:
+                                MeshObject = None
+                            if MeshObject is None:
+                                continue
 
-                        #Get UV Layer Active
-                        UVVertexList = []                    
-                        for name, uvl in bm.loops.layers.uv.items():
-                            for i, tri in enumerate(tris):
+                            #===========================================[Apply Matrix]====================================================
+                            MeshObject.transform(EXPORT_GLOBAL_MATRIX @ SceneObj.matrix_world)
+                            if (EXPORT_GLOBAL_MATRIX @ SceneObj.matrix_world).determinant() < 0.0:
+                                MeshObject.flip_normals()
+
+                            #===========================================[Triangulate Object]====================================================
+                            bm = bmesh.new()
+                            bm.from_mesh(MeshObject)
+                            tris = bm.calc_loop_triangles()
+
+                            #===========================================[Get Object Data]====================================================
+                            #Get vertex list without duplicates
+                            VertexList = []
+                            for tri in tris:
                                 for loop in tri:
-                                    DataToAppend = loop[uvl].uv
-                                    if DataToAppend not in UVVertexList:
-                                        UVVertexList.append(DataToAppend)
+                                    if loop.vert.co not in VertexList:
+                                        VertexList.append(loop.vert.co)              
 
-                        if EXPORT_VERTEXCOLORS:
-                            #Get Vertex Colors List 
-                            VertexColorList = []
-                            for name, cl in bm.loops.layers.color.items():
-                                for tri in tris:
+                            #Get UV Layer Active
+                            UVVertexList = []                    
+                            for name, uvl in bm.loops.layers.uv.items():
+                                for i, tri in enumerate(tris):
                                     for loop in tri:
-                                        color = loop[cl] # gives a Vector((R, G, B, A))
-                                        if color not in VertexColorList:
-                                            VertexColorList.append(color)
+                                        DataToAppend = loop[uvl].uv
+                                        if DataToAppend not in UVVertexList:
+                                            UVVertexList.append(DataToAppend)
 
-                        #===========================================[Print Object Data]====================================================       
-                        out.write('*GEOMOBJECT {\n')
-                        out.write('\t*NODE_NAME "%s"\n' % SceneObj.name)
+                            if EXPORT_VERTEXCOLORS:
+                                #Get Vertex Colors List 
+                                VertexColorList = []
+                                for name, cl in bm.loops.layers.color.items():
+                                    for tri in tris:
+                                        for loop in tri:
+                                            color = loop[cl] # gives a Vector((R, G, B, A))
+                                            if color not in VertexColorList:
+                                                VertexColorList.append(color)
 
-                        #Print Matrix Rotation
-                        out.write('\t*NODE_TM {\n')
-                        PrintNODE_TM(out, SceneObj)
-                        out.write('\t}\n')
+                            #===========================================[Print Object Data]====================================================       
+                            out.write('*GEOMOBJECT {\n')
+                            out.write('\t*NODE_NAME "%s"\n' % SceneObj.name)
 
-                        #Print Matrix Rotation again ¯\_(ツ)_/¯
-                        out.write('\t*PIVOT_TM {\n')
-                        PrintNODE_TM(out, SceneObj)
-                        out.write('\t}\n')
+                            #Print Matrix Rotation
+                            out.write('\t*NODE_TM {\n')
+                            PrintNODE_TM(out, SceneObj)
+                            out.write('\t}\n')
 
-                        #MESH Section
-                        out.write('\t*MESH {\n')
-                        out.write('\t\t*TIMEVALUE %u\n' % 0)
-                        out.write('\t\t*MESH_NUMVERTEX %u\n' % len(VertexList))
-                        out.write('\t\t*MESH_NUMFACES %u\n' % len(tris))
+                            #Print Matrix Rotation again ¯\_(ツ)_/¯
+                            out.write('\t*PIVOT_TM {\n')
+                            PrintNODE_TM(out, SceneObj)
+                            out.write('\t}\n')
 
-                        #Print Vertex List
-                        out.write('\t\t*MESH_VERTEX_LIST {\n')
-                        for idx, ListItem in enumerate(VertexList):
-                            out.write('\t\t\t*MESH_VERTEX %u %.4f %.4f %.4f\n' % (idx, ListItem[0], ListItem[1], ListItem[2]))
-                        out.write('\t\t}\n')
+                            #MESH Section
+                            out.write('\t*MESH {\n')
+                            out.write('\t\t*TIMEVALUE %u\n' % 0)
+                            out.write('\t\t*MESH_NUMVERTEX %u\n' % len(VertexList))
+                            out.write('\t\t*MESH_NUMFACES %u\n' % len(tris))
 
-                        #Face Vertex Index
-                        out.write('\t\t*MESH_FACE_LIST {\n')   
-                        for i, tri in enumerate(tris):
-                            out.write('\t\t\t*MESH_FACE %u: ' % i)
-                            if EXPORT_FLIP_POLYGONS:
-                                out.write('A: %u B: %u C: %u ' % (VertexList.index(tri[2].vert.co), VertexList.index(tri[1].vert.co), VertexList.index(tri[0].vert.co)))
-                                out.write('AB: %u BC: %u CA: %u ' % (not tri[2].vert.hide, not tri[1].vert.hide, not tri[0].vert.hide))
-                            else:
+                            #Print Vertex List
+                            out.write('\t\t*MESH_VERTEX_LIST {\n')
+                            for idx, ListItem in enumerate(VertexList):
+                                out.write('\t\t\t*MESH_VERTEX %u %.4f %.4f %.4f\n' % (idx, ListItem[0], ListItem[1], ListItem[2]))
+                            out.write('\t\t}\n')
+
+                            #Face Vertex Index
+                            out.write('\t\t*MESH_FACE_LIST {\n')   
+                            for i, tri in enumerate(tris):
+                                out.write('\t\t\t*MESH_FACE %u: ' % i)
                                 out.write('A: %u B: %u C: %u ' % (VertexList.index(tri[0].vert.co), VertexList.index(tri[1].vert.co), VertexList.index(tri[2].vert.co)))
                                 out.write('AB: %u BC: %u CA: %u ' % (not tri[0].vert.hide, not tri[1].vert.hide, not tri[2].vert.hide))   
-                            out.write('*MESH_SMOOTHING 1 ')
-                            out.write('*MESH_MTLID %u\n' % tri[0].face.material_index)
-                        out.write('\t\t}\n')
-
-                        #Texture UVs
-                        out.write('\t\t*MESH_NUMTVERTEX %u\n' % len(UVVertexList))
-                        out.write('\t\t*MESH_TVERTLIST {\n')
-                        for idx, TextUV in enumerate(UVVertexList):
-                            out.write('\t\t\t*MESH_TVERT %u %.4f %.4f\n' % (idx, TextUV[0], TextUV[1]))
-                        out.write('\t\t}\n')
-
-                        #Face Layers UVs Index
-                        layerIndex = 0
-                        out.write('\t\t*MESH_NUMTFACELAYERS %u\n' % len(bm.loops.layers.uv.items()))
-                        for name, uv_lay in bm.loops.layers.uv.items():
-                            out.write('\t\t*MESH_TFACELAYER %u {\n' % layerIndex)
-                            out.write('\t\t\t*MESH_NUMTVFACES %u \n' % len(bm.faces))
-                            out.write('\t\t\t*MESH_TFACELIST {\n')           
-                            for i, tri in enumerate(tris):
-                                out.write('\t\t\t\t*MESH_TFACE %u ' % i)
-                                if EXPORT_FLIP_POLYGONS:
-                                    out.write('%u %u %u\n' % (UVVertexList.index(tri[2][uv_lay].uv), UVVertexList.index(tri[1][uv_lay].uv), UVVertexList.index(tri[0][uv_lay].uv)))
-                                else:
-                                    out.write('%u %u %u\n' % (UVVertexList.index(tri[0][uv_lay].uv), UVVertexList.index(tri[1][uv_lay].uv), UVVertexList.index(tri[2][uv_lay].uv)))
-                            out.write('\t\t\t}\n')
-                            out.write('\t\t}\n')
-                            layerIndex += 1
-
-                        if EXPORT_VERTEXCOLORS:
-                            #Vertex Colors List
-                            out.write('\t\t*MESH_NUMCVERTEX %u\n' % len(VertexColorList))
-                            out.write('\t\t*MESH_CVERTLIST {\n')
-                            for idx, ColorArray in enumerate(VertexColorList):
-                                out.write('\t\t\t*MESH_VERTCOL %u %.4f %.4f %.4f %u\n' % (idx, (ColorArray[0] * .5), (ColorArray[1] * .5), (ColorArray[2] * .5), 1))
+                                out.write('*MESH_SMOOTHING 1 ')
+                                out.write('*MESH_MTLID %u\n' % tri[0].face.material_index)
                             out.write('\t\t}\n')
 
-                            #Face Color Vertex Index
+                            #Texture UVs
+                            out.write('\t\t*MESH_NUMTVERTEX %u\n' % len(UVVertexList))
+                            out.write('\t\t*MESH_TVERTLIST {\n')
+                            for idx, TextUV in enumerate(UVVertexList):
+                                out.write('\t\t\t*MESH_TVERT %u %.4f %.4f\n' % (idx, TextUV[0], TextUV[1]))
+                            out.write('\t\t}\n')
+
+                            #Face Layers UVs Index
                             layerIndex = 0
-                            out.write('\t\t*MESH_NUMCFACELAYERS %u\n' % len(bm.loops.layers.color.items()))
-                            for name, cl in bm.loops.layers.color.items():
-                                out.write('\t\t*MESH_CFACELAYER %u {\n' % layerIndex)
-                                out.write('\t\t\t*MESH_NUMCVFACES %u \n' % len(tris))
-                                out.write('\t\t\t*MESH_CFACELIST {\n')
+                            out.write('\t\t*MESH_NUMTFACELAYERS %u\n' % len(bm.loops.layers.uv.items()))
+                            for name, uv_lay in bm.loops.layers.uv.items():
+                                out.write('\t\t*MESH_TFACELAYER %u {\n' % layerIndex)
+                                out.write('\t\t\t*MESH_NUMTVFACES %u \n' % len(bm.faces))
+                                out.write('\t\t\t*MESH_TFACELIST {\n')           
                                 for i, tri in enumerate(tris):
-                                    out.write('\t\t\t\t*MESH_CFACE %u ' % i)
-                                    for loop in tri:
-                                        out.write('%u ' % VertexColorList.index(loop[cl]))
-                                    out.write('\n')
+                                    out.write('\t\t\t\t*MESH_TFACE %u ' % i)
+                                    out.write('%u %u %u\n' % (UVVertexList.index(tri[0][uv_lay].uv), UVVertexList.index(tri[1][uv_lay].uv), UVVertexList.index(tri[2][uv_lay].uv)))
                                 out.write('\t\t\t}\n')
                                 out.write('\t\t}\n')
-                                layerIndex +=1
+                                layerIndex += 1
 
-                            #Clear lists
-                            del VertexList
-                            del UVVertexList
+                            if EXPORT_VERTEXCOLORS:
+                                #Vertex Colors List
+                                out.write('\t\t*MESH_NUMCVERTEX %u\n' % len(VertexColorList))
+                                out.write('\t\t*MESH_CVERTLIST {\n')
+                                for idx, ColorArray in enumerate(VertexColorList):
+                                    out.write('\t\t\t*MESH_VERTCOL %u %.4f %.4f %.4f %u\n' % (idx, (ColorArray[0] * .5), (ColorArray[1] * .5), (ColorArray[2] * .5), 1))
+                                out.write('\t\t}\n')
 
-                        #Liberate BM Object
-                        bm.free()
+                                #Face Color Vertex Index
+                                layerIndex = 0
+                                out.write('\t\t*MESH_NUMCFACELAYERS %u\n' % len(bm.loops.layers.color.items()))
+                                for name, cl in bm.loops.layers.color.items():
+                                    out.write('\t\t*MESH_CFACELAYER %u {\n' % layerIndex)
+                                    out.write('\t\t\t*MESH_NUMCVFACES %u \n' % len(tris))
+                                    out.write('\t\t\t*MESH_CFACELIST {\n')
+                                    for i, tri in enumerate(tris):
+                                        out.write('\t\t\t\t*MESH_CFACE %u ' % i)
+                                        for loop in tri:
+                                            out.write('%u ' % VertexColorList.index(loop[cl]))
+                                        out.write('\n')
+                                    out.write('\t\t\t}\n')
+                                    out.write('\t\t}\n')
+                                    layerIndex +=1
 
-                        #Close blocks
-                        out.write('\t}\n')
-                        out.write('\t*MATERIAL_REF %u\n' % 0)
-                        out.write('}\n')
+                            #Liberate BM Object
+                            bm.free()
+
+                            #Close blocks
+                            out.write('\t}\n')
+                            out.write('\t*MATERIAL_REF %u\n' % indx)
+                            out.write('}\n')
 
             #===============================================================================================
             #  CAMERA OBJECT
