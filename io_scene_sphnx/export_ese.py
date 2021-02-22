@@ -15,7 +15,6 @@ from math import *
 from pathlib import Path
 from bpy_extras.io_utils import axis_conversion
 
-
 def _write(context, filepath,
             EXPORT_FLIP_POLYGONS,
             EXPORT_OBJECTTYPES,
@@ -49,10 +48,12 @@ def _write(context, filepath,
             OutputFile.write('\t\t*INHERIT_SCL %u %u %u\n' % (1,1,1))
 
             if SceneObject.type == 'CAMERA':
+                #Don't modify this, the cameras rotations works fine with this code.
                 OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, (RotationMatrix[0].y * -1), RotationMatrix[0].z))
                 OutputFile.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
                 OutputFile.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % ((RotationMatrix[2].x * -1), (RotationMatrix[2].y * -1), (RotationMatrix[2].z) * -1))
             else:
+                #This other code needs revision, the rotations in the entity editor don't works. 
                 OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
                 OutputFile.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, (RotationMatrix[1].z) * -1))
                 OutputFile.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x, (RotationMatrix[2].y * -1), (RotationMatrix[2].z) * -1))
@@ -91,7 +92,12 @@ def _write(context, filepath,
                 TimeValueCounter += TimeValue            
             OutputFile.write('\t\t}\n')
             OutputFile.write('\t}\n')
-
+    def GetMaterialCount():
+        Materials_Number = 0
+        for indx, MeshObj in enumerate(ProjectContextScene.objects):
+            if MeshObj.type == 'MESH':
+                Materials_Number += 1
+        return Materials_Number
     #===============================================================================================
     #  MAIN
     #===============================================================================================
@@ -131,7 +137,7 @@ def _write(context, filepath,
             #===============================================================================================
             if EXPORT_MATERIALS:
                 out.write('*MATERIAL_LIST {\n')
-                out.write('\t*MATERIAL_COUNT %u\n' % len(bpy.data.materials))
+                out.write('\t*MATERIAL_COUNT %u\n' % GetMaterialCount())
                 for indx, MeshObj in enumerate(ProjectContextScene.objects):
                         if MeshObj.type == 'MESH':
                             #Material
@@ -153,26 +159,43 @@ def _write(context, filepath,
                                 #Loop Trought Submaterials
                                 for indx, Material_Data in enumerate(MeshObj.material_slots):
                                     MatData = bpy.data.materials[Material_Data.name]
-                                    DiffuseColor = MatData.diffuse_color
-                                    ImageNode = MatData.node_tree.nodes.get('Image Texture', None)
-                                    ImageName = ImageNode.image.name
 
-                                    #Submaterial
-                                    out.write('\t\t*SUBMATERIAL %u {\n' % currentSubMat)
-                                    out.write('\t\t\t*MATERIAL_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
-                                    out.write('\t\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-                                    out.write('\t\t\t*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
-                                    out.write('\t\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
-                                    out.write('\t\t\t*MATERIAL_SELFILLUM %u\n' % int(MatData.use_preview_world))
+                                    #Material has texture
+                                    if MatData.node_tree.nodes.get('Image Texture', None):
+                                        ImageNode = MatData.node_tree.nodes.get('Image Texture', None)
+                                        ImageName = ImageNode.image.name
+                                        DiffuseColor = MatData.diffuse_color
 
-                                    #Map Difuse
-                                    out.write('\t\t\t*MAP_DIFFUSE {\n')
-                                    out.write('\t\t\t\t*MAP_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
-                                    out.write('\t\t\t\t*MAP_CLASS "%s"\n' % "Bitmap")
-                                    out.write('\t\t\t\t*MAP_AMOUNT "%u"\n' % 1)
-                                    out.write('\t\t\t\t*BITMAP "%s"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
+                                        #Submaterial
+                                        out.write('\t\t*SUBMATERIAL %u {\n' % currentSubMat)
+                                        out.write('\t\t\t*MATERIAL_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
+                                        out.write('\t\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                                        out.write('\t\t\t*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                                        out.write('\t\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
+                                        out.write('\t\t\t*MATERIAL_SELFILLUM %u\n' % int(MatData.use_preview_world))
 
-                                    out.write('\t\t\t}\n')
+                                        #Map Difuse
+                                        out.write('\t\t\t*MAP_DIFFUSE {\n')
+                                        out.write('\t\t\t\t*MAP_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
+                                        out.write('\t\t\t\t*MAP_CLASS "%s"\n' % "Bitmap")
+                                        out.write('\t\t\t\t*MAP_AMOUNT "%u"\n' % 1)
+                                        out.write('\t\t\t\t*BITMAP "%s"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
+                                        out.write('\t\t\t}\n')
+
+                                    #Material has no texture
+                                    else:
+                                        #Submaterial
+                                        principled = next(n for n in MatData.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
+                                        base_color = principled.inputs['Base Color']
+                                        color = base_color.default_value
+
+                                        out.write('\t\t*SUBMATERIAL %u {\n' % currentSubMat)
+                                        out.write('\t\t\t*MATERIAL_NAME "%s"\n' % MatData.name)
+                                        out.write('\t\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % ((color[0] * .5), (color[1] * .5), (color[2] * .5)))
+                                        out.write('\t\t\t*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                                        out.write('\t\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
+                                        out.write('\t\t\t*MATERIAL_SELFILLUM %u\n' % int(MatData.use_preview_world))
+
                                     out.write('\t\t}\n')
                                     currentSubMat += 1
                             out.write('\t}\n')
@@ -198,7 +221,7 @@ def _write(context, filepath,
 
                             #===========================================[Apply Matrix]====================================================
                             MeshObject.transform(EXPORT_GLOBAL_MATRIX @ SceneObj.matrix_world)
-                            if (EXPORT_GLOBAL_MATRIX @ SceneObj.matrix_world).determinant() < 0.0:
+                            if EXPORT_FLIP_POLYGONS:
                                 MeshObject.flip_normals()
 
                             #===========================================[Triangulate Object]====================================================
@@ -300,19 +323,20 @@ def _write(context, filepath,
 
                                 #Face Color Vertex Index
                                 layerIndex = 0
-                                out.write('\t\t*MESH_NUMCFACELAYERS %u\n' % len(bm.loops.layers.color.items()))
-                                for name, cl in bm.loops.layers.color.items():
-                                    out.write('\t\t*MESH_CFACELAYER %u {\n' % layerIndex)
-                                    out.write('\t\t\t*MESH_NUMCVFACES %u \n' % len(tris))
-                                    out.write('\t\t\t*MESH_CFACELIST {\n')
-                                    for i, tri in enumerate(tris):
-                                        out.write('\t\t\t\t*MESH_CFACE %u ' % i)
-                                        for loop in tri:
-                                            out.write('%u ' % VertexColorList.index(loop[cl]))
-                                        out.write('\n')
-                                    out.write('\t\t\t}\n')
-                                    out.write('\t\t}\n')
-                                    layerIndex +=1
+                                if len(bm.loops.layers.color.items()) > 0:
+                                    out.write('\t\t*MESH_NUMCFACELAYERS %u\n' % len(bm.loops.layers.color.items()))
+                                    for name, cl in bm.loops.layers.color.items():
+                                        out.write('\t\t*MESH_CFACELAYER %u {\n' % layerIndex)
+                                        out.write('\t\t\t*MESH_NUMCVFACES %u \n' % len(tris))
+                                        out.write('\t\t\t*MESH_CFACELIST {\n')
+                                        for i, tri in enumerate(tris):
+                                            out.write('\t\t\t\t*MESH_CFACE %u ' % i)
+                                            for loop in tri:
+                                                out.write('%u ' % VertexColorList.index(loop[cl]))
+                                            out.write('\n')
+                                        out.write('\t\t\t}\n')
+                                        out.write('\t\t}\n')
+                                        layerIndex +=1
 
                             #Liberate BM Object
                             bm.free()

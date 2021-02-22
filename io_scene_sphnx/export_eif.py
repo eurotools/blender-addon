@@ -297,14 +297,17 @@ def _write(context, filepath,
                         #Jump to the first frame
                         ProjectContextScene.frame_set(ProjectContextScene.frame_start)
                         
-                        RotationMatrix = EXPORT_GLOBAL_MATRIX @ obj.matrix_world
-                        RotationMatrix = EXPORT_GLOBAL_MATRIX @ RotationMatrix.transposed()
-                        loc_pos = InvertAxisMatrix @ obj.location
-                        
+                        ConvertedMatrix = obj.rotation_euler.to_matrix()
+                        rot_mtx = InvertAxisMatrix @ ConvertedMatrix
+                        RotationMatrix = rot_mtx.transposed()
+
                         #Print Roation matrix
                         out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z, 0))
-                        out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z, 0))
-                        out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z, 0))
+                        out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z, 0))
+                        out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z, 0))
+
+                        #Location
+                        loc_pos = InvertAxisMatrix @ obj.location
                         out.write('\t\t*TMROW3 %.6f %.6f %.6f %.6f\n' % (loc_pos.x, loc_pos.y, loc_pos.z, 1))
 
                         # swy: these aren't actually used or read by this version of the importer
