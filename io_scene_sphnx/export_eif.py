@@ -247,10 +247,11 @@ def _write(context, filepath,
 
                             if ('M' in FaceFormat):
                                 for indx, mat in enumerate(obj.material_slots):
-                                    if mat == obj.material_slots[bpy.data.materials[MeshPolys.material_index].name]:
+                                    MaterialToFind = bpy.data.materials[MeshPolys.material_index].name
+                                    if mat.name == MaterialToFind:
                                         out.write('%d ' % indx)
                                         break
-                                    
+                                
                             # swy: we're missing exporting an optional shader index here
 
                             #Write Flags ---F
