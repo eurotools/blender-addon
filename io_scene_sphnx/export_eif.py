@@ -64,12 +64,13 @@ def _write(context, filepath,
             #  MATERIAL LIST
             #===============================================================================================
             MaterialIndex = 0
+
             out.write('*MATERIALS {\n')
             for mat in bpy.data.materials:            
                 if hasattr(mat.node_tree, 'nodes'):
                     DiffuseColor = mat.diffuse_color
                     ImageNode = mat.node_tree.nodes.get('Image Texture', None)
-                    
+
                     #Material has texture
                     if (ImageNode is not None):
                         ImageName = ImageNode.image.name
@@ -87,7 +88,6 @@ def _write(context, filepath,
                         if mat.blend_method.startswith('ALPHA'):
                             out.write('\t\t*MAP_HASALPHA\n')
 
-                        MaterialIndex +=1
                         out.write('\t}\n')
 
                     #Material has no texture
@@ -97,7 +97,8 @@ def _write(context, filepath,
                         out.write('\t\t*NAME "%s"\n' % (mat.name))
                         out.write('\t\t*COL_DIFFUSE %.6f %.6f %.6f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
                         out.write('\t}\n')
-                        MaterialIndex +=1
+                    MaterialIndex +=1
+
             out.write('}\n')
             out.write('\n')
             
@@ -133,23 +134,27 @@ def _write(context, filepath,
                         UVList = []
                         if hasattr(MeshObject.uv_layers.active, 'data'):
                             if len(MeshObject.uv_layers):
-                                for layer in MeshObject.uv_layers:
-                                    uv_layer = layer.data
-                                    for pl_count, poly in enumerate(MeshObject.polygons):
-                                        for li_count, loop_index in enumerate(poly.loop_indices):
-                                            if uv_layer[loop_index].uv not in UVList:
-                                                UVList.append((uv_layer[loop_index].uv))
+                                for poly in MeshObject.polygons:
+                                    for loop_idx in poly.loop_indices:
+                                        uv_coords = MeshObject.uv_layers.active.data[loop_idx].uv
+                                        if uv_coords not in UVList:
+                                            UVList.append(uv_coords)
 
                         #Get vertex color list without duplicates
                         VertexColList = []
-                        if len(MeshObject.vertex_colors):
-                            if hasattr(MeshObject.vertex_colors.active, 'data'):
-                                for layer in MeshObject.vertex_colors:
-                                    for vertex in layer.data:
-                                        VertexColList.append(
-                                            (vertex.color[0] * .5, vertex.color[1] * .5, vertex.color[2] * .5, vertex.color[3])
-                                        )
-                                VertexColList = list(dict.fromkeys(VertexColList))
+                        if MeshObject.vertex_colors:
+                            vcol_layer = MeshObject.vertex_colors.active
+                        else:
+                            vcol_layer = MeshObject.vertex_colors.new()
+
+                        for poly in MeshObject.polygons:
+                            for loop_index in poly.loop_indices:
+                                loop_vert_index = MeshObject.loops[loop_index].vertex_index
+                                v_color = vcol_layer.data[loop_index].color
+                                VertexColList.append(v_color[:])
+
+                        #Remove duplicates
+                        VertexColList = list(dict.fromkeys(VertexColList))
 
                         FaceFormat = 'V'
                         #===========================================[Print Object Data]==================================================== 
@@ -188,7 +193,7 @@ def _write(context, filepath,
                         if(len(VertexColList) > 0):
                             FaceFormat += 'C'
                             for col in VertexColList:
-                                out.write('\t\t%.6f %.6f %.6f %.6f\n' % col[:])
+                                out.write('\t\t%.6f %.6f %.6f %.6f\n' % (col[0] * .5, col[1] * .5, col[2] * .5, col[3]))
                         out.write('\t}\n')
 
                         if len(obj.material_slots) > 0:
@@ -226,7 +231,7 @@ def _write(context, filepath,
 
                             #Write UVs ---T
                             if ('T' in FaceFormat):
-                                for vert_idx, loop_idx in enumerate(MeshPolys.loop_indices):
+                                for loop_idx in MeshPolys.loop_indices:
                                     for layer in MeshObject.uv_layers:
                                         out.write('%d ' % UVList.index(layer.data[loop_idx].uv))
 
@@ -236,12 +241,15 @@ def _write(context, filepath,
                                     # swy: this is wrong; it should be the same layer count as any other face format block, can't be a different size. me.vertex_colors != me.uv_layers
                                     for layerIndex in MeshObject.vertex_colors:
                                         vertex = layerIndex.data[loop_idx]
-                                        out.write('%d ' % VertexColList.index((vertex.color[0] * .5, vertex.color[1] * .5, vertex.color[2] * .5, vertex.color[3])))
+                                        out.write('%d ' % VertexColList.index((vertex.color[:])))
+
                             # swy: we're missing exporting (optional) face normals here
 
                             if ('M' in FaceFormat):
-                                for layer in MeshObject.uv_layers:
-                                    out.write('%d ' % MeshPolys.material_index)
+                                for indx, mat in enumerate(obj.material_slots):
+                                    if mat == obj.material_slots[bpy.data.materials[MeshPolys.material_index].name]:
+                                        out.write('%d ' % indx)
+                                        break
                                     
                             # swy: we're missing exporting an optional shader index here
 
