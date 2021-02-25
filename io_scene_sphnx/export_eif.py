@@ -138,11 +138,11 @@ def _write(context, filepath,
 
                         #Get UVs list without duplicates
                         UVList = []
-                        if hasattr(MeshObject.uv_layers.active, 'data'):
-                            if len(MeshObject.uv_layers):
-                                for poly in MeshObject.polygons:
-                                    for loop_idx in poly.loop_indices:
-                                        uv_coords = MeshObject.uv_layers.active.data[loop_idx].uv
+                        if len(MeshObject.uv_layers) > 0:
+                            for poly in MeshObject.polygons:
+                                for loop_idx in poly.loop_indices:
+                                    for layer in MeshObject.uv_layers:
+                                        uv_coords = layer.data[loop_idx].uv
                                         if uv_coords not in UVList:
                                             UVList.append(uv_coords)
 
@@ -162,7 +162,6 @@ def _write(context, filepath,
                         #Remove duplicates
                         VertexColList = list(dict.fromkeys(VertexColList))
 
-                        FaceFormat = 'V'
                         #===========================================[Print Object Data]==================================================== 
                         out.write('*MESH {\n')
                         out.write('\t*NAME "%s"\n' % obj.name)
@@ -178,7 +177,7 @@ def _write(context, filepath,
                             out.write('\t*FACELAYERSCOUNT %d\n' % 1)
                             
                         if len(MeshObject.uv_layers) > 1:
-                            out.write('\t*FACESHADERCOUNT %d\n' % len(MeshObject.material_slots))
+                            out.write('\t*FACESHADERCOUNT %d\n' % len(obj.material_slots))
 
                         #Print Vertex List
                         out.write('\t*VERTEX_LIST {\n')
@@ -188,7 +187,6 @@ def _write(context, filepath,
 
                         #Print UV data
                         out.write('\t*UV_LIST {\n')
-                        FaceFormat += 'T'
                         for uv in UVList:
                             out.write('\t\t%.6f %.6f\n' % (uv[0], 1.0 - uv[1]))
                         out.write('\t}\n')
@@ -196,35 +194,30 @@ def _write(context, filepath,
                         #Print Vertex Color List
                         out.write('\t*VERTCOL_LIST {\n')
                         if(len(VertexColList) > 0):
-                            FaceFormat += 'C'
                             for col in VertexColList:
                                 out.write('\t\t%.6f %.6f %.6f %.6f\n' % (col[0] * .5, col[1] * .5, col[2] * .5, col[3]))
                         out.write('\t}\n')
-
-                        if len(obj.material_slots) > 0:
-                            FaceFormat += 'M'
-                            FaceFormat += 'F'
 
                         #Print Shader faces
                         if (len(MeshObject.uv_layers) > 1):
                             ShaderIndex = 0
                             MaterialIndex = 0
                             out.write('\t*FACESHADERS {\n')
-                            for mat in MeshObject.material_slots:
+                            for mat in obj.material_slots:
                                 out.write('\t\t*SHADER %d {\n' % ShaderIndex)
-                                
+
                                 if mat.material.blend_method == 'OPAQUE':
                                     out.write('\t\t\t%d %s\n' % (bpy.data.materials.find(mat.name),"Non"))
                                 else:
                                     out.write('\t\t\t%d %s\n' % (bpy.data.materials.find(mat.name),"Alp"))
                                 out.write('\t\t}\n')
-                                
+
                                 #update Counter
                                 MaterialIndex +=1
                             out.write('\t}\n')
 
                         #Get FaceFormat
-                        out.write('\t*FACEFORMAT %s\n' % FaceFormat)
+                        out.write('\t*FACEFORMAT %s\n' % "VTCMF")
 
                         #Print Face List, the difficult part ;P
                         out.write('\t*FACE_LIST {\n')
@@ -235,39 +228,43 @@ def _write(context, filepath,
                                 out.write('%d ' % vert)
 
                             #Write UVs ---T
-                            if ('T' in FaceFormat):
-                                for loop_idx in MeshPolys.loop_indices:
-                                    if len(MeshObject.uv_layers) > 0:
-                                        for layer in MeshObject.uv_layers:
-                                            out.write('%d ' % UVList.index(layer.data[loop_idx].uv))
-                                    else:
-                                        out.write('%d ' % -1)
+                            for loop_idx in MeshPolys.loop_indices:
+                                if len(MeshObject.uv_layers) > 0:
+                                    for layer in MeshObject.uv_layers:
+                                        out.write('%d ' % UVList.index(layer.data[loop_idx].uv))
+                                else:
+                                    out.write('%d ' % -1)
 
                             #Write Colors ---C
-                            if ('C' in FaceFormat):
-                                for color_idx, loop_idx in enumerate(MeshPolys.loop_indices):
-                                    # swy: this is wrong; it should be the same layer count as any other face format block, can't be a different size. me.vertex_colors != me.uv_layers
-                                    for layerIndex in MeshObject.vertex_colors:
-                                        vertex = layerIndex.data[loop_idx]
-                                        out.write('%d ' % VertexColList.index((vertex.color[:])))
+                            for loop_idx in MeshPolys.loop_indices:
+                                if len(MeshObject.vertex_colors) > 0:
+                                    for layer in MeshObject.vertex_colors:
+                                        out.write('%d ' % VertexColList.index((layer.data[loop_idx].color[:])))
+                                else:
+                                    out.write('%d ' % -1)
 
                             # swy: we're missing exporting (optional) face normals here
-                            if ('M' in FaceFormat):
+
+                            #Material Index ---M
+                            if len(obj.material_slots) > 0:
                                 for indx, mat in enumerate(obj.material_slots):
                                     MaterialToFind = bpy.data.materials[MeshPolys.material_index].name
                                     if mat.name == MaterialToFind:
                                         out.write('%d ' % indx)
                                         break
-                                
+                                    else:
+                                        out.write('%d ' % 0)
+                            else:
+                                out.write('%d ' % -1)
+
                             # swy: we're missing exporting an optional shader index here
 
                             #Write Flags ---F
-                            if ('F' in FaceFormat):
-                                flags = 0                             
-                                
+                            flags = 0
+                            if len(obj.material_slots) > 0:
                                 if obj.material_slots[MeshPolys.material_index].material.use_backface_culling:
                                     flags |= 1 << 16
-                                out.write('%d ' % flags)
+                            out.write('%d ' % flags)
 
                             out.write('\n')
                         out.write('\t}\n')
