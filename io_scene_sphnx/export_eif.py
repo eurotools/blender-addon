@@ -67,11 +67,11 @@ def _write(context, filepath,
             out.write('*MATERIALS {\n')
             for mat in bpy.data.materials:            
                 if hasattr(mat.node_tree, 'nodes'):
-                    DiffuseColor = mat.diffuse_color
                     ImageNode = mat.node_tree.nodes.get('Image Texture', None)
 
                     #Material has texture
                     if (ImageNode is not None):
+                        DiffuseColor = mat.diffuse_color
                         ImageName = ImageNode.image.name
                         out.write('\t*MATERIAL %d {\n' % (MaterialIndex))
                         out.write('\t\t*NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
@@ -91,10 +91,13 @@ def _write(context, filepath,
 
                     #Material has no texture
                     else:
-                        Color = DiffuseColor[0] + DiffuseColor[1] + DiffuseColor[2]
+                        principled = next(n for n in mat.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
+                        base_color = principled.inputs['Base Color']
+                        color = base_color.default_value
+
                         out.write('\t*MATERIAL %d {\n' % (MaterialIndex))
                         out.write('\t\t*NAME "%s"\n' % (mat.name))
-                        out.write('\t\t*COL_DIFFUSE %.6f %.6f %.6f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                        out.write('\t\t*COL_DIFFUSE %.6f %.6f %.6f\n' % (color[0], color[1], color[2]))
                         out.write('\t}\n')
                     MaterialIndex +=1
 
@@ -206,10 +209,11 @@ def _write(context, filepath,
                             for mat in obj.material_slots:
                                 out.write('\t\t*SHADER %d {\n' % ShaderIndex)
 
-                                if mat.material.blend_method == 'OPAQUE':
-                                    out.write('\t\t\t%d %s\n' % (bpy.data.materials.find(mat.name),"Non"))
-                                else:
-                                    out.write('\t\t\t%d %s\n' % (bpy.data.materials.find(mat.name),"Alp"))
+                                if hasattr(mat.material, 'blend_method'):
+                                    if mat.material.blend_method == 'OPAQUE':
+                                        out.write('\t\t\t%d %s\n' % (bpy.data.materials.find(mat.name),"Non"))
+                                    else:
+                                        out.write('\t\t\t%d %s\n' % (bpy.data.materials.find(mat.name),"Alp"))
                                 out.write('\t\t}\n')
 
                                 #update Counter
@@ -228,19 +232,21 @@ def _write(context, filepath,
                                 out.write('%d ' % vert)
 
                             #Write UVs ---T
-                            for loop_idx in MeshPolys.loop_indices:
-                                if len(MeshObject.uv_layers) > 0:
-                                    for layer in MeshObject.uv_layers:
+                            if len(MeshObject.uv_layers) > 0:
+                                for layer in MeshObject.uv_layers:
+                                    for loop_idx in MeshPolys.loop_indices:
                                         out.write('%d ' % UVList.index(layer.data[loop_idx].uv))
-                                else:
+                            else:
+                                for num in range(len(MeshPolys.vertices)):
                                     out.write('%d ' % -1)
 
                             #Write Colors ---C
-                            for loop_idx in MeshPolys.loop_indices:
-                                if len(MeshObject.vertex_colors) > 0:
-                                    for layer in MeshObject.vertex_colors:
+                            if len(MeshObject.vertex_colors) > 0:
+                                for layer in MeshObject.vertex_colors:
+                                    for loop_idx in MeshPolys.loop_indices:
                                         out.write('%d ' % VertexColList.index((layer.data[loop_idx].color[:])))
-                                else:
+                            else:
+                                for num in range(len(MeshPolys.vertices)):
                                     out.write('%d ' % -1)
 
                             # swy: we're missing exporting (optional) face normals here
