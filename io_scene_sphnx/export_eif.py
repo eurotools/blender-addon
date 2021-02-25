@@ -62,56 +62,59 @@ def _write(context, filepath,
             #===============================================================================================
             #  MATERIAL LIST
             #===============================================================================================
-            MaterialIndex = 0
+            SceneMaterials = []
 
             out.write('*MATERIALS {\n')
-            for mat in bpy.data.materials:            
-                if hasattr(mat.node_tree, 'nodes'):
-                    ImageNode = mat.node_tree.nodes.get('Image Texture', None)
+            for obj in ProjectContextScene.objects:
+                if obj.material_slots:
+                    for mat in obj.material_slots:
+                        if mat.name not in SceneMaterials:
+                            #Add Material to the list
+                            SceneMaterials.append(mat.name)
 
-                    #Material has texture
-                    if (ImageNode is not None):
-                        DiffuseColor = mat.diffuse_color
-                        ImageName = ImageNode.image.name
-                        out.write('\t*MATERIAL %d {\n' % (MaterialIndex))
-                        out.write('\t\t*NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
-                        out.write('\t\t*COL_DIFFUSE %.6f %.6f %.6f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                            #Print Basic Info
+                            out.write('\t*MATERIAL %d {\n' % (len(SceneMaterials) - 1))
+                            out.write('\t\t*NAME "%s"\n' % (mat.name))
 
-                        #Check if the texture exists
-                        if (os.path.exists(bpy.path.abspath(ImageNode.image.filepath))):
-                            out.write('\t\t*TWOSIDED\n')
-                            out.write('\t\t*MAP_DIFFUSE "%s"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
-                        out.write('\t\t*MAP_DIFFUSE_AMOUNT 1.0\n')
+                            ImageNode = mat.material.node_tree.nodes.get('Image Texture', None)
+                            #Material has texture
+                            if (ImageNode is not None):
+                                DiffuseColor = mat.material.diffuse_color
+                                ImageName = ImageNode.image.name
 
-                        #Check if use Alpha
-                        if mat.blend_method.startswith('ALPHA'):
-                            out.write('\t\t*MAP_HASALPHA\n')
+                                out.write('\t\t*COL_DIFFUSE %.6f %.6f %.6f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
 
-                        out.write('\t}\n')
+                                #Check if the texture exists
+                                if (os.path.exists(bpy.path.abspath(ImageNode.image.filepath))):
+                                    out.write('\t\t*TWOSIDED\n')
+                                    out.write('\t\t*MAP_DIFFUSE "%s"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
+                                out.write('\t\t*MAP_DIFFUSE_AMOUNT 1.0\n')
 
-                    #Material has no texture
-                    else:
-                        principled = next(n for n in mat.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
-                        base_color = principled.inputs['Base Color']
-                        color = base_color.default_value
+                                #Check if use Alpha
+                                if mat.material.blend_method.startswith('ALPHA'):
+                                    out.write('\t\t*MAP_HASALPHA\n')
 
-                        out.write('\t*MATERIAL %d {\n' % (MaterialIndex))
-                        out.write('\t\t*NAME "%s"\n' % (mat.name))
-                        out.write('\t\t*COL_DIFFUSE %.6f %.6f %.6f\n' % (color[0], color[1], color[2]))
-                        out.write('\t}\n')
-                    MaterialIndex +=1
+                                out.write('\t}\n')
 
+                            #Material has no texture
+                            else:
+                                principled = next(n for n in mat.material.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
+                                base_color = principled.inputs['Base Color']
+                                color = base_color.default_value
+
+                                out.write('\t\t*COL_DIFFUSE %.6f %.6f %.6f\n' % (color[0], color[1], color[2]))
+                                out.write('\t}\n')
             out.write('}\n')
             out.write('\n')
-            
+
             #===============================================================================================
             #  MESH DATA
             #===============================================================================================
             for obj in ProjectContextScene.objects:
                 if obj.type == 'MESH':
                     if hasattr(obj, 'data'):
+                        #===========================================[Save Previous Location and Rotation]====================================================
                         if EXPORT_TRANSFORM_POS_ROT:
-                            #===========================================[Save Previous Location and Rotation]====================================================
                             PrevLoc = [obj.location.x, obj.location.y, obj.location.z]
 
                             #Apply default *GEOMNODE Location
@@ -151,16 +154,14 @@ def _write(context, filepath,
 
                         #Get vertex color list without duplicates
                         VertexColList = []
-                        if MeshObject.vertex_colors:
-                            vcol_layer = MeshObject.vertex_colors.active
-                        else:
-                            vcol_layer = MeshObject.vertex_colors.new()
+                        if len(MeshObject.vertex_colors) < 1:
+                            MeshObject.vertex_colors.new()
 
                         for poly in MeshObject.polygons:
-                            for loop_index in poly.loop_indices:
-                                loop_vert_index = MeshObject.loops[loop_index].vertex_index
-                                v_color = vcol_layer.data[loop_index].color
-                                VertexColList.append(v_color[:])
+                            for layer in MeshObject.vertex_colors:
+                                for loop_idx in poly.loop_indices:
+                                    v_color = layer.data[loop_idx].color
+                                    VertexColList.append(v_color[:])
 
                         #Remove duplicates
                         VertexColList = list(dict.fromkeys(VertexColList))
@@ -208,7 +209,6 @@ def _write(context, filepath,
                             out.write('\t*FACESHADERS {\n')
                             for mat in obj.material_slots:
                                 out.write('\t\t*SHADER %d {\n' % ShaderIndex)
-
                                 if hasattr(mat.material, 'blend_method'):
                                     if mat.material.blend_method == 'OPAQUE':
                                         out.write('\t\t\t%d %s\n' % (bpy.data.materials.find(mat.name),"Non"))
@@ -226,12 +226,12 @@ def _write(context, filepath,
                         #Print Face List, the difficult part ;P
                         out.write('\t*FACE_LIST {\n')
                         for MeshPolys in MeshObject.polygons:
-                            #Write vertices ---V
+                            #Vertices ---V
                             out.write('\t\t%d ' % (len(MeshPolys.vertices)))
                             for vert in MeshPolys.vertices:
                                 out.write('%d ' % vert)
 
-                            #Write UVs ---T
+                            #UVs ---T
                             if len(MeshObject.uv_layers) > 0:
                                 for layer in MeshObject.uv_layers:
                                     for loop_idx in MeshPolys.loop_indices:
@@ -240,7 +240,7 @@ def _write(context, filepath,
                                 for num in range(len(MeshPolys.vertices)):
                                     out.write('%d ' % -1)
 
-                            #Write Colors ---C
+                            #Colors ---C
                             if len(MeshObject.vertex_colors) > 0:
                                 for layer in MeshObject.vertex_colors:
                                     for loop_idx in MeshPolys.loop_indices:
@@ -252,16 +252,12 @@ def _write(context, filepath,
                             # swy: we're missing exporting (optional) face normals here
 
                             #Material Index ---M
-                            if len(obj.material_slots) > 0:
-                                for indx, mat in enumerate(obj.material_slots):
-                                    MaterialToFind = bpy.data.materials[MeshPolys.material_index].name
-                                    if mat.name == MaterialToFind:
-                                        out.write('%d ' % indx)
-                                        break
-                                    else:
-                                        out.write('%d ' % 0)
-                            else:
-                                out.write('%d ' % -1)
+                            MatIndex = -1
+                            if len(SceneMaterials) > 0:
+                                MaterialToFind = obj.material_slots[MeshPolys.material_index].name
+                                if MaterialToFind in SceneMaterials:
+                                    MatIndex = SceneMaterials.index(MaterialToFind)
+                            out.write('%d ' % MatIndex)
 
                             # swy: we're missing exporting an optional shader index here
 
@@ -270,9 +266,7 @@ def _write(context, filepath,
                             if len(obj.material_slots) > 0:
                                 if obj.material_slots[MeshPolys.material_index].material.use_backface_culling:
                                     flags |= 1 << 16
-                            out.write('%d ' % flags)
-
-                            out.write('\n')
+                            out.write('%d\n' % flags)
                         out.write('\t}\n')
                     out.write('}\n')
                     out.write('\n')
