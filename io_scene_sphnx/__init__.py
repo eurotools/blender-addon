@@ -171,6 +171,18 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
             options={'HIDDEN'},
             )
 
+    #Output Options            
+    Output_Map: BoolProperty(
+        name="Output as a Map",
+        description="Output scene as a new map for EuroLand.",
+        default=False,
+    )
+    Output_Transform: BoolProperty(
+        name="Transform Objects to (0,0,0)",
+        description="Transform objects to position (0,0,0).",
+        default=False,
+    )
+
     #Scale Options
     global_scale: FloatProperty(
         name="Scale",
@@ -201,6 +213,30 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
 
     def draw(self, context):
         pass
+
+class EIF_Export_OutputOptions(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Output Options"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        return operator.bl_idname == "EXPORT_SCENE_OT_eif"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        layout.prop(operator, 'Output_Map')
+        layout.prop(operator, 'Output_Transform')
 
 class EIF_Export_Scale(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
@@ -244,7 +280,7 @@ class ExportESE(bpy.types.Operator, ExportHelper):
         name="Materials",
         description="Output scene materials.",
         default=False,
-    ) 
+    )
     Output_CameraLightAnims: BoolProperty(
         name="Animated Camera/Light settings",
         description="Export animations from Camera and Light object types.",
@@ -254,7 +290,7 @@ class ExportESE(bpy.types.Operator, ExportHelper):
         name="Animations",
         description="Export animations.",
         default=True,
-    )           
+    )
             
     #Output Types 
     object_types: EnumProperty(
@@ -447,6 +483,7 @@ classes = (
     ImportESE,
     
     ExportEIF,
+    EIF_Export_OutputOptions,
     EIF_Export_Scale,
     ExportRTG,
     ExportESE,

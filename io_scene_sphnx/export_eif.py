@@ -20,6 +20,8 @@ from decimal import Decimal
 from mathutils import Euler
 
 def _write(context, filepath,
+            EXPORT_AS_MAP,
+            EXPORT_TRANSFORM_POS_ROT,
             EXPORT_GLOBAL_MATRIX,
         ):
 
@@ -105,13 +107,12 @@ def _write(context, filepath,
             for obj in ProjectContextScene.objects:
                 if obj.type == 'MESH':
                     if hasattr(obj, 'data'):
-                        #===========================================[Save Previous Location and Rotation]====================================================
-                        PrevLoc = [obj.location.x, obj.location.y, obj.location.z]
-                        PrevRot = [obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z]
+                        if EXPORT_TRANSFORM_POS_ROT:
+                            #===========================================[Save Previous Location and Rotation]====================================================
+                            PrevLoc = [obj.location.x, obj.location.y, obj.location.z]
 
-                        #===========================================[Apply default *GEOMNODE Location and Rotation]====================================================
-                        obj.location = (0,0,0)
-                        obj.rotation_euler = (0,0,0)
+                            #Apply default *GEOMNODE Location
+                            obj.location = (0,0,0)
                         
                         #===========================================[Clone Object]====================================================
                         depsgraph = bpy.context.evaluated_depsgraph_get()
@@ -274,11 +275,11 @@ def _write(context, filepath,
                     out.write('\n')
 
                     #===========================================[Restore Previous Location]====================================================
-                    obj.location = PrevLoc
-                    obj.rotation_euler = PrevRot
+                    if EXPORT_TRANSFORM_POS_ROT:
+                        obj.location = PrevLoc
 
             #===============================================================================================
-            #  GEOM NODE
+            #  GEOM NODE (POSITION IN THE ENTITIES EDITOR)
             #===============================================================================================
             for obj in ProjectContextScene.objects:
                 if obj.type == 'MESH':
@@ -303,42 +304,41 @@ def _write(context, filepath,
                         out.write('\n')
 
             #===============================================================================================
-            #  PLACE NODE
+            #  PLACE NODE (POSITION IN MAP)
             #===============================================================================================
-            for obj in ProjectContextScene.objects:
-                if obj.type == 'MESH':
-                    if hasattr(obj, 'data'):
-                        # Axis Conversion
-                        InvertAxisMatrix = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0)))
-    
-                        out.write('*PLACENODE {\n')
-                        out.write('\t*NAME "%s"\n' % (obj.name))
-                        out.write('\t*MESH "%s"\n' % (obj.name))
-                        out.write('\t*WORLD_TM {\n')
-                        
-                        #Jump to the first frame
-                        ProjectContextScene.frame_set(ProjectContextScene.frame_start)
-                        
-                        ConvertedMatrix = obj.rotation_euler.to_matrix()
-                        rot_mtx = InvertAxisMatrix @ ConvertedMatrix
-                        RotationMatrix = rot_mtx.transposed()
+            if EXPORT_AS_MAP:
+                for obj in ProjectContextScene.objects:
+                    if obj.type == 'MESH':
+                        if hasattr(obj, 'data'):
+                            # Axis Conversion
+                            InvertAxisMatrix = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0)))
+        
+                            out.write('*PLACENODE {\n')
+                            out.write('\t*NAME "%s"\n' % (obj.name))
+                            out.write('\t*MESH "%s"\n' % (obj.name))
+                            out.write('\t*WORLD_TM {\n')
+                            
+                            #Jump to the first frame
+                            ProjectContextScene.frame_set(ProjectContextScene.frame_start)
+                            
+                            #Print Roation matrix
+                            out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (1,0,0,0))
+                            out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (0,1,0,0))
+                            out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (0,0,1,0))
 
-                        #Print Roation matrix
-                        out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z, 0))
-                        out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z, 0))
-                        out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z, 0))
-
-                        #Location
-                        loc_pos = InvertAxisMatrix @ obj.location
-                        out.write('\t\t*TMROW3 %.6f %.6f %.6f %.6f\n' % (loc_pos.x, loc_pos.y, loc_pos.z, 1))
-
-                        # swy: these aren't actually used or read by this version of the importer
-                        out.write('\t\t*POS %.6f %.6f %.6f\n' % (loc_pos.x, loc_pos.y, loc_pos.z))
-                        out.write('\t\t*ROT %.6f %.6f %.6f\n' % (degrees(obj.rotation_euler.x), degrees(obj.rotation_euler.z), degrees(obj.rotation_euler.y)))
-                        out.write('\t\t*SCL %.6f %.6f %.6f\n' % (obj.scale.x, obj.scale.y, obj.scale.z))
-                        out.write('\t}\n')
-                        out.write('}\n')
-                        out.write('\n')
+                            #Location
+                            if EXPORT_TRANSFORM_POS_ROT:
+                                loc_pos = InvertAxisMatrix @ obj.location
+                                out.write('\t\t*TMROW3 %.6f %.6f %.6f %.6f\n' % (loc_pos.x, loc_pos.y, loc_pos.z, 1))
+                                out.write('\t\t*POS %.6f %.6f %.6f\n' % (loc_pos.x, loc_pos.y, loc_pos.z))
+                            else:
+                                out.write('\t\t*TMROW3 %.6f %.6f %.6f %.6f\n' % (0,0,0,1))
+                                out.write('\t\t*POS %.6f %.6f %.6f\n' % (0,0,0))
+                            out.write('\t\t*ROT %.6f %.6f %.6f\n' % (degrees(obj.rotation_euler.x), degrees(obj.rotation_euler.z), degrees(obj.rotation_euler.y)))
+                            out.write('\t\t*SCL %.6f %.6f %.6f\n' % (obj.scale.x, obj.scale.y, obj.scale.z))
+                            out.write('\t}\n')
+                            out.write('}\n')
+                            out.write('\n')
             #Close File
             out.flush()
             out.close()
@@ -347,10 +347,14 @@ def _write(context, filepath,
 def save(context,
             filepath,
             *,
+            Output_Map=False,
+            Output_Transform=False,
             global_matrix=None,
         ):
 
     _write(context, filepath,
+            EXPORT_AS_MAP=Output_Map,
+            EXPORT_TRANSFORM_POS_ROT=Output_Transform,
             EXPORT_GLOBAL_MATRIX=global_matrix,
         )
 
