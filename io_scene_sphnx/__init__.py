@@ -132,7 +132,7 @@ class ImportESE(bpy.types.Operator, ImportHelper):
 #===============================================================================================
 #  EXPORTERS (ON IT)
 #===============================================================================================
-@orientation_helper(axis_forward='-Z', axis_up='Y')
+@orientation_helper(axis_forward='Z', axis_up='Y')
 class ExportRTG(bpy.types.Operator, ExportHelper):
     """Save a dynamic Maya Euroland file; for animations, scripts and maps"""
 
@@ -157,7 +157,7 @@ class ExportRTG(bpy.types.Operator, ExportHelper):
     def draw(self, context):
         pass
 
-@orientation_helper(axis_forward='-Z', axis_up='Y')
+@orientation_helper(axis_forward='Z', axis_up='Y')
 class ExportEIF(bpy.types.Operator, ExportHelper):
     """Save a static 3ds Max Euroland file, for scenes and entities"""
 
@@ -194,7 +194,7 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
                                             "path_mode",
                                         ))
                                             
-        global_matrix = (Matrix.Scale(self.global_scale, 4) @Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4())
+        global_matrix = (Matrix.Scale(self.global_scale, 4) @ Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4())
         keywords["global_matrix"] = global_matrix
 
         return export_eif.save(context, **keywords)
@@ -225,7 +225,7 @@ class EIF_Export_Scale(bpy.types.Panel):
 
         layout.prop(operator, "global_scale")
 
-@orientation_helper(axis_forward='-Z', axis_up='Y')
+@orientation_helper(axis_forward='Z', axis_up='Y')
 class ExportESE(bpy.types.Operator, ExportHelper):
     """Save a dynamic 3ds Max Euroland file; for cutscenes and maps"""
 
@@ -303,7 +303,7 @@ class ExportESE(bpy.types.Operator, ExportHelper):
                                             "path_mode",
                                             ))
                                             
-        global_matrix = (Matrix.Scale(self.global_scale, 4) @Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4())
+        global_matrix = (Matrix.Scale(self.global_scale, 4) @ Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4())
         keywords["global_matrix"] = global_matrix
         
         return export_ese.save(context, **keywords)
@@ -460,9 +460,9 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
 
-    bpy.types.TOPBAR_MT_file_import.append(menu_func_eif_import)
-    bpy.types.TOPBAR_MT_file_import.append(menu_func_rtg_import)
-    bpy.types.TOPBAR_MT_file_import.append(menu_func_ese_import)
+    #bpy.types.TOPBAR_MT_file_import.append(menu_func_eif_import)
+    #bpy.types.TOPBAR_MT_file_import.append(menu_func_rtg_import)
+    #bpy.types.TOPBAR_MT_file_import.append(menu_func_ese_import)
         
     bpy.types.TOPBAR_MT_file_export.append(menu_func_eif_export)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_rtg_export)
@@ -477,9 +477,9 @@ def register():
         bpy.utils.register_class(ReloadAddon)
 
 def unregister():
-    bpy.types.TOPBAR_MT_file_import.remove(menu_func_eif_import)
-    bpy.types.TOPBAR_MT_file_import.remove(menu_func_rtg_import)
-    bpy.types.TOPBAR_MT_file_import.remove(menu_func_ese_import)
+    #bpy.types.TOPBAR_MT_file_import.remove(menu_func_eif_import)
+    #bpy.types.TOPBAR_MT_file_import.remove(menu_func_rtg_import)
+    #bpy.types.TOPBAR_MT_file_import.remove(menu_func_ese_import)
     
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_eif_export)
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_rtg_export)

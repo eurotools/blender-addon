@@ -89,15 +89,17 @@ def _write(context, filepath,
                 OutputFile.write('%.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
 
                 #Update counter
-                TimeValueCounter += TimeValue            
+                TimeValueCounter += TimeValue
             OutputFile.write('\t\t}\n')
             OutputFile.write('\t}\n')
+
     def GetMaterialCount():
         Materials_Number = 0
         for indx, MeshObj in enumerate(ProjectContextScene.objects):
             if MeshObj.type == 'MESH':
                 Materials_Number += 1
         return Materials_Number
+
     #===============================================================================================
     #  MAIN
     #===============================================================================================
@@ -343,7 +345,16 @@ def _write(context, filepath,
 
                             #Close blocks
                             out.write('\t}\n')
-                            out.write('\t*MATERIAL_REF %u\n' % indx)
+
+                            #===============================================================================================
+                            #  ANIMATION
+                            #===============================================================================================
+                            if EXPORT_ANIMATION:
+                                PrintTM_ANIMATION(out, SceneObj, TimeValue)
+                            
+                            #Material Reference
+                            if EXPORT_MATERIALS:
+                                out.write('\t*MATERIAL_REF %u\n' % indx)
                             out.write('}\n')
 
             #===============================================================================================
@@ -357,91 +368,89 @@ def _write(context, filepath,
                         CamerasList.append(SceneObj)
                 CamerasList.sort(key = lambda o: o.name)
 
-                for CameraObj in CamerasList:
-                    if CameraObj.type == 'CAMERA':    
-                        out.write('*CAMERAOBJECT {\n')
-                        out.write('\t*NODE_NAME "%s"\n' % CameraObj.name)
-                        out.write('\t*CAMERA_TYPE %s\n' % "Target")
+                for CameraObj in CamerasList:  
+                    out.write('*CAMERAOBJECT {\n')
+                    out.write('\t*NODE_NAME "%s"\n' % CameraObj.name)
+                    out.write('\t*CAMERA_TYPE %s\n' % "Target")
 
-                        #Print Matrix Rotation
-                        out.write('\t*NODE_TM {\n')
-                        PrintNODE_TM(out, CameraObj)
+                    #Print Matrix Rotation
+                    out.write('\t*NODE_TM {\n')
+                    PrintNODE_TM(out, CameraObj)
+                    out.write('\t}\n')
+
+                    #===============================================================================================
+                    #  CAMERA SETTINGS
+                    #=============================================================================================== 
+                    out.write('\t*CAMERA_SETTINGS {\n')
+                    out.write('\t\t*TIMEVALUE %u\n' % 0)
+                    out.write('\t\t*CAMERA_NEAR %.4f\n' % 0)
+                    out.write('\t\t*CAMERA_FAR %.4f\n'% CameraObj.data.clip_end)  
+                    out.write('\t\t*CAMERA_FOV %.4f\n'% CameraObj.data.angle)
+                    out.write('\t\t*CAMERA_TDIST %.4f\n'% 15.9229)
+                    out.write('\t}\n')
+
+                    #===============================================================================================
+                    #  CAMERA ANIMATION
+                    #===============================================================================================
+                    if EXPORT_CAMERALIGHTANIMS:
+                        out.write('\t*CAMERA_ANIMATION {\n')
+                        
+                        TimeValueCounter = 0
+                        for f in range(ProjectContextScene.frame_start, ProjectContextScene.frame_end + 1):
+                            ProjectContextScene.frame_set(f)
+
+                            out.write('\t\t*CAMERA_SETTINGS {\n')
+                            out.write('\t\t\t*TIMEVALUE %u\n' % TimeValueCounter)
+                            out.write('\t\t\t*CAMERA_NEAR %.4f\n' % 0)
+                            out.write('\t\t\t*CAMERA_FAR %.4f\n'% CameraObj.data.clip_end)  
+                            out.write('\t\t\t*CAMERA_FOV %.4f\n'% CameraObj.data.angle)
+                            out.write('\t\t\t*CAMERA_TDIST %.4f\n'% 15.9229)
+                            out.write('\t\t}\n')
+
+                            TimeValueCounter += TimeValue
+
                         out.write('\t}\n')
 
-                        #===============================================================================================
-                        #  CAMERA SETTINGS
-                        #=============================================================================================== 
-                        out.write('\t*CAMERA_SETTINGS {\n')
-                        out.write('\t\t*TIMEVALUE %u\n' % 0)
-                        #out.write('\t\t*CAMERA_NEAR %.4f\n' % CameraObj.data.clip_start)
-                        out.write('\t\t*CAMERA_NEAR %.4f\n' % 0)
-                        out.write('\t\t*CAMERA_FAR %.4f\n'% CameraObj.data.clip_end)  
-                        out.write('\t\t*CAMERA_FOV %.4f\n'% CameraObj.data.angle)
-                        out.write('\t\t*CAMERA_TDIST %.4f\n'% 15.9229)
+                    #===============================================================================================
+                    #  ANIMATION
+                    #===============================================================================================
+                    if EXPORT_ANIMATION:
+                        PrintTM_ANIMATION(out, CameraObj, TimeValue)
+
+                    #===============================================================================================
+                    #  USER DATA (ONLY FOR SCRIPTS)
+                    #===============================================================================================
+                    if CameraObj == CamerasList[-1] and len(CamerasList) > 1:
+                        out.write('\t*USER_DATA %u {\n' % 0)
+                        out.write('\t\tCameraScript = %u\n' % 1)
+                        out.write('\t\tCameraScript_numCameras = %u\n' % len(CamerasList))
+                        out.write('\t\tCameraScript_globalOffset = %u\n' % 0)
+
+                        #Print Cameras Info
+                        CameraNumber = 1
+                        CamStart = 0
+                        CamEnd = 0
+                        for ob in CamerasList:
+                            if ob.type == 'CAMERA':
+                                #Get Camera Keyframes
+                                if ob.animation_data:
+                                    if ob.animation_data.action is not None:
+                                        Keyframe_Points_list = []
+                                        for curve in ob.animation_data.action.fcurves:
+                                            for key in curve.keyframe_points:
+                                                key_idx = int(key.co[0])
+                                                if key_idx not in Keyframe_Points_list:
+                                                    Keyframe_Points_list.append(key_idx)
+                                        
+                                        #Calculate EuroLand Start
+                                        CamEnd = CamStart + (Keyframe_Points_list[-1] - Keyframe_Points_list[0])
+                                        out.write('\t\tCameraScript_camera%u = %s %u %u %u %u\n' % (CameraNumber, ob.name, Keyframe_Points_list[0], Keyframe_Points_list[-1], CamStart, CamEnd))
+                                        
+                                        #Calculate EuroLand End
+                                        CamStart += Keyframe_Points_list[-1] + 1
+                                        CameraNumber += 1
                         out.write('\t}\n')
-
-                        #===============================================================================================
-                        #  CAMERA ANIMATION
-                        #===============================================================================================
-                        if EXPORT_CAMERALIGHTANIMS:
-                            out.write('\t*CAMERA_ANIMATION {\n')
-                            
-                            TimeValueCounter = 0
-                            for f in range(ProjectContextScene.frame_start, ProjectContextScene.frame_end + 1):
-                                ProjectContextScene.frame_set(f)
-
-                                out.write('\t\t*CAMERA_SETTINGS {\n')
-                                out.write('\t\t\t*TIMEVALUE %u\n' % TimeValueCounter)
-                                #out.write('\t\t\t*CAMERA_NEAR %.4f\n' % CameraObj.data.clip_start)
-                                out.write('\t\t\t*CAMERA_NEAR %.4f\n' % 0)
-                                out.write('\t\t\t*CAMERA_FAR %.4f\n'% CameraObj.data.clip_end)  
-                                out.write('\t\t\t*CAMERA_FOV %.4f\n'% CameraObj.data.angle)
-                                out.write('\t\t\t*CAMERA_TDIST %.4f\n'% 15.9229)
-                                out.write('\t\t}\n')
-
-                                TimeValueCounter += TimeValue
-
-                            out.write('\t}\n')
-
-                        #===============================================================================================
-                        #  ANIMATION
-                        #===============================================================================================
-                        if EXPORT_ANIMATION:
-                            PrintTM_ANIMATION(out, CameraObj, TimeValue)
-
-                        #===============================================================================================
-                        #  USER DATA (ONLY FOR SCRIPTS)
-                        #===============================================================================================
-                        if CameraObj == CamerasList[-1] and len(CamerasList) > 1:
-                            out.write('\t*USER_DATA %u {\n' % 0)
-                            out.write('\t\tCameraScript = %u\n' % 1)
-                            out.write('\t\tCameraScript_numCameras = %u\n' % len(CamerasList))
-                            out.write('\t\tCameraScript_globalOffset = %u\n' % 0)
-
-                            #Print Cameras Info
-                            CameraNumber = 1
-                            CamStart = 0
-                            CamEnd = 0
-                            for ob in CamerasList:
-                                if ob.type == 'CAMERA':
-                                    #Get Camera Keyframes
-                                    if ob.animation_data:
-                                        if ob.animation_data.action is not None:
-                                            Keyframe_Points_list = []
-                                            for curve in ob.animation_data.action.fcurves:
-                                                for key in curve.keyframe_points:
-                                                    key_idx = int(key.co[0])
-                                                    if key_idx not in Keyframe_Points_list:
-                                                        Keyframe_Points_list.append(key_idx)
-                                            #Calculate EuroLand Start
-                                            CamEnd = CamStart + (Keyframe_Points_list[-1] - Keyframe_Points_list[0])
-                                            out.write('\t\tCameraScript_camera%u = %s %u %u %u %u\n' % (CameraNumber, ob.name, Keyframe_Points_list[0], Keyframe_Points_list[-1], CamStart, CamEnd))
-                                            #Calculate EuroLand End
-                                            CamStart += Keyframe_Points_list[-1] + 1
-                                            CameraNumber += 1
-                            out.write('\t}\n')
-
-                        out.write('}\n')
+                    out.write('}\n')
 
             #===============================================================================================
             #  LIGHT OBJECT

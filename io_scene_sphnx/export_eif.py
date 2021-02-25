@@ -27,9 +27,6 @@ def _write(context, filepath,
     #  GLOBAL VARIABLES
     #===============================================================================================
     ProjectContextScene = bpy.context.scene
-
-    # Axis Conversion
-    InvertAxisMatrix = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0)))
     
     #===============================================================================================
     #  MAIN
@@ -108,10 +105,18 @@ def _write(context, filepath,
             for obj in ProjectContextScene.objects:
                 if obj.type == 'MESH':
                     if hasattr(obj, 'data'):
+                        #===========================================[Save Previous Location and Rotation]====================================================
+                        PrevLoc = [obj.location.x, obj.location.y, obj.location.z]
+                        PrevRot = [obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z]
+
+                        #===========================================[Apply default *GEOMNODE Location and Rotation]====================================================
+                        obj.location = (0,0,0)
+                        obj.rotation_euler = (0,0,0)
+                        
                         #===========================================[Clone Object]====================================================
                         depsgraph = bpy.context.evaluated_depsgraph_get()
                         ob_for_convert = obj.evaluated_get(depsgraph)
-
+                        
                         try:
                             MeshObject = ob_for_convert.to_mesh()
                         except RuntimeError:
@@ -120,10 +125,10 @@ def _write(context, filepath,
                             continue
 
                         #===========================================[Apply Matrix]====================================================
-                        MeshObject.transform(EXPORT_GLOBAL_MATRIX @ obj.matrix_world)
-                        if (EXPORT_GLOBAL_MATRIX @ obj.matrix_world).determinant() < 0.0:
+                        MeshObject.transform(EXPORT_GLOBAL_MATRIX @ ob_for_convert.matrix_world)
+                        if (EXPORT_GLOBAL_MATRIX @ ob_for_convert.matrix_world).determinant() < 0.0:
                             MeshObject.flip_normals()
-
+                        
                         #===========================================[Get Object Data]====================================================
                         #Get vertex list without duplicates
                         VertexList = []
@@ -182,10 +187,9 @@ def _write(context, filepath,
 
                         #Print UV data
                         out.write('\t*UV_LIST {\n')
-                        if (len(UVList) > 0):
-                            FaceFormat += 'T'
-                            for uv in UVList:
-                                out.write('\t\t%.6f %.6f\n' % (uv[0], 1.0 - uv[1]))
+                        FaceFormat += 'T'
+                        for uv in UVList:
+                            out.write('\t\t%.6f %.6f\n' % (uv[0], 1.0 - uv[1]))
                         out.write('\t}\n')
 
                         #Print Vertex Color List
@@ -232,8 +236,11 @@ def _write(context, filepath,
                             #Write UVs ---T
                             if ('T' in FaceFormat):
                                 for loop_idx in MeshPolys.loop_indices:
-                                    for layer in MeshObject.uv_layers:
-                                        out.write('%d ' % UVList.index(layer.data[loop_idx].uv))
+                                    if len(MeshObject.uv_layers) > 0:
+                                        for layer in MeshObject.uv_layers:
+                                            out.write('%d ' % UVList.index(layer.data[loop_idx].uv))
+                                    else:
+                                        out.write('%d ' % -1)
 
                             #Write Colors ---C
                             if ('C' in FaceFormat):
@@ -244,7 +251,6 @@ def _write(context, filepath,
                                         out.write('%d ' % VertexColList.index((vertex.color[:])))
 
                             # swy: we're missing exporting (optional) face normals here
-
                             if ('M' in FaceFormat):
                                 for indx, mat in enumerate(obj.material_slots):
                                     MaterialToFind = bpy.data.materials[MeshPolys.material_index].name
@@ -266,6 +272,10 @@ def _write(context, filepath,
                         out.write('\t}\n')
                     out.write('}\n')
                     out.write('\n')
+
+                    #===========================================[Restore Previous Location]====================================================
+                    obj.location = PrevLoc
+                    obj.rotation_euler = PrevRot
 
             #===============================================================================================
             #  GEOM NODE
@@ -290,14 +300,17 @@ def _write(context, filepath,
                         out.write('\t\t*SET 0 0x00000000\n')
                         out.write('\t}\n')
                         out.write('}\n')
+                        out.write('\n')
 
             #===============================================================================================
             #  PLACE NODE
             #===============================================================================================
             for obj in ProjectContextScene.objects:
                 if obj.type == 'MESH':
-                    if hasattr(obj, 'data'):                     
-
+                    if hasattr(obj, 'data'):
+                        # Axis Conversion
+                        InvertAxisMatrix = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0)))
+    
                         out.write('*PLACENODE {\n')
                         out.write('\t*NAME "%s"\n' % (obj.name))
                         out.write('\t*MESH "%s"\n' % (obj.name))
@@ -325,6 +338,7 @@ def _write(context, filepath,
                         out.write('\t\t*SCL %.6f %.6f %.6f\n' % (obj.scale.x, obj.scale.y, obj.scale.z))
                         out.write('\t}\n')
                         out.write('}\n')
+                        out.write('\n')
             #Close File
             out.flush()
             out.close()
