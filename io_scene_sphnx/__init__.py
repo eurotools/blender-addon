@@ -1,29 +1,12 @@
-#  Copyright (c) 2020 Swyter <swyterzone+sphinx@gmail.com>
-#
-# ##### BEGIN GPL LICENSE BLOCK #####
-#
-#  This program is free software; you can redistribute it and/or
-#  modify it under the terms of the GNU General Public License
-#  as published by the Free Software Foundation; either version 2
-#  of the License, or (at your option) any later version.
-#
-#  This program is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
-#
-#  You should have received a copy of the GNU General Public License
-#  along with this program; if not, write to the Free Software Foundation,
-#  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# ##### END GPL LICENSE BLOCK #####
+#  Copyright (c) 2020-2021 Swyter <swyterzone+sphinx@gmail.com>
+#  SPDX-License-Identifier: Zlib
 
 bl_info = {
-           "name": "Eurocom 3D formats for Sphinx and the Cursed Mummy",
-         "author": "Swyter, for THQ Nordic",
+           "name": "Eurocom 3D formats for Sphinx and the Cursed Mummy™",
+         "author": "Swyter, for THQ Nordic GmbH",
         "version": (2020, 10, 10),
         "blender": (2, 81, 6),
-       "location": "File > Import-Export",
+       "location": "File > Import-Export",  
     "description": "Export and import EIF, ESE and RTG files compatible with Euroland.",
         "warning": "LOL ¯\_(ツ)_/¯",
         "doc_url": "https://sphinxandthecursedmummy.fandom.com/wiki/Technical",

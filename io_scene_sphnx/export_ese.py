@@ -1,3 +1,6 @@
+#  Copyright (c) 2020-2021 Swyter <swyterzone+sphinx@gmail.com>
+#  SPDX-License-Identifier: Zlib
+
 """
 Name: 'EUROEXPORT'
 Blender: 2.90.1

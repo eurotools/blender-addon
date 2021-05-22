@@ -1,3 +1,6 @@
+#  Copyright (c) 2020-2021 Swyter <swyterzone+sphinx@gmail.com>
+#  SPDX-License-Identifier: Zlib
+
 """
 Name: 'Eurocom Interchange File'
 Blender: 2.90.1
