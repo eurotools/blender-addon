@@ -19,6 +19,9 @@ jobs:
       run: |
         prev_run_sha="`curl -s --fail 'https://api.github.com/repos/Swyter/sphinx-euroland/actions/workflows/2949131/runs' | jq -r .workflow_runs[1].head_sha`"
         echo "prev=$prev_run_sha cur=`git rev-parse --short HEAD`"
+        
+        # swy: replace the versioned date in the script descriptor; (2020, 10, 10) -> (2021, 05, 22)
+        sed -i --regexp-extended 's/("version":) .+(,.+)/\1 '"$(date "+(%Y, %m, %d)" -u)"'\2/'  io_scene_sphnx/__init__.py
 
         # swy: only pack it when the folder has changed since the last time we ran a GitHub Actions job
         if [[ ! -z $(git diff --quiet HEAD "$prev_run_sha" -- io_scene_sphnx || echo changed) ]]; then
