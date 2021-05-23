@@ -21,7 +21,10 @@ jobs:
         echo "prev=$prev_run_sha cur=`git rev-parse --short HEAD`"
         
         # swy: replace the versioned date in the script descriptor; (2020, 10, 10) -> (2021, 05, 22)
-        sed -i --regexp-extended 's/("version":) .+(,.+)/\1 '"$(date "+(%Y, %m, %d)" -u)"'\2/'  io_scene_sphnx/__init__.py
+        #      the hyphen in the date formatter makes it not pad numbers to zero (2021, 05, 22) -> (2021, 5, 22)
+        #      we need to do this because python throws an error due to the invalid octal prefix:
+        #      https://unix.stackexchange.com/a/79372/295814
+        sed -i --regexp-extended 's/("version":) .+(,.+)/\1 '"$(date "+(%-Y, %-m, %-d)" -u)"'\2/'  io_scene_sphnx/__init__.py
 
         # swy: only pack it when the folder has changed since the last time we ran a GitHub Actions job
         if [[ ! -z $(git diff --quiet HEAD "$prev_run_sha" -- io_scene_sphnx || echo changed) ]]; then
