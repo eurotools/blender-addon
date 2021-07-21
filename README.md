@@ -1,4 +1,4 @@
-# sphinx-euroland
+# Euroland Blender add-on
 
 Import and export intermediate Eurocom formats for *Sphinx and the Cursed Mummy* in Blender.
 Heavily work in progress.
@@ -7,9 +7,10 @@ Heavily work in progress.
 
 # Formats
 
-> *The formats we aim to support are documented here:*  
-> *https://sphinxandthecursedmummy.fandom.com/wiki/Technical*
+The formats we aim to support are documented here:
+*https://sphinxandthecursedmummy.fandom.com/wiki/Technical*
 
+Here's a rough table with the kind of data they can work with, you usually need different formats for different elements:
 
 | Format   | Entities       | Maps         | Animations + Skins | Scripts     |
 | :------- | :------------- | :----------- | ------------------ | ----------- |
@@ -21,34 +22,34 @@ Heavily work in progress.
 [RTG]: https://sphinxandthecursedmummy.fandom.com/wiki/RTG
 [ESE]: https://sphinxandthecursedmummy.fandom.com/wiki/ESE
 
-# Current status
-EIF (Eurocom Interchange Format)
-- [x] Arbitrary polygons
-- [x] Vertex colors
-- [ ] Layers
-- [X] Maps: Issues with rotations
-
-ESE (Eurocom Export Scene)
-- [x] Arbitrary polygons: Visible vertex edges is not implemented yet
-- [x] Vertex colors
-- [ ] Layers
-- [ ] Maps
-- [ ] Animations + Skins
-- [ ] Scripts
-
-RTG (Real Time Game)
-- [ ] Arbitrary polygons: Visible vertex edges is not implemented yet
-- [ ] Vertex colors
-- [ ] LODs
-- [ ] Layers
-- [ ] Hard edges
-- [ ] Maps
-- [ ] Animations + Skins
-- [ ] Scripts: Only Animated cameras, but need fixes in the rotations
-
-For more info, you can look at the [wiki].
+For more info about which things each format supports, you can look at the [wiki].
 
 [wiki]: https://sphinxandthecursedmummy.fandom.com/wiki/EuroLand#Intermediate_formats
+
+## Current status / supported export features
+* EIF (_Eurocom Interchange Format_)
+  - [x] Arbitrary polygons
+  - [x] Vertex colors
+  - [ ] Layers
+  - [X] Maps: Issues with rotations
+
+* ESE (_Eurocom Export Scene_)
+  - [x] Arbitrary polygons: Visible vertex edges is not implemented yet
+  - [x] Vertex colors
+  - [ ] Layers
+  - [ ] Maps
+  - [ ] Animations + Skins
+  - [ ] Scripts
+
+* RTG (_Real Time Game_)
+  - [ ] Arbitrary polygons: Visible vertex edges is not implemented yet
+  - [ ] Vertex colors
+  - [ ] LODs
+  - [ ] Layers
+  - [ ] Hard edges
+  - [ ] Maps
+  - [ ] Animations + Skins
+  - [ ] Scripts: Only Animated cameras, but rotations need fixing
 
 
 # To develop
