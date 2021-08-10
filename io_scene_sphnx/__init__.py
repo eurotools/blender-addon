@@ -6,7 +6,7 @@ bl_info = {
          "author": "Swyter, for THQ Nordic GmbH",
         "version": (2020, 10, 10),
         "blender": (2, 81, 6),
-       "location": "File > Import-Export",  
+       "location": "File > Import-Export",
     "description": "Export and import EIF, ESE and RTG files compatible with Euroland.",
         "warning": "LOL ¯\_(ツ)_/¯",
         "doc_url": "https://sphinxandthecursedmummy.fandom.com/wiki/Technical",
@@ -17,7 +17,7 @@ bl_info = {
 
 if "bpy" in locals():
     import importlib
-    
+
     if "import_eif" in locals():
         importlib.reload(import_eif)
     if "export_eif" in locals():
@@ -25,7 +25,7 @@ if "bpy" in locals():
     if "import_rtg" in locals():
         importlib.reload(import_rtg)
     if "export_rtg" in locals():
-        importlib.reload(export_rtg)     
+        importlib.reload(export_rtg)
     if "import_ese" in locals():
         importlib.reload(import_ese)
     if "export_ese" in locals():
@@ -48,7 +48,7 @@ from bpy_extras.io_utils import (
 
 #===============================================================================================
 #  IMPORTERS (TO DO)
-#===============================================================================================     
+#===============================================================================================
 @orientation_helper(axis_forward='-Z', axis_up='Y')
 class ImportRTG(bpy.types.Operator, ImportHelper):
     """Load a dynamic Maya Euroland file; for animations, scripts and maps"""
@@ -139,7 +139,7 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
     filename_ext = ".eif"
     filter_glob: StringProperty(default="*.eif", options={'HIDDEN'})
 
-    #Output Options            
+    #Output Options
     Output_Map: BoolProperty(
         name="Output as a Map",
         description="Output scene as a new map for EuroLand.",
@@ -173,7 +173,7 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
                                             "filter_glob",
                                             "path_mode",
                                         ))
-                                            
+
         global_matrix = (Matrix.Scale(self.global_scale, 4) @ Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4())
         keywords["global_matrix"] = global_matrix
 
@@ -239,8 +239,8 @@ class ExportESE(bpy.types.Operator, ExportHelper):
 
     filename_ext = ".ese"
     filter_glob: StringProperty(default="*.ese", options={'HIDDEN'})
-    
-    #Output Options            
+
+    #Output Options
     Output_Materials: BoolProperty(
         name="Materials",
         description="Output scene materials.",
@@ -256,8 +256,8 @@ class ExportESE(bpy.types.Operator, ExportHelper):
         description="Export animations.",
         default=True,
     )
-            
-    #Output Types 
+
+    #Output Types
     object_types: EnumProperty(
         name="Output Types",
         options={'ENUM_FLAG'},
@@ -268,7 +268,7 @@ class ExportESE(bpy.types.Operator, ExportHelper):
         description="Which kind of object to export",
         default={'CAMERA'}
     )
- 
+
     #Mesh Options
     Output_VertexColors : BoolProperty(
         name="Vertex Colors",
@@ -280,7 +280,7 @@ class ExportESE(bpy.types.Operator, ExportHelper):
         description="Flip polygons direction in which polygon faces.",
         default=False,
     )
-    
+
     #Scale Options
     global_scale: FloatProperty(
         name="Scale",
@@ -288,10 +288,10 @@ class ExportESE(bpy.types.Operator, ExportHelper):
         max=1000.0,
         default=1.0,
     )
-    
+
     path_mode: path_reference_mode
     check_extension = True
-            
+
     def execute(self, context):
         from mathutils import Matrix
         from . import export_ese
@@ -303,18 +303,18 @@ class ExportESE(bpy.types.Operator, ExportHelper):
                                             "filter_glob",
                                             "path_mode",
                                             ))
-                                            
+
         global_matrix = (Matrix.Scale(self.global_scale, 4) @ Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4())
         keywords["global_matrix"] = global_matrix
-        
+
         return export_ese.save(context, **keywords)
 
     def draw(self, context):
         pass
-          
+
 #===============================================================================================
 #  ESE OUTPUT PANELS OPTIONS
-#===============================================================================================  
+#===============================================================================================
 class ESE_EXPORT_PT_output_options(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
@@ -339,7 +339,7 @@ class ESE_EXPORT_PT_output_options(bpy.types.Panel):
         layout.prop(operator, 'Output_Materials')
         layout.prop(operator, 'Output_CameraLightAnims')
         layout.prop(operator, 'Output_Animations')
-        
+
 class ESE_EXPORT_PT_mesh_options(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
@@ -410,7 +410,7 @@ class ESE_EXPORT_PT_scale(bpy.types.Panel):
         operator = sfile.active_operator
 
         layout.prop(operator, "global_scale")
- 
+
 def menu_func_eif_import(self, context):
     self.layout.operator(ImportEIF.bl_idname, text="Eurocom Interchange File (.eif)")
 def menu_func_eif_export(self, context):
@@ -426,12 +426,12 @@ def menu_func_ese_import(self, context):
 def menu_func_ese_export(self, context):
     self.layout.operator(ExportESE.bl_idname, text="Eurocom Scene Export (.ese)")
 
-        
+
 classes = (
     ImportEIF,
     ImportRTG,
     ImportESE,
-    
+
     ExportEIF,
     EIF_EXPORT_PT_output_options,
     EIF_EXPORT_PT_scale,
@@ -443,26 +443,25 @@ classes = (
     ESE_EXPORT_PT_scale,
 )
 
+menu_import = (menu_func_eif_import, menu_func_rtg_import, menu_func_ese_import)
+menu_export = (menu_func_eif_export, menu_func_rtg_export, menu_func_ese_export)
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
 
-    #bpy.types.TOPBAR_MT_file_import.append(menu_func_eif_import)
-    #bpy.types.TOPBAR_MT_file_import.append(menu_func_rtg_import)
-    #bpy.types.TOPBAR_MT_file_import.append(menu_func_ese_import)
-        
-    bpy.types.TOPBAR_MT_file_export.append(menu_func_eif_export)
-    bpy.types.TOPBAR_MT_file_export.append(menu_func_rtg_export)
-    bpy.types.TOPBAR_MT_file_export.append(menu_func_ese_export)
+    for m in menu_import:
+        bpy.types.TOPBAR_MT_file_import.append(m)
+
+    for m in menu_export:
+        bpy.types.TOPBAR_MT_file_export.append(m)
 
 def unregister():
-    #bpy.types.TOPBAR_MT_file_import.remove(menu_func_eif_import)
-    #bpy.types.TOPBAR_MT_file_import.remove(menu_func_rtg_import)
-    #bpy.types.TOPBAR_MT_file_import.remove(menu_func_ese_import)
-    
-    bpy.types.TOPBAR_MT_file_export.remove(menu_func_eif_export)
-    bpy.types.TOPBAR_MT_file_export.remove(menu_func_rtg_export)
-    bpy.types.TOPBAR_MT_file_export.remove(menu_func_ese_export)
+    for m in menu_export:
+        bpy.types.TOPBAR_MT_file_export.append(m)
+
+    for m in menu_import:
+        bpy.types.TOPBAR_MT_file_import.append(m)
 
     for cls in classes:
         bpy.utils.unregister_class(cls)
