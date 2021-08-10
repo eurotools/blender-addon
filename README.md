@@ -54,18 +54,23 @@ For more info about which things each format supports, you can look at the [wiki
 
 # To develop
 
-For ease of development it's a good idea to install the add-on in some place where Blender can find it, otherwise you would have to change the Blender startup script to add your folder to the Python search path, a good place to put it in the local scripts folder:
-```
-%appdata%\Blender Foundation\Blender\<version>\scripts\addons\
-```
+For ease of development it's a good idea to install the add-on in some place where Blender can find it, otherwise you would have to change the Blender startup script to add your folder to the Python search path, a good place to put it in the local scripts folder.
 
-You can do this by cloning the Git repository and making a symbolic link. On Windows, open `cmd`, navigate to your Git repository (with `cd <path>`) and type something like this:
+You can do this by cloning the Git repository and making a symbolic link from one folder to another. On Windows, open `cmd`, navigate to your local Git repository folder (with `cd <path>`) and type something like this, note the `2.93` version and adjust accordingly:
 ```
-mklink /j '%appdata%\Blender Foundation\Blender\<version>\scripts\addons\io_scene_sphnx' '.\io_scene_sphnx'
+mklink /j '%appdata%\Blender Foundation\Blender\2.93\scripts\addons\io_scene_sphnx' '.\io_scene_sphnx'
 ```
 
 Once you refresh the Blender Add-ons window it should show up; click under «Edit > Preferences...» to open the dialog with the «Add-ons» tab, click the «Refresh» button and you should be able to find our entry in the list and toggle it on.
 
-After editing the `.py` files you can live-reload the code (without restarting Blender) via shortcut; press *F3* to open the search menu and look for the «*Reload scripts*» operator. Right-click over the *«Blender > System > Reload Scripts»* entry that comes up and select «*Add to Quick Favorites*», now you can easily refresh it with the latest changes from the text editor by pressing the *Q* key and then right-clicking or immediately pressing *Enter*, as long as it stays as the first *Quick Favorites* menu option.
+## Live-reloading
+After editing the `.py` files you can live-reload the code (without restarting Blender) via shortcut; press *F3* to open the search menu and look for the «*Reload scripts*» operator. Right-click over the *«Blender > System > Reload Scripts»* entry that comes up and select «*Add to Quick Favorites*».
 
-Other useful tools during development are the _Python Console_ (_Shift + F4_) to view the internal data structures, and the _System Console_ (_Window > Toggle System Console_) to view possible Python errors and dumping debug `print("LOL")` calls. That should be enough.
+From now on you can easily refresh it with the latest changes from the text editor by pressing the *Q* key and then right-clicking or immediately pressing *Enter*, as long as it stays as the first *Quick Favorites* menu option.
+
+A normal cycle should be; save, switch to the Blender window and quickly press *Q* and *Enter*. Try your changes and see the results.
+
+## Useful tools
+Other useful tools during development are the _Python Console_ (_Shift + F4_) to view the internal data structures, and the _System Console_ (_Window > Toggle System Console_) to view possible Python error output and dumping debug `print("LOL")` calls.
+
+That should be enough.
