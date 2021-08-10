@@ -182,7 +182,7 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
     def draw(self, context):
         pass
 
-class EIF_Export_OutputOptions(bpy.types.Panel):
+class EIF_EXPORT_PT_output_options(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
     bl_label = "Output Options"
@@ -206,7 +206,7 @@ class EIF_Export_OutputOptions(bpy.types.Panel):
         layout.prop(operator, 'Output_Map')
         layout.prop(operator, 'Output_Transform')
 
-class EIF_Export_Scale(bpy.types.Panel):
+class EIF_EXPORT_PT_scale(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
     bl_label = "Transform"
@@ -315,7 +315,7 @@ class ExportESE(bpy.types.Operator, ExportHelper):
 #===============================================================================================
 #  ESE OUTPUT PANELS OPTIONS
 #===============================================================================================  
-class ESE_Export_OutputOptions(bpy.types.Panel):
+class ESE_EXPORT_PT_output_options(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
     bl_label = "Output Options"
@@ -340,7 +340,7 @@ class ESE_Export_OutputOptions(bpy.types.Panel):
         layout.prop(operator, 'Output_CameraLightAnims')
         layout.prop(operator, 'Output_Animations')
         
-class ESE_Export_MeshOptions(bpy.types.Panel):
+class ESE_EXPORT_PT_mesh_options(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
     bl_label = "Mesh Options"
@@ -364,7 +364,7 @@ class ESE_Export_MeshOptions(bpy.types.Panel):
         layout.prop(operator, 'Flip_Polygons')
         layout.prop(operator, 'Output_VertexColors')
 
-class ESE_Export_ObjectTypes(bpy.types.Panel):
+class ESE_EXPORT_PT_object_types(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
     bl_label = ""
@@ -388,7 +388,7 @@ class ESE_Export_ObjectTypes(bpy.types.Panel):
 
         layout.column().prop(operator, "object_types")
 
-class ESE_Export_Scale(bpy.types.Panel):
+class ESE_EXPORT_PT_scale(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
     bl_label = "Transform"
@@ -411,21 +411,6 @@ class ESE_Export_Scale(bpy.types.Panel):
 
         layout.prop(operator, "global_scale")
  
-class ReloadAddon(bpy.types.Operator):
-    """Reloads the whole Eurocom 3D tools, for development """
-    bl_idname = "wm.reload_sphnx"
-    bl_label = "Reload the Eurocom Add-on (for development)"
-    bl_options = {'REGISTER'}
-
-    def execute(self, context):
-        bpy.ops.preferences.addon_enable(module='io_scene_sphnx')
-        print("LOLOL")
-        return {'FINISHED'}
-
-    def invoke(self, context, event):
-        return self.execute(context)
-
-
 def menu_func_eif_import(self, context):
     self.layout.operator(ImportEIF.bl_idname, text="Eurocom Interchange File (.eif)")
 def menu_func_eif_export(self, context):
@@ -448,14 +433,14 @@ classes = (
     ImportESE,
     
     ExportEIF,
-    EIF_Export_OutputOptions,
-    EIF_Export_Scale,
+    EIF_EXPORT_PT_output_options,
+    EIF_EXPORT_PT_scale,
     ExportRTG,
     ExportESE,
-    ESE_Export_ObjectTypes,
-    ESE_Export_OutputOptions,
-    ESE_Export_MeshOptions,
-    ESE_Export_Scale,
+    ESE_EXPORT_PT_object_types,
+    ESE_EXPORT_PT_output_options,
+    ESE_EXPORT_PT_mesh_options,
+    ESE_EXPORT_PT_scale,
 )
 
 def register():
@@ -469,14 +454,6 @@ def register():
     bpy.types.TOPBAR_MT_file_export.append(menu_func_eif_export)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_rtg_export)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_ese_export)
-    
-    # swy: don't unregister this because Blender crashes with an EXCEPTION_ACCESS_VIOLATION
-    #      when the add-on reenable function reloads itself, kind of sucky. load it once:
-    #       WM_operator_pystring_ex > RNA_pointer_as_string_keywords >
-    #        RNA_pointer_as_string_keywords_ex > RNA_property_as_string >
-    #          Macro_bl_label_length
-    if not hasattr(bpy.types, bpy.ops.wm.reload_sphnx.idname()):
-        bpy.utils.register_class(ReloadAddon)
 
 def unregister():
     #bpy.types.TOPBAR_MT_file_import.remove(menu_func_eif_import)
