@@ -15,36 +15,23 @@ bl_info = {
        "category": "Import-Export",
 }
 
-if "bpy" in locals():
-    import importlib
-
-    if "import_eif" in locals():
-        importlib.reload(import_eif)
-    if "export_eif" in locals():
-        importlib.reload(export_eif)
-    if "import_rtg" in locals():
-        importlib.reload(import_rtg)
-    if "export_rtg" in locals():
-        importlib.reload(export_rtg)
-    if "import_ese" in locals():
-        importlib.reload(import_ese)
-    if "export_ese" in locals():
-        importlib.reload(export_ese)
-
+import os
 import bpy
-from bpy.props import (
+import bpy.utils.previews
+from bpy.props import(
         BoolProperty,
         FloatProperty,
         StringProperty,
         EnumProperty,
-        )
-from bpy_extras.io_utils import (
+)
+
+from bpy_extras.io_utils import(
         ImportHelper,
         ExportHelper,
         orientation_helper,
         path_reference_mode,
         axis_conversion,
-        )
+)
 
 #===============================================================================================
 #  IMPORTERS (TO DO)
@@ -67,6 +54,10 @@ class ImportRTG(bpy.types.Operator, ImportHelper):
     def draw(self, context):
         pass
 
+    @classmethod
+    def poll(cls, context):
+        return False
+
 @orientation_helper(axis_forward='-Z', axis_up='Y')
 class ImportEIF(bpy.types.Operator, ImportHelper):
     """Load a static 3ds Max Euroland file, for scenes and entities"""
@@ -85,6 +76,10 @@ class ImportEIF(bpy.types.Operator, ImportHelper):
     def draw(self, context):
         pass
 
+    @classmethod
+    def poll(cls, context):
+        return False
+
 @orientation_helper(axis_forward='-Z', axis_up='Y')
 class ImportESE(bpy.types.Operator, ImportHelper):
     """Load a dynamic 3ds Max Euroland file; for cutscenes and maps"""
@@ -102,6 +97,10 @@ class ImportESE(bpy.types.Operator, ImportHelper):
 
     def draw(self, context):
         pass
+
+    @classmethod
+    def poll(cls, context):
+        return False
 
 #===============================================================================================
 #  EXPORTERS (ON IT)
@@ -411,20 +410,34 @@ class ESE_EXPORT_PT_scale(bpy.types.Panel):
 
         layout.prop(operator, "global_scale")
 
+class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
+    bl_label = 'Eurocom Tools'
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+
+    def draw(self, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        self.layout.prop(operator, "global_scale")
+
+# global variable to store icons in
+custom_icons = None
+
 def menu_func_eif_import(self, context):
-    self.layout.operator(ImportEIF.bl_idname, text="Eurocom Interchange File (.eif)")
+    self.layout.operator(ImportEIF.bl_idname, icon_value=custom_icons["sphinx_ico"].icon_id, text="Eurocom Interchange File (.eif)")
 def menu_func_eif_export(self, context):
-    self.layout.operator(ExportEIF.bl_idname, text="Eurocom Interchange File (.eif)")
+    self.layout.operator(ExportEIF.bl_idname, icon_value=custom_icons["sphinx_ico"].icon_id, text="Eurocom Interchange File (.eif)")
 
 def menu_func_rtg_import(self, context):
-    self.layout.operator(ImportRTG.bl_idname, text="Eurocom Real Time Game (.rtg)")
+    self.layout.operator(ImportRTG.bl_idname, icon_value=custom_icons["sphinx_ico"].icon_id, text="Eurocom Real Time Game (.rtg)")
 def menu_func_rtg_export(self, context):
-    self.layout.operator(ExportRTG.bl_idname, text="Eurocom Real Time Game (.rtg)")
+    self.layout.operator(ExportRTG.bl_idname, icon_value=custom_icons["sphinx_ico"].icon_id, text="Eurocom Real Time Game (.rtg)")
 
 def menu_func_ese_import(self, context):
-    self.layout.operator(ImportESE.bl_idname, text="Eurocom Scene Export (.ese)")
+    self.layout.operator(ImportESE.bl_idname, icon_value=custom_icons["sphinx_ico"].icon_id, text="Eurocom Scene Export (.ese)")
 def menu_func_ese_export(self, context):
-    self.layout.operator(ExportESE.bl_idname, text="Eurocom Scene Export (.ese)")
+    self.layout.operator(ExportESE.bl_idname, icon_value=custom_icons["sphinx_ico"].icon_id, text="Eurocom Scene Export (.ese)")
 
 
 classes = (
@@ -433,14 +446,18 @@ classes = (
     ImportESE,
 
     ExportEIF,
-    EIF_EXPORT_PT_output_options,
-    EIF_EXPORT_PT_scale,
     ExportRTG,
     ExportESE,
+
+    EIF_EXPORT_PT_output_options,
+    EIF_EXPORT_PT_scale,
+
     ESE_EXPORT_PT_object_types,
     ESE_EXPORT_PT_output_options,
     ESE_EXPORT_PT_mesh_options,
     ESE_EXPORT_PT_scale,
+
+    TOOLS_PANEL_PT_eurocom
 )
 
 menu_import = (menu_func_eif_import, menu_func_rtg_import, menu_func_ese_import)
@@ -456,7 +473,14 @@ def register():
     for m in menu_export:
         bpy.types.TOPBAR_MT_file_export.append(m)
 
+    # Note that preview collections returned by bpy.utils.previews
+    # are regular py objects - you can use them to store custom data.
+    global custom_icons; custom_icons = bpy.utils.previews.new()
+    custom_icons.load("sphinx_ico", os.path.join(os.path.dirname(__file__), "Sphinx.png"), 'IMAGE')
+
 def unregister():
+    bpy.utils.previews.remove(custom_icons)
+
     for m in menu_export:
         bpy.types.TOPBAR_MT_file_export.append(m)
 
