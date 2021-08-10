@@ -57,10 +57,7 @@ class ImportRTG(bpy.types.Operator, ImportHelper):
     bl_options = {'PRESET', 'UNDO'}
 
     filename_ext = ".rtg"
-    filter_glob: StringProperty(
-            default="*.rtg",
-            options={'HIDDEN'},
-            )
+    filter_glob: StringProperty(default="*.rtg", options={'HIDDEN'})
 
     def execute(self, context):
         print("Selected: " + context.active_object.name)
@@ -78,10 +75,7 @@ class ImportEIF(bpy.types.Operator, ImportHelper):
     bl_options = {'PRESET', 'UNDO'}
 
     filename_ext = ".eif"
-    filter_glob: StringProperty(
-            default="*.eif",
-            options={'HIDDEN'},
-            )
+    filter_glob: StringProperty(default="*.eif", options={'HIDDEN'})
 
     def execute(self, context):
         print("Selected: " + context.active_object.name)
@@ -99,10 +93,7 @@ class ImportESE(bpy.types.Operator, ImportHelper):
     bl_options = {'PRESET', 'UNDO'}
 
     filename_ext = ".ese"
-    filter_glob: StringProperty(
-            default="*.ese",
-            options={'HIDDEN'},
-            )
+    filter_glob: StringProperty(default="*.ese", options={'HIDDEN'})
 
     def execute(self, context):
         print("Selected: " + context.active_object.name)
@@ -124,10 +115,7 @@ class ExportRTG(bpy.types.Operator, ExportHelper):
     bl_options = {'PRESET'}
 
     filename_ext = ".rtg"
-    filter_glob: StringProperty(
-            default="*.rtg",
-            options={'HIDDEN'},
-            )
+    filter_glob: StringProperty(default="*.rtg", options={'HIDDEN'})
 
     path_mode: path_reference_mode
 
@@ -149,10 +137,7 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
     bl_options = {'PRESET'}
 
     filename_ext = ".eif"
-    filter_glob: StringProperty(
-            default="*.eif",
-            options={'HIDDEN'},
-            )
+    filter_glob: StringProperty(default="*.eif", options={'HIDDEN'})
 
     #Output Options            
     Output_Map: BoolProperty(
@@ -253,10 +238,7 @@ class ExportESE(bpy.types.Operator, ExportHelper):
     bl_options = {'PRESET'}
 
     filename_ext = ".ese"
-    filter_glob: StringProperty(
-        default="*.ese",
-        options={'HIDDEN'},
-    )
+    filter_glob: StringProperty(default="*.ese", options={'HIDDEN'})
     
     #Output Options            
     Output_Materials: BoolProperty(
