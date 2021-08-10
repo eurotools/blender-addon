@@ -61,7 +61,7 @@ class ImportRTG(bpy.types.Operator, ImportHelper):
 
     def execute(self, context):
         print("Selected: " + context.active_object.name)
-        from . import import_eif
+        from . import import_rtg
         return import_rtg.load(context, self.filepath)
 
     def draw(self, context):
