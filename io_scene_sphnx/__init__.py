@@ -8,7 +8,7 @@ bl_info = {
         "blender": (2, 81, 6),
        "location": "File > Import-Export",
     "description": "Export and import EIF, ESE and RTG files compatible with Euroland.",
-        "warning": "LOL ¯\_(ツ)_/¯",
+        "warning": "Importing still doesn't work, export in progress. ¯\_(ツ)_/¯",
         "doc_url": "https://sphinxandthecursedmummy.fandom.com/wiki/Technical",
     "tracker_url": "https://discord.gg/sphinx",
         "support": 'COMMUNITY',
@@ -412,32 +412,30 @@ class ESE_EXPORT_PT_scale(bpy.types.Panel):
 
 class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
     bl_label = 'Eurocom Tools'
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = 'data'
 
     def draw(self, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
+        pass
 
-        self.layout.prop(operator, "global_scale")
-
-# global variable to store icons in
+# swy: global variable to store icons in
 custom_icons = None
 
 def menu_func_eif_import(self, context):
-    self.layout.operator(ImportEIF.bl_idname, icon_value=custom_icons["sphinx_ico"].icon_id, text="Eurocom Interchange File (.eif)")
+    self.layout.operator(ImportEIF.bl_idname, icon_value=custom_icons['sphinx_ico'].icon_id, text='Eurocom Interchange File (.eif)')
 def menu_func_eif_export(self, context):
-    self.layout.operator(ExportEIF.bl_idname, icon_value=custom_icons["sphinx_ico"].icon_id, text="Eurocom Interchange File (.eif)")
+    self.layout.operator(ExportEIF.bl_idname, icon_value=custom_icons['sphinx_ico'].icon_id, text='Eurocom Interchange File (.eif)')
 
 def menu_func_rtg_import(self, context):
-    self.layout.operator(ImportRTG.bl_idname, icon_value=custom_icons["sphinx_ico"].icon_id, text="Eurocom Real Time Game (.rtg)")
+    self.layout.operator(ImportRTG.bl_idname, icon_value=custom_icons['sphinx_ico'].icon_id, text='Eurocom Real Time Game (.rtg)')
 def menu_func_rtg_export(self, context):
-    self.layout.operator(ExportRTG.bl_idname, icon_value=custom_icons["sphinx_ico"].icon_id, text="Eurocom Real Time Game (.rtg)")
+    self.layout.operator(ExportRTG.bl_idname, icon_value=custom_icons['sphinx_ico'].icon_id, text='Eurocom Real Time Game (.rtg)')
 
 def menu_func_ese_import(self, context):
-    self.layout.operator(ImportESE.bl_idname, icon_value=custom_icons["sphinx_ico"].icon_id, text="Eurocom Scene Export (.ese)")
+    self.layout.operator(ImportESE.bl_idname, icon_value=custom_icons['sphinx_ico'].icon_id, text='Eurocom Scene Export (.ese)')
 def menu_func_ese_export(self, context):
-    self.layout.operator(ExportESE.bl_idname, icon_value=custom_icons["sphinx_ico"].icon_id, text="Eurocom Scene Export (.ese)")
+    self.layout.operator(ExportESE.bl_idname, icon_value=custom_icons['sphinx_ico'].icon_id, text='Eurocom Scene Export (.ese)')
 
 
 classes = (
@@ -463,6 +461,7 @@ classes = (
 menu_import = (menu_func_eif_import, menu_func_rtg_import, menu_func_ese_import)
 menu_export = (menu_func_eif_export, menu_func_rtg_export, menu_func_ese_export)
 
+# swy: initialize and de-initialize in opposite order
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
@@ -473,10 +472,9 @@ def register():
     for m in menu_export:
         bpy.types.TOPBAR_MT_file_export.append(m)
 
-    # Note that preview collections returned by bpy.utils.previews
-    # are regular py objects - you can use them to store custom data.
+    # swy: load every custom icon image from here; as an image preview
     global custom_icons; custom_icons = bpy.utils.previews.new()
-    custom_icons.load("sphinx_ico", os.path.join(os.path.dirname(__file__), "Sphinx.png"), 'IMAGE')
+    custom_icons.load('sphinx_ico', os.path.join(os.path.dirname(__file__), 'icons/sphinx.png'), 'IMAGE')
 
 def unregister():
     bpy.utils.previews.remove(custom_icons)
@@ -490,5 +488,5 @@ def unregister():
     for cls in classes:
         bpy.utils.unregister_class(cls)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     register()
