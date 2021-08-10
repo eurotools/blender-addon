@@ -54,15 +54,18 @@ For more info about which things each format supports, you can look at the [wiki
 
 # To develop
 
-For ease of development it's a good idea to install the plugin in some place where Blender can find it, otherwise you would have to change the Blender startup script to add your folder to the Python search path, a good place to put it is:
+For ease of development it's a good idea to install the add-on in some place where Blender can find it, otherwise you would have to change the Blender startup script to add your folder to the Python search path, a good place to put it in the local scripts folder:
 ```
-C:\Users\<user-name>\AppData\Roaming\Blender Foundation\Blender\2.90\scripts\addons\
-```
-
-You can do this by cloning the Git repository and making a symbolic link. On Windows, open `cmd`, navigate to your user's Blender Add-ons folder and type something like this:
-```
-mklink /j '.\io_scene_sphnx' 'C:\Users\<user-name>\Documents\github\sphinx-euroland\io_scene_sphnx'
+%appdata%\Blender Foundation\Blender\<version>\scripts\addons\
 ```
 
-Once you refresh the Blender Add-ons window it should show up and you should be able to enable it. But there are many ways of doing this.
-You can also use the F3 search menu to look for the «*Eurocom reload*» operator, and assign it to a hotkey, like F8, to easily refresh it with the latest changes from the text editor.
+You can do this by cloning the Git repository and making a symbolic link. On Windows, open `cmd`, navigate to your Git repository (with `cd <path>`) and type something like this:
+```
+mklink /j '%appdata%\Blender Foundation\Blender\<version>\scripts\addons\io_scene_sphnx' '.\io_scene_sphnx'
+```
+
+Once you refresh the Blender Add-ons window it should show up; click under «Edit > Preferences...» to open the dialog with the «Add-ons» tab, click the «Refresh» button and you should be able to find our entry in the list and toggle it on.
+
+After editing the `.py` files you can live-reload the code (without restarting Blender) via shortcut; press *F3* to open the search menu and look for the «*Reload scripts*» operator. Right-click over the *«Blender > System > Reload Scripts»* entry that comes up and select «*Add to Quick Favorites*», now you can easily refresh it with the latest changes from the text editor by pressing the *Q* key and then right-clicking or immediately pressing *Enter*, as long as it stays as the first *Quick Favorites* menu option.
+
+Other useful tools during development are the _Python Console_ (_Shift + F4_) to view the internal data structures, and the _System Console_ (_Window > Toggle System Console_) to view possible Python errors and dumping debug `print("LOL")` calls. That should be enough.
