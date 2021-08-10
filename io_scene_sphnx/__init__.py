@@ -2,17 +2,17 @@
 #  SPDX-License-Identifier: Zlib
 
 bl_info = {
-           "name": "Eurocom 3D formats for Sphinx and the Cursed Mummy™",
-         "author": "Swyter, for THQ Nordic GmbH",
-        "version": (2020, 10, 10),
-        "blender": (2, 81, 6),
-       "location": "File > Import-Export",
-    "description": "Export and import EIF, ESE and RTG files compatible with Euroland.",
-        "warning": "Importing still doesn't work, export in progress. ¯\_(ツ)_/¯",
-        "doc_url": "https://sphinxandthecursedmummy.fandom.com/wiki/Technical",
-    "tracker_url": "https://discord.gg/sphinx",
-        "support": 'COMMUNITY',
-       "category": "Import-Export",
+           'name': 'Eurocom 3D formats for Sphinx and the Cursed Mummy™',
+         'author': 'Swyter, for THQ Nordic GmbH',
+        'version': (2020, 10, 10),
+        'blender': (2, 81, 6),
+       'location': 'File > Import-Export',
+    'description': 'Export and import EIF, ESE and RTG files compatible with Euroland.',
+        'warning': 'Importing still doesn\'t work, export in progress. ¯\_(ツ)_/¯',
+        'doc_url': 'https://sphinxandthecursedmummy.fandom.com/wiki/Technical',
+    'tracker_url': 'https://discord.gg/sphinx',
+        'support': 'COMMUNITY',
+       'category': 'Import-Export',
 }
 
 import os
@@ -195,15 +195,11 @@ class EIF_EXPORT_PT_output_options(bpy.types.Panel):
         return operator.bl_idname == "EXPORT_SCENE_OT_eif"
 
     def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
-
         sfile = context.space_data
         operator = sfile.active_operator
 
-        layout.prop(operator, 'Output_Map')
-        layout.prop(operator, 'Output_Transform')
+        self.layout.prop(operator, 'Output_Map')
+        self.layout.prop(operator, 'Output_Transform')
 
 class EIF_EXPORT_PT_scale(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
@@ -219,14 +215,10 @@ class EIF_EXPORT_PT_scale(bpy.types.Panel):
         return operator.bl_idname == "EXPORT_SCENE_OT_eif"
 
     def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
-
         sfile = context.space_data
         operator = sfile.active_operator
 
-        layout.prop(operator, "global_scale")
+        self.layout.prop(operator, "global_scale")
 
 @orientation_helper(axis_forward='Z', axis_up='Y')
 class ExportESE(bpy.types.Operator, ExportHelper):
@@ -328,16 +320,12 @@ class ESE_EXPORT_PT_output_options(bpy.types.Panel):
         return operator.bl_idname == "EXPORT_SCENE_OT_ese"
 
     def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
-
         sfile = context.space_data
         operator = sfile.active_operator
 
-        layout.prop(operator, 'Output_Materials')
-        layout.prop(operator, 'Output_CameraLightAnims')
-        layout.prop(operator, 'Output_Animations')
+        self.layout.prop(operator, 'Output_Materials')
+        self.layout.prop(operator, 'Output_CameraLightAnims')
+        self.layout.prop(operator, 'Output_Animations')
 
 class ESE_EXPORT_PT_mesh_options(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
@@ -353,15 +341,11 @@ class ESE_EXPORT_PT_mesh_options(bpy.types.Panel):
         return operator.bl_idname == "EXPORT_SCENE_OT_ese"
 
     def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
-
         sfile = context.space_data
         operator = sfile.active_operator
 
-        layout.prop(operator, 'Flip_Polygons')
-        layout.prop(operator, 'Output_VertexColors')
+        self.layout.prop(operator, 'Flip_Polygons')
+        self.layout.prop(operator, 'Output_VertexColors')
 
 class ESE_EXPORT_PT_object_types(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
@@ -378,14 +362,10 @@ class ESE_EXPORT_PT_object_types(bpy.types.Panel):
         return operator.bl_idname == "EXPORT_SCENE_OT_ese"
 
     def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
-
         sfile = context.space_data
         operator = sfile.active_operator
 
-        layout.column().prop(operator, "object_types")
+        self.layout.column().prop(operator, "object_types")
 
 class ESE_EXPORT_PT_scale(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
@@ -401,14 +381,10 @@ class ESE_EXPORT_PT_scale(bpy.types.Panel):
         return operator.bl_idname == "EXPORT_SCENE_OT_ese"
 
     def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
-
         sfile = context.space_data
         operator = sfile.active_operator
 
-        layout.prop(operator, "global_scale")
+        self.layout.prop(operator, "global_scale")
 
 class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
     bl_label = 'Eurocom Tools'
@@ -437,7 +413,7 @@ def menu_func_ese_import(self, context):
 def menu_func_ese_export(self, context):
     self.layout.operator(ExportESE.bl_idname, icon_value=custom_icons['sphinx_ico'].icon_id, text='Eurocom Scene Export (.ese)')
 
-
+# swy: un/register the whole thing in one go, see below
 classes = (
     ImportEIF,
     ImportRTG,
