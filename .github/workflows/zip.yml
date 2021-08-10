@@ -17,7 +17,7 @@ jobs:
     - name: Pack things up
       id: pack
       run: |
-        prev_run_sha="`curl -s --fail 'https://api.github.com/repos/Swyter/sphinx-euroland/actions/workflows/2949131/runs' | jq -r .workflow_runs[1].head_sha`"
+        prev_run_sha="`curl -s --location --fail 'https://api.github.com/repos/Swyter/sphinx-euroland/actions/workflows/2949131/runs' | jq -r .workflow_runs[1].head_sha`"
         echo "prev=$prev_run_sha cur=`git rev-parse --short HEAD`"
         
         # swy: replace the versioned date in the script descriptor; (2020, 10, 10) -> (2021, 05, 22)
