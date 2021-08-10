@@ -43,7 +43,7 @@ jobs:
         echo "$GH_ASSET"; echo "$FILENAME"
         
         if [[ -f "$FILENAME" ]]; then
-          curl --fail --data-binary @"$FILENAME" -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" "$GH_ASSET"
+          curl --fail --location --data-binary @"$FILENAME" -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" "$GH_ASSET"
         else
           echo "[no changes in the add-on folder this time around; skipped]"
         fi
