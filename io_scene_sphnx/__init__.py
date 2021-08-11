@@ -359,6 +359,7 @@ class IgnitProperties(bpy.types.PropertyGroup):
     my_enum: bpy.props.EnumProperty(
         name = "My options",
         description = "My enum description",
+        options = {'ENUM_FLAG'},
         items = [
             # swy: configurable per-project flags0
             ("", "Project Flags", ""),
@@ -366,18 +367,20 @@ class IgnitProperties(bpy.types.PropertyGroup):
             ("Silver", "UnderWater / Ladder (line seg. and line poly)",                  "0x0002"),
             ("Silver", "Slippery (line poly) / Wall (line seg.) / NoDive (normal poly)", "0x0004"),
             ("Silver", "Moveable / Edge (line seg.)",                                    "0x0008"),
+            (None),
             ("Silver", "Riser / ZipHandle (grab poly)",                                  "0x0010"),
             ("Silver", "No Camera Collision",                                            "0x0020"),
             ("Silver", "No Char Lighting",                                               "0x0040"),
             ("Silver", "User Flag8",                                                     "0x0080"),
+            (None),
             ("Silver", "DualSide Collision",                                             "0x0100"),
             ("Silver", "Flag10",                                                         "0x0200"),
             ("Silver", "No Dynamic Lighting",                                            "0x0400"),
             ("Silver", "No Dynamic Shadows",                                             "0x0800"),
+            (None),
             ("Silver", "No Cast Shadows",                                                "0x1000"),
             ("Silver", "Dont BSP Poly",                                                  "0x2000"),
             ("Silver", "BSP Only Poly",                                                  "0x4000"),
-            (None),
             ("Silver", "Flag16",                                                         "0x8000"),
 
             # swy: hardcoded Euroland flags
@@ -386,12 +389,13 @@ class IgnitProperties(bpy.types.PropertyGroup):
             ("Gold",       "Portal",                 "0x00020000"),
             ("Space Grey", "Invisible",              "0x00040000"),
             ("Space Grey", "Line segment",           "0x00080000"),
+            (None),
             ("Space Grey", "Facetted",               "0x00100000"),
             ("Space Grey", "Clip Portal",            "0x00200000"),
             ("Space Grey", "No collision",           "0x01000000"),
             ("Space Grey", "Always backface culled", "0x02000000")
         ],
-        #update=update_after_enum
+        update=update_after_enum
     )
     # my_string = bpy.props.StringProperty()
     # my_integer = bpy.props.IntProperty()
