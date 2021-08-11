@@ -398,6 +398,50 @@ class EuroProperties(bpy.types.PropertyGroup):
         default=set(),
         update=update_after_enum
     )
+    
+    
+class EApplyFlags(bpy.types.Operator):
+    """Assigns toggled flags from the panel in the current selection"""
+    bl_idname = "wm.ea"
+    bl_label = "Apply selected flags"
+    bl_options = {'PRESET', 'UNDO'}
+
+    def execute(self, context):
+        print("EApplyFlags: ", context)
+        return {'FINISHED'}
+
+    def draw(self, context):
+        pass
+        
+class ESelectChFlags(bpy.types.Operator):
+    """Select any elements with this combination of flags"""
+    bl_idname = "wm.eb"
+    bl_label = "Select any elements with this combination of flags"
+    bl_options = {'PRESET', 'UNDO'}
+
+    def execute(self, context):
+        print("ESelectChFlags: ", context)
+        return {'FINISHED'}
+
+    def draw(self, context):
+        pass
+
+class ESelectNoFlags(bpy.types.Operator):
+    """Select any elements with no flags checked"""
+    bl_idname = "wm.ec"
+    bl_label = "Select any elements with no flags checked"
+    bl_options = {'PRESET', 'UNDO'}
+
+    def execute(self, context):
+        print("ESelectNoFlags: ", context)
+        return {'FINISHED'}
+
+    def draw(self, context):
+        pass
+
+@classmethod
+def poll(cls, context):
+    return False
 
 class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
     bl_label = 'Eurocom Tools'
@@ -406,20 +450,17 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
     bl_context = 'data'
 
     def draw(self, context):
-        layout = self.layout
-        
-
-        box = layout.box()
+        box = self.layout.box()
         row = box.column_flow(columns=2)
         row.prop(context.mesh.euroland, "my_enum", expand=True)
-        box.operator(ImportEIF.bl_idname, text='Apply to selected')
+        box.operator(EApplyFlags.bl_idname, text='Apply to selected')
         
-        
-        butt = layout.split()
+        butt = self.layout.split()
         butt.label(text="Select any elements with...")
-        butt = layout.split(align=True)
-        butt.operator(ExportESE.bl_idname, text='These flags checked')
-        butt.operator(ExportESE.bl_idname, text='No flags checked')
+        
+        butt = self.layout.split(align=True)
+        butt.operator(ESelectChFlags.bl_idname, text='These flags checked')
+        butt.operator(ESelectNoFlags.bl_idname, text='No flags checked')
 
 # swy: global variable to store icons in
 custom_icons = None
@@ -457,7 +498,10 @@ classes = (
     ESE_EXPORT_PT_mesh_options,
     ESE_EXPORT_PT_scale,
 
-    TOOLS_PANEL_PT_eurocom
+    TOOLS_PANEL_PT_eurocom,
+    EApplyFlags,
+    ESelectChFlags,
+    ESelectNoFlags
 )
 
 menu_import = (menu_func_eif_import, menu_func_rtg_import, menu_func_ese_import)
