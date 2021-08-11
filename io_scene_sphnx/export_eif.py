@@ -29,11 +29,6 @@ def _write(context, filepath,
         ):
 
     #===============================================================================================
-    #  GLOBAL VARIABLES
-    #===============================================================================================
-    ProjectContextScene = bpy.context.scene
-    
-    #===============================================================================================
     #  MAIN
     #===============================================================================================
     def WriteFile():
@@ -53,11 +48,11 @@ def _write(context, filepath,
             out.write('}\n')
             out.write('\n')
             out.write('*SCENE {\n')
-            out.write('\t*FILENAME "%s"\n' % (bpy.data.filepath))
-            out.write('\t*FIRSTFRAME %d\n' % (ProjectContextScene.frame_start))
-            out.write('\t*LASTFRAME %d\n' % (ProjectContextScene.frame_end))
-            out.write('\t*FRAMESPEED %d\n' % (ProjectContextScene.render.fps))
-            out.write('\t*STATICFRAME %d\n' % (ProjectContextScene.frame_current))
+            out.write('\t*FILENAME "%s"\n'  % (bpy.data.filepath))
+            out.write('\t*FIRSTFRAME %d\n'  % (bpy.context.scene.frame_start))
+            out.write('\t*LASTFRAME %d\n'   % (bpy.context.scene.frame_end))
+            out.write('\t*FRAMESPEED %d\n'  % (bpy.context.scene.render.fps))
+            out.write('\t*STATICFRAME %d\n' % (bpy.context.scene.frame_current))
             out.write('\t*AMBIENTSTATIC %.6f %.6f %.6f\n' %(AmbientValue, AmbientValue, AmbientValue))
             out.write('}\n')
             out.write('\n')
@@ -68,7 +63,7 @@ def _write(context, filepath,
             SceneMaterials = []
 
             out.write('*MATERIALS {\n')
-            for obj in ProjectContextScene.objects:
+            for obj in bpy.context.scene.objects:
                 if obj.material_slots:
                     for mat in obj.material_slots:
                         if mat.name not in SceneMaterials:
@@ -123,7 +118,7 @@ def _write(context, filepath,
             #===============================================================================================
             #  MESH DATA
             #===============================================================================================
-            for obj in ProjectContextScene.objects:
+            for obj in bpy.context.scene.objects:
                 if obj.type == 'MESH':
                     if hasattr(obj, 'data'):
                         #===========================================[Save Previous Location and Rotation]====================================================
@@ -291,7 +286,7 @@ def _write(context, filepath,
             #===============================================================================================
             #  GEOM NODE (POSITION IN THE ENTITIES EDITOR)
             #===============================================================================================
-            for obj in ProjectContextScene.objects:
+            for obj in bpy.context.scene.objects:
                 if obj.type == 'MESH':
                     if hasattr(obj, 'data'):        
                         out.write('*GEOMNODE {\n')
@@ -317,7 +312,7 @@ def _write(context, filepath,
             #  PLACE NODE (POSITION IN MAP)
             #===============================================================================================
             if EXPORT_AS_MAP:
-                for obj in ProjectContextScene.objects:
+                for obj in bpy.context.scene.objects:
                     if obj.type == 'MESH':
                         if hasattr(obj, 'data'):
                             # Axis Conversion
@@ -329,7 +324,7 @@ def _write(context, filepath,
                             out.write('\t*WORLD_TM {\n')
                             
                             #Jump to the first frame
-                            ProjectContextScene.frame_set(ProjectContextScene.frame_start)
+                            bpy.context.scene.frame_set(bpy.context.scene.frame_start)
                             
                             #Print Roation matrix
                             out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (1,0,0,0))
