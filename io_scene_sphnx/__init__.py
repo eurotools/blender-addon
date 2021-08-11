@@ -361,7 +361,7 @@ class EuroProperties(bpy.types.PropertyGroup):
         name = "Eurocom flags",
         options = {'ENUM_FLAG'},
         items = [
-            # swy: configurable per-project flags0
+            # swy: configurable per-project flags
             ("", "Project Flags", ""),
             ("0x0001", "Water / NoJump (line seg.)",                                     "0x0001"),
             ("0x0002", "UnderWater / Ladder (line seg. and line poly)",                  "0x0002"),
@@ -490,6 +490,7 @@ classes = (
     ExportRTG,
     ExportESE,
 
+    # swy: export panel stuff
     EIF_EXPORT_PT_output_options,
     EIF_EXPORT_PT_scale,
 
@@ -498,6 +499,7 @@ classes = (
     ESE_EXPORT_PT_mesh_options,
     ESE_EXPORT_PT_scale,
 
+    # swy: mesh flags panel stuff
     TOOLS_PANEL_PT_eurocom,
     EApplyFlags,
     ESelectChFlags,
@@ -518,7 +520,8 @@ def register():
     for m in menu_export:
         bpy.types.TOPBAR_MT_file_export.append(m)
 
-
+    # swy: this is a bit of a dummy property for flag display; we actually
+    #      retrieve the contents from a custom mesh layer, no other way
     bpy.utils.register_class(EuroProperties)
     bpy.types.Mesh.euroland = bpy.props.PointerProperty(type=EuroProperties)
 
