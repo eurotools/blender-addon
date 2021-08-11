@@ -356,9 +356,9 @@ def update_after_enum(self, context):
     print('self.my_enum ---->', self.my_enum)
 
 class EuroProperties(bpy.types.PropertyGroup):
+    ''' Per-face bitfield for Euroland entities. ''' 
     my_enum: bpy.props.EnumProperty(
         name = "Eurocom flags",
-        #description = "Per-face bitfield for Euroland entities.",
         options = {'ENUM_FLAG'},
         items = [
             # swy: configurable per-project flags0
@@ -409,6 +409,10 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
         layout = self.layout
         row = layout.column_flow(columns=2)
         row.prop(context.mesh.euroland, "my_enum", expand=True)
+        layout.operator(ImportEIF.bl_idname, text='Apply to selected')
+        butt = layout.row(align=True)
+        butt.operator(ExportESE.bl_idname, text='Select flags checked')
+        butt.operator(ExportESE.bl_idname, text='Select no flags')
 
 # swy: global variable to store icons in
 custom_icons = None
