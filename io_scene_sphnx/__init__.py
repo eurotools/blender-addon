@@ -350,17 +350,18 @@ class ESE_EXPORT_PT_scale(bpy.types.Panel):
 
     def draw(self, context):
         self.layout.prop(context.space_data.active_operator, "global_scale")
-        
-        
+
+
 def update_after_enum(self, context):
     print('self.my_enum ---->', self.my_enum)
-    
+
 class IgnitProperties(bpy.types.PropertyGroup):
-    my_enum = bpy.props.EnumProperty(
+    my_enum: bpy.props.EnumProperty(
         name = "My options",
         description = "My enum description",
         items = [
-            # swy: configurable per-project flags
+            # swy: configurable per-project flags0
+            ("", "Project Flags", ""),
             ("Silver", "Water / NoJump (line seg.)",                                     "0x0001"),
             ("Silver", "UnderWater / Ladder (line seg. and line poly)",                  "0x0002"),
             ("Silver", "Slippery (line poly) / Wall (line seg.) / NoDive (normal poly)", "0x0004"),
@@ -376,9 +377,11 @@ class IgnitProperties(bpy.types.PropertyGroup):
             ("Silver", "No Cast Shadows",                                                "0x1000"),
             ("Silver", "Dont BSP Poly",                                                  "0x2000"),
             ("Silver", "BSP Only Poly",                                                  "0x4000"),
+            (None),
             ("Silver", "Flag16",                                                         "0x8000"),
-        
+
             # swy: hardcoded Euroland flags
+            ("", "Hardcoded Flags", ""),
             ("Silver",     "Not backface culled",    "0x00010000"),
             ("Gold",       "Portal",                 "0x00020000"),
             ("Space Grey", "Invisible",              "0x00040000"),
@@ -388,7 +391,7 @@ class IgnitProperties(bpy.types.PropertyGroup):
             ("Space Grey", "No collision",           "0x01000000"),
             ("Space Grey", "Always backface culled", "0x02000000")
         ],
-        update=update_after_enum
+        #update=update_after_enum
     )
     # my_string = bpy.props.StringProperty()
     # my_integer = bpy.props.IntProperty()
@@ -402,8 +405,8 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-        row = layout.row()
-        #row.prop(scene.ignit_panel, "my_enum", expand=True)
+        row = layout.column()
+        row.prop(scene.ignit_panel, "my_enum", expand=True)
 
 # swy: global variable to store icons in
 custom_icons = None
@@ -458,10 +461,14 @@ def register():
     for m in menu_export:
         bpy.types.TOPBAR_MT_file_export.append(m)
 
+
+    bpy.utils.register_class(IgnitProperties)
+    bpy.types.Scene.ignit_panel = bpy.props.PointerProperty(type=IgnitProperties)
+
     # swy: load every custom icon image from here; as an image preview
     global custom_icons; custom_icons = bpy.utils.previews.new()
     custom_icons.load('sphinx_ico', os.path.join(os.path.dirname(__file__), 'icons/sphinx.png'), 'IMAGE')
- 
+
 
 def unregister():
     bpy.utils.previews.remove(custom_icons)
