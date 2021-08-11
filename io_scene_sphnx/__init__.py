@@ -416,11 +416,10 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
         
         
         butt = layout.split()
-        butt.label(text="Select with flags checked:")
-        butt.operator(ExportESE.bl_idname, text='Select')
+        butt.label(text="Select any elements with...")
         butt = layout.split(align=True)
-        butt.label(text="Select no flags checked:")
-        butt.operator(ExportESE.bl_idname, text='Select')
+        butt.operator(ExportESE.bl_idname, text='These flags checked')
+        butt.operator(ExportESE.bl_idname, text='No flags checked')
 
 # swy: global variable to store icons in
 custom_icons = None
