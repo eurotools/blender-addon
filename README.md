@@ -54,7 +54,7 @@ For more info about which things each format supports, you can look at the [wiki
 
 # To develop
 
-For ease of development it's a good idea to install the add-on in some place where Blender can find it, otherwise you would have to change the Blender startup script to add your folder to the Python search path, a good place to put it in the local scripts folder.
+For ease of development it's a good idea to install the add-on in some place where Blender can find it, otherwise you would have to change the Blender startup script to add your folder to the Python search path, a good place to put it is the local scripts folder.
 
 You can do this by cloning the Git repository and making a symbolic link from one folder to another. On Windows, open `cmd`, navigate to your local Git repository folder (with `cd <path>`) and type something like this, note the `2.93` version and adjust accordingly:
 ```
