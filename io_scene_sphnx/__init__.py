@@ -407,12 +407,20 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        row = layout.column_flow(columns=2)
+        
+
+        box = layout.box()
+        row = box.column_flow(columns=2)
         row.prop(context.mesh.euroland, "my_enum", expand=True)
-        layout.operator(ImportEIF.bl_idname, text='Apply to selected')
-        butt = layout.row(align=True)
-        butt.operator(ExportESE.bl_idname, text='Select flags checked')
-        butt.operator(ExportESE.bl_idname, text='Select no flags')
+        box.operator(ImportEIF.bl_idname, text='Apply to selected')
+        
+        
+        butt = layout.split()
+        butt.label(text="Select with flags checked:")
+        butt.operator(ExportESE.bl_idname, text='Select')
+        butt = layout.split(align=True)
+        butt.label(text="Select no flags checked:")
+        butt.operator(ExportESE.bl_idname, text='Select')
 
 # swy: global variable to store icons in
 custom_icons = None
