@@ -18,6 +18,7 @@ bl_info = {
 import os
 import bpy
 import bpy.utils.previews
+
 from bpy.props import(
         BoolProperty,
         FloatProperty,
@@ -189,17 +190,11 @@ class EIF_EXPORT_PT_output_options(bpy.types.Panel):
 
     @classmethod
     def poll(cls, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        return operator.bl_idname == "EXPORT_SCENE_OT_eif"
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_eif"
 
     def draw(self, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        self.layout.prop(operator, 'Output_Map')
-        self.layout.prop(operator, 'Output_Transform')
+        self.layout.prop(context.space_data.active_operator, 'Output_Map')
+        self.layout.prop(context.space_data.active_operator, 'Output_Transform')
 
 class EIF_EXPORT_PT_scale(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
@@ -209,16 +204,10 @@ class EIF_EXPORT_PT_scale(bpy.types.Panel):
 
     @classmethod
     def poll(cls, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        return operator.bl_idname == "EXPORT_SCENE_OT_eif"
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_eif"
 
     def draw(self, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        self.layout.prop(operator, "global_scale")
+        self.layout.prop(context.space_data.active_operator, "global_scale")
 
 @orientation_helper(axis_forward='Z', axis_up='Y')
 class ExportESE(bpy.types.Operator, ExportHelper):
@@ -314,18 +303,12 @@ class ESE_EXPORT_PT_output_options(bpy.types.Panel):
 
     @classmethod
     def poll(cls, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        return operator.bl_idname == "EXPORT_SCENE_OT_ese"
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_ese"
 
     def draw(self, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        self.layout.prop(operator, 'Output_Materials')
-        self.layout.prop(operator, 'Output_CameraLightAnims')
-        self.layout.prop(operator, 'Output_Animations')
+        self.layout.prop(context.space_data.active_operator, 'Output_Materials')
+        self.layout.prop(context.space_data.active_operator, 'Output_CameraLightAnims')
+        self.layout.prop(context.space_data.active_operator, 'Output_Animations')
 
 class ESE_EXPORT_PT_mesh_options(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
@@ -335,17 +318,11 @@ class ESE_EXPORT_PT_mesh_options(bpy.types.Panel):
 
     @classmethod
     def poll(cls, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        return operator.bl_idname == "EXPORT_SCENE_OT_ese"
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_ese"
 
     def draw(self, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        self.layout.prop(operator, 'Flip_Polygons')
-        self.layout.prop(operator, 'Output_VertexColors')
+        self.layout.prop(context.space_data.active_operator, 'Flip_Polygons')
+        self.layout.prop(context.space_data.active_operator, 'Output_VertexColors')
 
 class ESE_EXPORT_PT_object_types(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
@@ -356,16 +333,10 @@ class ESE_EXPORT_PT_object_types(bpy.types.Panel):
 
     @classmethod
     def poll(cls, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        return operator.bl_idname == "EXPORT_SCENE_OT_ese"
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_ese"
 
     def draw(self, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        self.layout.column().prop(operator, "object_types")
+        self.layout.column().prop(context.space_data.active_operator, "object_types")
 
 class ESE_EXPORT_PT_scale(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
@@ -375,16 +346,28 @@ class ESE_EXPORT_PT_scale(bpy.types.Panel):
 
     @classmethod
     def poll(cls, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        return operator.bl_idname == "EXPORT_SCENE_OT_ese"
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_ese"
 
     def draw(self, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        self.layout.prop(operator, "global_scale")
+        self.layout.prop(context.space_data.active_operator, "global_scale")
+        
+        
+def update_after_enum(self, context):
+    print('self.my_enum ---->', self.my_enum)
+    
+class IgnitProperties(bpy.types.PropertyGroup):
+    my_enum = bpy.props.EnumProperty(
+        name = "My options",
+        description = "My enum description",
+        items = [
+            ("Silver" , "Silver" , "Description..."),
+            ("Gold", "Gold", "other description"),
+            ("Space Grey", "Space Grey", "Some other description")            
+        ],
+        update=update_after_enum
+    )
+    # my_string = bpy.props.StringProperty()
+    # my_integer = bpy.props.IntProperty()
 
 class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
     bl_label = 'Eurocom Tools'
@@ -393,7 +376,10 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
     bl_context = 'data'
 
     def draw(self, context):
-        pass
+        layout = self.layout
+        scene = context.scene
+        row = layout.row()
+        #row.prop(scene.ignit_panel, "my_enum", expand=True)
 
 # swy: global variable to store icons in
 custom_icons = None
@@ -451,6 +437,7 @@ def register():
     # swy: load every custom icon image from here; as an image preview
     global custom_icons; custom_icons = bpy.utils.previews.new()
     custom_icons.load('sphinx_ico', os.path.join(os.path.dirname(__file__), 'icons/sphinx.png'), 'IMAGE')
+ 
 
 def unregister():
     bpy.utils.previews.remove(custom_icons)
