@@ -355,50 +355,49 @@ class ESE_EXPORT_PT_scale(bpy.types.Panel):
 def update_after_enum(self, context):
     print('self.my_enum ---->', self.my_enum)
 
-class IgnitProperties(bpy.types.PropertyGroup):
+class EuroProperties(bpy.types.PropertyGroup):
     my_enum: bpy.props.EnumProperty(
-        name = "My options",
-        description = "My enum description",
+        name = "Eurocom flags",
+        #description = "Per-face bitfield for Euroland entities.",
         options = {'ENUM_FLAG'},
         items = [
             # swy: configurable per-project flags0
             ("", "Project Flags", ""),
-            ("Silver", "Water / NoJump (line seg.)",                                     "0x0001"),
-            ("Silver", "UnderWater / Ladder (line seg. and line poly)",                  "0x0002"),
-            ("Silver", "Slippery (line poly) / Wall (line seg.) / NoDive (normal poly)", "0x0004"),
-            ("Silver", "Moveable / Edge (line seg.)",                                    "0x0008"),
+            ("0x0001", "Water / NoJump (line seg.)",                                     "0x0001"),
+            ("0x0002", "UnderWater / Ladder (line seg. and line poly)",                  "0x0002"),
+            ("0x0004", "Slippery (line poly) / Wall (line seg.) / NoDive (normal poly)", "0x0004"),
+            ("0x0008", "Moveable / Edge (line seg.)",                                    "0x0008"),
             (None),
-            ("Silver", "Riser / ZipHandle (grab poly)",                                  "0x0010"),
-            ("Silver", "No Camera Collision",                                            "0x0020"),
-            ("Silver", "No Char Lighting",                                               "0x0040"),
-            ("Silver", "User Flag8",                                                     "0x0080"),
+            ("0x0010", "Riser / ZipHandle (grab poly)",                                  "0x0010"),
+            ("0x0020", "No Camera Collision",                                            "0x0020"),
+            ("0x0040", "No Char Lighting",                                               "0x0040"),
+            ("0x0080", "User Flag8",                                                     "0x0080"),
             (None),
-            ("Silver", "DualSide Collision",                                             "0x0100"),
-            ("Silver", "Flag10",                                                         "0x0200"),
-            ("Silver", "No Dynamic Lighting",                                            "0x0400"),
-            ("Silver", "No Dynamic Shadows",                                             "0x0800"),
+            ("0x0100", "DualSide Collision",                                             "0x0100"),
+            ("0x0200", "Flag10",                                                         "0x0200"),
+            ("0x0400", "No Dynamic Lighting",                                            "0x0400"),
+            ("0x0800", "No Dynamic Shadows",                                             "0x0800"),
             (None),
-            ("Silver", "No Cast Shadows",                                                "0x1000"),
-            ("Silver", "Dont BSP Poly",                                                  "0x2000"),
-            ("Silver", "BSP Only Poly",                                                  "0x4000"),
-            ("Silver", "Flag16",                                                         "0x8000"),
+            ("0x1000", "No Cast Shadows",                                                "0x1000"),
+            ("0x2000", "Dont BSP Poly",                                                  "0x2000"),
+            ("0x4000", "BSP Only Poly",                                                  "0x4000"),
+            ("0x8000", "Flag16",                                                         "0x8000"),
 
             # swy: hardcoded Euroland flags
             ("", "Hardcoded Flags", ""),
-            ("Silver",     "Not backface culled",    "0x00010000"),
-            ("Gold",       "Portal",                 "0x00020000"),
-            ("Space Grey", "Invisible",              "0x00040000"),
-            ("Space Grey", "Line segment",           "0x00080000"),
+            ("0x00010000", "Not backface culled",    "0x00010000"),
+            ("0x00020000", "Portal",                 "0x00020000"),
+            ("0x00040000", "Invisible",              "0x00040000"),
+            ("0x00080000", "Line segment",           "0x00080000"),
             (None),
-            ("Space Grey", "Facetted",               "0x00100000"),
-            ("Space Grey", "Clip Portal",            "0x00200000"),
-            ("Space Grey", "No collision",           "0x01000000"),
-            ("Space Grey", "Always backface culled", "0x02000000")
+            ("0x00100000", "Facetted",               "0x00100000"),
+            ("0x00200000", "Clip Portal",            "0x00200000"),
+            ("0x01000000", "No collision",           "0x01000000"),
+            ("0x02000000", "Always backface culled", "0x02000000")
         ],
+        default=set(),
         update=update_after_enum
     )
-    # my_string = bpy.props.StringProperty()
-    # my_integer = bpy.props.IntProperty()
 
 class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
     bl_label = 'Eurocom Tools'
@@ -408,9 +407,8 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        scene = context.scene
-        row = layout.column()
-        row.prop(scene.ignit_panel, "my_enum", expand=True)
+        row = layout.column_flow(columns=2)
+        row.prop(context.mesh.euroland, "my_enum", expand=True)
 
 # swy: global variable to store icons in
 custom_icons = None
@@ -466,8 +464,8 @@ def register():
         bpy.types.TOPBAR_MT_file_export.append(m)
 
 
-    bpy.utils.register_class(IgnitProperties)
-    bpy.types.Scene.ignit_panel = bpy.props.PointerProperty(type=IgnitProperties)
+    bpy.utils.register_class(EuroProperties)
+    bpy.types.Mesh.euroland = bpy.props.PointerProperty(type=EuroProperties)
 
     # swy: load every custom icon image from here; as an image preview
     global custom_icons; custom_icons = bpy.utils.previews.new()
