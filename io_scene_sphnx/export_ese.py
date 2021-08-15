@@ -52,19 +52,19 @@ def _write(context, filepath,
 
             if SceneObject.type == 'CAMERA':
                 #Don't modify this, the cameras rotations works fine with this code.
-                OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, (RotationMatrix[0].y * -1), RotationMatrix[0].z))
-                OutputFile.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
-                OutputFile.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % ((RotationMatrix[2].x * -1), (RotationMatrix[2].y * -1), (RotationMatrix[2].z) * -1))
+                OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
+                OutputFile.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
+                OutputFile.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
             else:
                 #This other code needs revision, the rotations in the entity editor don't works. 
-                OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
-                OutputFile.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, (RotationMatrix[1].z) * -1))
-                OutputFile.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x, (RotationMatrix[2].y * -1), (RotationMatrix[2].z) * -1))
+                OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, RotationMatrix[0].y,      RotationMatrix[0].z     ))
+                OutputFile.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y,      RotationMatrix[1].z * -1))
+                OutputFile.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
             
             #Flip location axis
             loc_conv = InvertAxisRotationMatrix @ SceneObject.location
             OutputFile.write('\t\t*TM_ROW3 %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
-            OutputFile.write('\t\t*TM_POS %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
+            OutputFile.write('\t\t*TM_POS  %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
 
     def PrintTM_ANIMATION(OutputFile, SceneObject, TimeValue):
             OutputFile.write('\t*TM_ANIMATION {\n')
@@ -83,9 +83,9 @@ def _write(context, filepath,
                 OutputFile.write('\t\t\t*TM_FRAME %u ' % TimeValueCounter)
 
                 #Write Matrix
-                OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[0].x, (RotationMatrix[0].y * -1), RotationMatrix[0].z))
-                OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
-                OutputFile.write('%.4f %.4f %.4f ' % ((RotationMatrix[2].x * -1), (RotationMatrix[2].y * -1), (RotationMatrix[2].z) * -1))
+                OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z)     )
+                OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z)     )
+                OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z) * -1)
                 
                 #Flip location axis
                 loc_conv = InvertAxisRotationMatrix @ SceneObject.location
@@ -465,11 +465,11 @@ def _write(context, filepath,
                         out.write('\t*NODE_NAME "%s"\n' % SceneObj.name)
                         out.write('\t*NODE_PARENT "%s"\n' % SceneObj.name)
 
-                        type_lut={}
-                        type_lut['POINT']='Omni'
-                        type_lut['SPOT' ]='TargetSpot'
-                        type_lut['SUN'  ]='TargetDirect'
-                        type_lut['AREA' ]='TargetDirect' # swy: this is sort of wrong ¯\_(ツ)_/¯
+                        type_lut = {}
+                        type_lut['POINT'] = 'Omni'
+                        type_lut['SPOT' ] = 'TargetSpot'
+                        type_lut['SUN'  ] = 'TargetDirect'
+                        type_lut['AREA' ] = 'TargetDirect' # swy: this is sort of wrong ¯\_(ツ)_/¯
 
                         out.write('\t*LIGHT_TYPE %s\n' % type_lut[SceneObj.data.type]) #Seems that always used "Omni" lights in 3dsMax, in blender is called "Point"
 
