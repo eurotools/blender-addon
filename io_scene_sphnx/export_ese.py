@@ -70,11 +70,19 @@ def _write(context, filepath,
             OutputFile.write('\t\t*NODE_NAME "%s"\n' % object.name)
             OutputFile.write('\t\t*TM_ANIM_FRAMES {\n')
 
+            prev_rot = None; prev_loc = None
             TimeValueCounter = 0
             for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
                 bpy.context.scene.frame_set(f)
 
                 ConvertedMatrix = object.rotation_euler.to_matrix()
+
+                # swy: skip duplicated animation frames; less cruft
+                if (prev_rot == ConvertedMatrix and prev_loc == object.location):
+                    continue
+
+                prev_rot = ConvertedMatrix; prev_loc = object.location
+
                 rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
                 RotationMatrix = rot_mtx.transposed()
 
