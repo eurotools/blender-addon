@@ -79,12 +79,12 @@ def _write(context, filepath,
                 RotationMatrix = rot_mtx.transposed()
 
                 #Write Time Value
-                OutputFile.write('\t\t\t*TM_FRAME %u ' % TimeValueCounter)
+                OutputFile.write('\t\t\t*TM_FRAME  %u ' % TimeValueCounter)
 
                 #Write Matrix
-                OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z)     )
-                OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z)     )
-                OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z) * -1)
+                OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
+                OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
+                OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
                 
                 #Flip location axis
                 loc_conv = InvertAxisRotationMatrix @ object.location
@@ -130,8 +130,6 @@ def _write(context, filepath,
             out.write('\t*SCENE_LASTFRAME %u\n' % bpy.context.scene.frame_end)
             out.write('\t*SCENE_FRAMESPEED %u\n' %  bpy.context.scene.render.fps)
             out.write('\t*SCENE_TICKSPERFRAME %u\n' % TimeValue)
-            out.write('\t*SCENE_BACKGROUND_STATIC 1.0 1.0 1.0\n')    
-            out.write('\t*SCENE_AMBIENT_STATIC 0.5020 0.5020 0.5020\n')
             out.write('}\n')
 
             #===============================================================================================
