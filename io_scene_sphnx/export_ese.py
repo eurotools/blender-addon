@@ -248,7 +248,7 @@ def _write(context, filepath,
                                         if DataToAppend not in UVVertexList:
                                             UVVertexList.append(DataToAppend)
 
-                            if EXPORT_VERTEXCOLORS:
+                            if True:
                                 #Get Vertex Colors List 
                                 VertexColorList = []
                                 for name, cl in bm.loops.layers.color.items():
@@ -303,19 +303,26 @@ def _write(context, filepath,
 
                             #Face Layers UVs Index
                             layerIndex = 0
-                            out.write('\t\t*MESH_NUMTFACELAYERS %u\n' % len(bm.loops.layers.uv.items()))
-                            for name, uv_lay in bm.loops.layers.uv.items():
-                                out.write('\t\t*MESH_TFACELAYER %u {\n' % layerIndex)
-                                out.write('\t\t\t*MESH_NUMTVFACES %u \n' % len(bm.faces))
-                                out.write('\t\t\t*MESH_TFACELIST {\n')           
-                                for i, tri in enumerate(tris):
-                                    out.write('\t\t\t\t*MESH_TFACE %u ' % i)
-                                    out.write('%u %u %u\n' % (UVVertexList.index(tri[0][uv_lay].uv), UVVertexList.index(tri[1][uv_lay].uv), UVVertexList.index(tri[2][uv_lay].uv)))
-                                out.write('\t\t\t}\n')
-                                out.write('\t\t}\n')
-                                layerIndex += 1
+                            #out.write('\t\t*MESH_NUMTFACELAYERS %u\n' % len(bm.loops.layers.uv.items()))
+                            #for name, uv_lay in bm.loops.layers.uv.items():
+                            #    out.write('\t\t*MESH_TFACELAYER %u {\n' % layerIndex)
+                            #    out.write('\t\t\t*MESH_NUMTVFACES %u \n' % len(bm.faces))
+                            #    out.write('\t\t\t*MESH_TFACELIST {\n')           
+                            #    for i, tri in enumerate(tris):
+                            #        out.write('\t\t\t\t*MESH_TFACE %u ' % i)
+                            #        out.write('%u %u %u\n' % (UVVertexList.index(tri[0][uv_lay].uv), UVVertexList.index(tri[1][uv_lay].uv), UVVertexList.index(tri[2][uv_lay].uv)))
+                            #    out.write('\t\t\t}\n')
+                            #    out.write('\t\t}\n')
+                            #    layerIndex += 1
 
-                            if EXPORT_VERTEXCOLORS:
+                            # swy: fix-me: add the custom mesh attributes here
+                            out.write("\t\t*MESH_NUMFACEFLAGS %u\n" % len(bm.faces))
+                            out.write("\t\t*MESH_FACEFLAGLIST {\n")
+                            for i, tri in enumerate(tris):
+                                out.write('\t\t\t*MESH_FACEFLAG %u %u\n' % (i, 0))
+                            out.write("\t\t}\n")
+
+                            if True:
                                 #Vertex Colors List
                                 out.write('\t\t*MESH_NUMCVERTEX %u\n' % len(VertexColorList))
                                 out.write('\t\t*MESH_CVERTLIST {\n')
