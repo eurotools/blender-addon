@@ -205,7 +205,7 @@ def _write(context, filepath,
 
             #===============================================================================================
             #  GEOM OBJECT
-            #=============================================================================================== 
+            #===============================================================================================
             if 'MESH' in EXPORT_OBJECTTYPES:
                 for indx, obj in enumerate(bpy.context.scene.objects):
                     if obj.type == 'MESH':
@@ -321,6 +321,21 @@ def _write(context, filepath,
                             for i, tri in enumerate(tris):
                                 out.write('\t\t\t*MESH_FACEFLAG %u %u\n' % (i, 0))
                             out.write("\t\t}\n")
+
+                            for indx, obj in enumerate(bpy.context.scene.objects):
+                                if obj.type == 'ARMATURE':
+                                    out.write("\t\t*SKIN_DATA {\n")
+                                    out.write("\t\t\t*BONE_LIST {\n")
+                                    for bidx, bone in enumerate(obj.data.bones):
+                                        out.write('\t\t\t\t*BONE %u "%s"\n' % (bidx, bone.name))
+                                    out.write("\t\t\t}\n")
+
+                                    out.write('\t\t\t*SKIN_VERTEX_DATA {\n')
+                                    for bidx, bone in enumerate(obj.data.bones):
+                                        out.write('\t\t\t\t*VERTEX\n ')
+                                    out.write("\t\t\t}\n")
+
+                                    out.write("\t\t}\n")
 
                             if True:
                                 #Vertex Colors List
