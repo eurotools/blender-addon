@@ -449,6 +449,10 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
     bl_region_type = 'WINDOW'
     bl_context = 'data'
 
+    @classmethod
+    def poll(cls, context):
+        return (context.object is not None and context.object.type == 'MESH')
+
     def draw(self, context):
         box = self.layout.box()
         row = box.column_flow(columns=2)
