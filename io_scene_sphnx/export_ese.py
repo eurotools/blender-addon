@@ -31,26 +31,25 @@ def _write(context, filepath,
     #===============================================================================================
     #  GLOBAL VARIABLES
     #===============================================================================================
-    ProjectContextScene = bpy.context.scene
     InvertAxisRotationMatrix = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0)))
 
     #===============================================================================================
     #  FUNCTIONS
     #===============================================================================================
-    def PrintNODE_TM(OutputFile, SceneObject):
-            ProjectContextScene.frame_set(ProjectContextScene.frame_start)
+    def PrintNODE_TM(OutputFile, object):
+            bpy.context.scene.frame_set(bpy.context.scene.frame_start)
 
-            ConvertedMatrix = SceneObject.rotation_euler.to_matrix()
+            ConvertedMatrix = object.rotation_euler.to_matrix()
             rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
             RotationMatrix = rot_mtx.transposed()
 
             #Write Matrix
-            OutputFile.write('\t\t*NODE_NAME "%s"\n' % SceneObject.name)
+            OutputFile.write('\t\t*NODE_NAME "%s"\n' % object.name)
             OutputFile.write('\t\t*INHERIT_POS %u %u %u\n' % (0,0,0))
             OutputFile.write('\t\t*INHERIT_ROT %u %u %u\n' % (0,0,0))
             OutputFile.write('\t\t*INHERIT_SCL %u %u %u\n' % (1,1,1))
 
-            if SceneObject.type == 'CAMERA':
+            if object.type == 'CAMERA':
                 #Don't modify this, the cameras rotations works fine with this code.
                 OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
                 OutputFile.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
@@ -62,20 +61,20 @@ def _write(context, filepath,
                 OutputFile.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
             
             #Flip location axis
-            loc_conv = InvertAxisRotationMatrix @ SceneObject.location
+            loc_conv = InvertAxisRotationMatrix @ object.location
             OutputFile.write('\t\t*TM_ROW3 %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
             OutputFile.write('\t\t*TM_POS  %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
 
-    def PrintTM_ANIMATION(OutputFile, SceneObject, TimeValue):
+    def PrintTM_ANIMATION(OutputFile, object, TimeValue):
             OutputFile.write('\t*TM_ANIMATION {\n')
-            OutputFile.write('\t\t*NODE_NAME "%s"\n' % SceneObject.name)
+            OutputFile.write('\t\t*NODE_NAME "%s"\n' % object.name)
             OutputFile.write('\t\t*TM_ANIM_FRAMES {\n')
 
             TimeValueCounter = 0
-            for f in range(ProjectContextScene.frame_start, ProjectContextScene.frame_end + 1):
-                ProjectContextScene.frame_set(f)
+            for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
+                bpy.context.scene.frame_set(f)
 
-                ConvertedMatrix = SceneObject.rotation_euler.to_matrix()
+                ConvertedMatrix = object.rotation_euler.to_matrix()
                 rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
                 RotationMatrix = rot_mtx.transposed()
 
@@ -88,7 +87,7 @@ def _write(context, filepath,
                 OutputFile.write('%.4f %.4f %.4f ' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z) * -1)
                 
                 #Flip location axis
-                loc_conv = InvertAxisRotationMatrix @ SceneObject.location
+                loc_conv = InvertAxisRotationMatrix @ object.location
                 OutputFile.write('%.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
 
                 #Update counter
@@ -98,7 +97,7 @@ def _write(context, filepath,
 
     def GetMaterialCount():
         Materials_Number = 0
-        for indx, MeshObj in enumerate(ProjectContextScene.objects):
+        for indx, MeshObj in enumerate(bpy.context.scene.objects):
             if MeshObj.type == 'MESH':
                 Materials_Number += 1
         return Materials_Number
@@ -123,18 +122,16 @@ def _write(context, filepath,
             #===============================================================================================
             #  SCENE INFO
             #=============================================================================================== 
-            BackgroundC = bpy.data.worlds["World"].node_tree.nodes["Background"].inputs[0].default_value
-            AmbientValue = ProjectContextScene.world.light_settings.ao_factor
-            TimeValue = 4800/ProjectContextScene.render.fps
+            TimeValue = 4800/bpy.context.scene.render.fps
 
             out.write('*SCENE {\n')
             out.write('\t*SCENE_FILENAME "%s"\n' % os.path.basename(bpy.data.filepath))
-            out.write('\t*SCENE_FIRSTFRAME %u\n' % ProjectContextScene.frame_start)
-            out.write('\t*SCENE_LASTFRAME %u\n' % ProjectContextScene.frame_end)
-            out.write('\t*SCENE_FRAMESPEED %u\n' %  ProjectContextScene.render.fps)
+            out.write('\t*SCENE_FIRSTFRAME %u\n' % bpy.context.scene.frame_start)
+            out.write('\t*SCENE_LASTFRAME %u\n' % bpy.context.scene.frame_end)
+            out.write('\t*SCENE_FRAMESPEED %u\n' %  bpy.context.scene.render.fps)
             out.write('\t*SCENE_TICKSPERFRAME %u\n' % TimeValue)
-            out.write('\t*SCENE_BACKGROUND_STATIC %u %u %u\n' %(BackgroundC[0], BackgroundC[1], BackgroundC[2]))    
-            out.write('\t*SCENE_AMBIENT_STATIC %.4f %.4f %.4f\n' %(AmbientValue, AmbientValue, AmbientValue))
+            out.write('\t*SCENE_BACKGROUND_STATIC 1.0 1.0 1.0\n')    
+            out.write('\t*SCENE_AMBIENT_STATIC 0.5020 0.5020 0.5020\n')
             out.write('}\n')
 
             #===============================================================================================
@@ -143,7 +140,7 @@ def _write(context, filepath,
             if EXPORT_MATERIALS:
                 out.write('*MATERIAL_LIST {\n')
                 out.write('\t*MATERIAL_COUNT %u\n' % GetMaterialCount())
-                for indx, MeshObj in enumerate(ProjectContextScene.objects):
+                for indx, MeshObj in enumerate(bpy.context.scene.objects):
                         if MeshObj.type == 'MESH':
                             #Material
                             out.write('\t*MATERIAL %u {\n' % indx)
@@ -210,12 +207,12 @@ def _write(context, filepath,
             #  GEOM OBJECT
             #=============================================================================================== 
             if 'MESH' in EXPORT_OBJECTTYPES:
-                for indx, SceneObj in enumerate(ProjectContextScene.objects):
-                    if SceneObj.type == 'MESH':
-                        if hasattr(SceneObj, 'data'):
+                for indx, obj in enumerate(bpy.context.scene.objects):
+                    if obj.type == 'MESH':
+                        if hasattr(obj, 'data'):
                             #===========================================[Clone Object]====================================================
                             depsgraph = bpy.context.evaluated_depsgraph_get()
-                            ob_for_convert = SceneObj.evaluated_get(depsgraph)
+                            ob_for_convert = obj.evaluated_get(depsgraph)
 
                             try:
                                 MeshObject = ob_for_convert.to_mesh()
@@ -225,7 +222,7 @@ def _write(context, filepath,
                                 continue
 
                             #===========================================[Apply Matrix]====================================================
-                            MeshObject.transform(EXPORT_GLOBAL_MATRIX @ SceneObj.matrix_world)
+                            MeshObject.transform(EXPORT_GLOBAL_MATRIX @ obj.matrix_world)
                             if EXPORT_FLIP_POLYGONS:
                                 MeshObject.flip_normals()
 
@@ -263,16 +260,16 @@ def _write(context, filepath,
 
                             #===========================================[Print Object Data]====================================================       
                             out.write('*GEOMOBJECT {\n')
-                            out.write('\t*NODE_NAME "%s"\n' % SceneObj.name)
+                            out.write('\t*NODE_NAME "%s"\n' % obj.name)
 
                             #Print Matrix Rotation
                             out.write('\t*NODE_TM {\n')
-                            PrintNODE_TM(out, SceneObj)
+                            PrintNODE_TM(out, obj)
                             out.write('\t}\n')
 
                             #Print Matrix Rotation again ¯\_(ツ)_/¯
                             out.write('\t*PIVOT_TM {\n')
-                            PrintNODE_TM(out, SceneObj)
+                            PrintNODE_TM(out, obj)
                             out.write('\t}\n')
 
                             #MESH Section
@@ -353,7 +350,7 @@ def _write(context, filepath,
                             #  ANIMATION
                             #===============================================================================================
                             if EXPORT_ANIMATION:
-                                PrintTM_ANIMATION(out, SceneObj, TimeValue)
+                                PrintTM_ANIMATION(out, obj, TimeValue)
                             
                             #Material Reference
                             if EXPORT_MATERIALS:
@@ -366,9 +363,9 @@ def _write(context, filepath,
             if 'CAMERA' in EXPORT_OBJECTTYPES:
                 CamerasList = []
 
-                for SceneObj in ProjectContextScene.objects:
-                    if SceneObj.type == 'CAMERA':
-                        CamerasList.append(SceneObj)
+                for obj in bpy.context.scene.objects:
+                    if obj.type == 'CAMERA':
+                        CamerasList.append(obj)
                 CamerasList.sort(key = lambda o: o.name)
 
                 for CameraObj in CamerasList:  
@@ -399,8 +396,8 @@ def _write(context, filepath,
                         out.write('\t*CAMERA_ANIMATION {\n')
                         
                         TimeValueCounter = 0
-                        for f in range(ProjectContextScene.frame_start, ProjectContextScene.frame_end + 1):
-                            ProjectContextScene.frame_set(f)
+                        for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
+                            bpy.context.scene.frame_set(f)
 
                             out.write('\t\t*CAMERA_SETTINGS {\n')
                             out.write('\t\t\t*TIMEVALUE %u\n' % TimeValueCounter)
@@ -420,50 +417,17 @@ def _write(context, filepath,
                     if EXPORT_ANIMATION:
                         PrintTM_ANIMATION(out, CameraObj, TimeValue)
 
-                    #===============================================================================================
-                    #  USER DATA (ONLY FOR SCRIPTS)
-                    #===============================================================================================
-                    if CameraObj == CamerasList[-1] and len(CamerasList) > 1:
-                        out.write('\t*USER_DATA %u {\n' % 0)
-                        out.write('\t\tCameraScript = %u\n' % 1)
-                        out.write('\t\tCameraScript_numCameras = %u\n' % len(CamerasList))
-                        out.write('\t\tCameraScript_globalOffset = %u\n' % 0)
-
-                        #Print Cameras Info
-                        CameraNumber = 1
-                        CamStart = 0
-                        CamEnd = 0
-                        for ob in CamerasList:
-                            if ob.type == 'CAMERA':
-                                #Get Camera Keyframes
-                                if ob.animation_data:
-                                    if ob.animation_data.action is not None:
-                                        Keyframe_Points_list = []
-                                        for curve in ob.animation_data.action.fcurves:
-                                            for key in curve.keyframe_points:
-                                                key_idx = int(key.co[0])
-                                                if key_idx not in Keyframe_Points_list:
-                                                    Keyframe_Points_list.append(key_idx)
-                                        
-                                        #Calculate EuroLand Start
-                                        CamEnd = CamStart + (Keyframe_Points_list[-1] - Keyframe_Points_list[0])
-                                        out.write('\t\tCameraScript_camera%u = %s %u %u %u %u\n' % (CameraNumber, ob.name, Keyframe_Points_list[0], Keyframe_Points_list[-1], CamStart, CamEnd))
-                                        
-                                        #Calculate EuroLand End
-                                        CamStart += Keyframe_Points_list[-1] + 1
-                                        CameraNumber += 1
-                        out.write('\t}\n')
                     out.write('}\n')
 
             #===============================================================================================
             #  LIGHT OBJECT
             #===============================================================================================
             if 'LIGHT' in EXPORT_OBJECTTYPES:
-                for SceneObj in ProjectContextScene.objects:
-                    if SceneObj.type == 'LIGHT':
+                for obj in bpy.context.scene.objects:
+                    if obj.type == 'LIGHT':
                         out.write('*LIGHTOBJECT {\n')
-                        out.write('\t*NODE_NAME "%s"\n' % SceneObj.name)
-                        out.write('\t*NODE_PARENT "%s"\n' % SceneObj.name)
+                        out.write('\t*NODE_NAME "%s"\n' % obj.name)
+                        out.write('\t*NODE_PARENT "%s"\n' % obj.name)
 
                         type_lut = {}
                         type_lut['POINT'] = 'Omni'
@@ -471,17 +435,17 @@ def _write(context, filepath,
                         type_lut['SUN'  ] = 'TargetDirect'
                         type_lut['AREA' ] = 'TargetDirect' # swy: this is sort of wrong ¯\_(ツ)_/¯
 
-                        out.write('\t*LIGHT_TYPE %s\n' % type_lut[SceneObj.data.type]) #Seems that always used "Omni" lights in 3dsMax, in blender is called "Point"
+                        out.write('\t*LIGHT_TYPE %s\n' % type_lut[obj.data.type]) #Seems that always used "Omni" lights in 3dsMax, in blender is called "Point"
 
                         #Print Matrix Rotation
                         out.write('\t*NODE_TM {\n')
-                        PrintNODE_TM(out, SceneObj)
+                        PrintNODE_TM(out, obj)
                         out.write('\t}\n')
 
                         #---------------------------------------------[Light Props]---------------------------------------------
                         out.write('\t*LIGHT_DECAY %s\n' % "InvSquare") # swy: this is the only supported mode
                         out.write('\t*LIGHT_AFFECT_DIFFUSE %s\n' % "Off") #for now
-                        if (SceneObj.data.specular_factor > 0.001):
+                        if (obj.data.specular_factor > 0.001):
                             out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "On") #for now
                         else:
                             out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "Off") #for now
@@ -490,10 +454,10 @@ def _write(context, filepath,
                         #---------------------------------------------[Light Settings]---------------------------------------------           
                         out.write('\t*LIGHT_SETTINGS {\n')
                         out.write('\t\t*TIMEVALUE %u\n' % 0)
-                        out.write('\t\t*COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r, SceneObj.data.color.g, SceneObj.data.color.b))
-                        out.write('\t\t*FAR_ATTEN %.4f %.4f\n' % (SceneObj.data.distance, SceneObj.data.cutoff_distance))
-                        if (SceneObj.data.type == 'SUN'):
-                            out.write('\t\t*HOTSPOT %u\n' % math.degrees(SceneObj.data.angle))
+                        out.write('\t\t*COLOR %.4f %.4f %.4f\n' % (obj.data.color.r, obj.data.color.g, obj.data.color.b))
+                        out.write('\t\t*FAR_ATTEN %.4f %.4f\n' % (obj.data.distance, obj.data.cutoff_distance))
+                        if (obj.data.type == 'SUN'):
+                            out.write('\t\t*HOTSPOT %u\n' % math.degrees(obj.data.angle))
                         else:
                             out.write('\t\t*HOTSPOT %u\n' % 0)
                         out.write('\t}\n')
@@ -505,15 +469,15 @@ def _write(context, filepath,
                             out.write('\t*LIGHT_ANIMATION {\n')
 
                             TimeValueCounter = 0
-                            for f in range(ProjectContextScene.frame_start, ProjectContextScene.frame_end + 1):
-                                ProjectContextScene.frame_set(f)
+                            for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
+                                bpy.context.scene.frame_set(f)
 
                                 out.write('\t\t*LIGHT_SETTINGS {\n')
                                 out.write('\t\t\t*TIMEVALUE %u\n' % TimeValueCounter)
-                                out.write('\t\t\t*COLOR %.4f %.4f %.4f\n' % (SceneObj.data.color.r, SceneObj.data.color.g, SceneObj.data.color.b))
-                                out.write('\t\t\t*FAR_ATTEN %.4f %.4f\n' % (SceneObj.data.distance, SceneObj.data.cutoff_distance))
-                                if (SceneObj.data.type == 'SUN'):
-                                    out.write('\t\t\t*HOTSPOT %u\n' % math.degrees(SceneObj.data.angle))
+                                out.write('\t\t\t*COLOR %.4f %.4f %.4f\n' % (obj.data.color.r, obj.data.color.g, obj.data.color.b))
+                                out.write('\t\t\t*FAR_ATTEN %.4f %.4f\n' % (obj.data.distance, obj.data.cutoff_distance))
+                                if (obj.data.type == 'SUN'):
+                                    out.write('\t\t\t*HOTSPOT %u\n' % math.degrees(obj.data.angle))
                                 else:
                                     out.write('\t\t\t*HOTSPOT %u\n' % 0)
                                 out.write('\t\t}\n')
@@ -526,7 +490,7 @@ def _write(context, filepath,
                         #  ANIMATION
                         #===============================================================================================
                         if EXPORT_ANIMATION:
-                            PrintTM_ANIMATION(out, SceneObj, TimeValue)
+                            PrintTM_ANIMATION(out, obj, TimeValue)
 
                         #Close light object
                         out.write('}\n')
