@@ -28,10 +28,11 @@ def _write(context, filepath,
             EXPORT_GLOBAL_MATRIX,
         ):
 
-    #===============================================================================================
-    #  GLOBAL VARIABLES
-    #===============================================================================================
-    InvertAxisRotationMatrix = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0)))
+    # swy: convert from the blender to the euroland coordinate system; we can't do that with the
+    #      standard matrix transformations
+    InvertAxisRotationMatrix = Matrix(((1, 0, 0),
+                                       (0, 0, 1),
+                                       (0, 1, 0)))
 
     #===============================================================================================
     #  FUNCTIONS
@@ -70,18 +71,11 @@ def _write(context, filepath,
             OutputFile.write('\t\t*NODE_NAME "%s"\n' % object.name)
             OutputFile.write('\t\t*TM_ANIM_FRAMES {\n')
 
-            prev_rot = None; prev_loc = None
             TimeValueCounter = 0
             for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
                 bpy.context.scene.frame_set(f)
 
                 ConvertedMatrix = object.rotation_euler.to_matrix()
-
-                # swy: skip duplicated animation frames; less cruft
-                if (prev_rot == ConvertedMatrix and prev_loc == object.location):
-                    continue
-
-                prev_rot = ConvertedMatrix; prev_loc = object.location
 
                 rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
                 RotationMatrix = rot_mtx.transposed()
@@ -389,16 +383,13 @@ def _write(context, filepath,
                     #=============================================================================================== 
                     out.write('\t*CAMERA_SETTINGS {\n')
                     out.write('\t\t*TIMEVALUE %u\n' % 0)
-                    out.write('\t\t*CAMERA_NEAR %.4f\n' % 0)
-                    out.write('\t\t*CAMERA_FAR %.4f\n'% CameraObj.data.clip_end)  
                     out.write('\t\t*CAMERA_FOV %.4f\n'% CameraObj.data.angle)
-                    out.write('\t\t*CAMERA_TDIST %.4f\n'% 15.9229)
                     out.write('\t}\n')
 
                     #===============================================================================================
                     #  CAMERA ANIMATION
                     #===============================================================================================
-                    if EXPORT_CAMERALIGHTANIMS:
+                    if EXPORT_ANIMATION:
                         out.write('\t*CAMERA_ANIMATION {\n')
                         
                         TimeValueCounter = 0
@@ -407,10 +398,7 @@ def _write(context, filepath,
 
                             out.write('\t\t*CAMERA_SETTINGS {\n')
                             out.write('\t\t\t*TIMEVALUE %u\n' % TimeValueCounter)
-                            out.write('\t\t\t*CAMERA_NEAR %.4f\n' % 0)
-                            out.write('\t\t\t*CAMERA_FAR %.4f\n'% CameraObj.data.clip_end)  
                             out.write('\t\t\t*CAMERA_FOV %.4f\n'% CameraObj.data.angle)
-                            out.write('\t\t\t*CAMERA_TDIST %.4f\n'% 15.9229)
                             out.write('\t\t}\n')
 
                             TimeValueCounter += TimeValue
@@ -471,7 +459,7 @@ def _write(context, filepath,
                         #===============================================================================================
                         #  LIGHT ANIMATION
                         #=============================================================================================== 
-                        if EXPORT_CAMERALIGHTANIMS:
+                        if EXPORT_ANIMATION:
                             out.write('\t*LIGHT_ANIMATION {\n')
 
                             TimeValueCounter = 0
