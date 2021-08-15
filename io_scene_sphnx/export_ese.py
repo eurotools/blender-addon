@@ -322,20 +322,27 @@ def _write(context, filepath,
                                 out.write('\t\t\t*MESH_FACEFLAG %u %u\n' % (i, 0))
                             out.write("\t\t}\n")
 
-                            for indx, obj in enumerate(bpy.context.scene.objects):
-                                if obj.type == 'ARMATURE':
+                            for indx, mod in enumerate(obj.modifiers):
+                                if mod.type == 'ARMATURE' and mod.object and mod.object.type == 'ARMATURE':
+                                    armat = mod.object
                                     out.write("\t\t*SKIN_DATA {\n")
                                     out.write("\t\t\t*BONE_LIST {\n")
-                                    for bidx, bone in enumerate(obj.data.bones):
+                                    for bidx, bone in enumerate(armat.data.bones):
                                         out.write('\t\t\t\t*BONE %u "%s"\n' % (bidx, bone.name))
                                     out.write("\t\t\t}\n")
 
                                     out.write('\t\t\t*SKIN_VERTEX_DATA {\n')
-                                    for bidx, bone in enumerate(obj.data.bones):
-                                        out.write('\t\t\t\t*VERTEX\n ')
+                                    for vidx, vert in enumerate(obj.data.vertices):
+                                        #for bidx, bone in enumerate(armat.data.bones):
+                                            out.write('\t\t\t\t*VERTEX %u %u' % (vidx, len(vert.groups)))
+                                            for gidx, group in enumerate(vert.groups):
+                                                out.write(' %u %f' % (gidx, group.weight))
+                                            out.write("\n")
                                     out.write("\t\t\t}\n")
 
                                     out.write("\t\t}\n")
+
+                                    break
 
                             if True:
                                 #Vertex Colors List
