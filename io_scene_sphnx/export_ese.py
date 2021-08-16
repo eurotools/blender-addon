@@ -311,11 +311,11 @@ def _write(context, filepath,
                             #Face Vertex Index
                             w_new_block('*MESH_FACE_LIST {')   
                             for i, tri in enumerate(tris):
-                                write_scope_no_cr('*MESH_FACE %u: ' % i)
-                                out.write('A: %u B: %u C: %u ' % (VertexList.index(tri[0].vert.co), VertexList.index(tri[1].vert.co), VertexList.index(tri[2].vert.co)))
-                                out.write('AB: %u BC: %u CA: %u ' % (not tri[0].vert.hide, not tri[1].vert.hide, not tri[2].vert.hide))   
-                                out.write('*MESH_SMOOTHING 1 ')
-                                out.write('*MESH_MTLID %u\n' % tri[0].face.material_index)
+                                write_scope_no_cr('*MESH_FACE %u:' % i)
+                                out.write('  A: %u B: %u C: %u' % (VertexList.index(tri[0].vert.co), VertexList.index(tri[1].vert.co), VertexList.index(tri[2].vert.co)))
+                                out.write('  AB: %u BC: %u CA: %u' % (not tri[0].vert.hide, not tri[1].vert.hide, not tri[2].vert.hide))   
+                                out.write('  *MESH_SMOOTHING 1')
+                                out.write('  *MESH_MTLID %u\n' % tri[0].face.material_index)
                             w_end_block('}')
 
                             #Texture UVs
@@ -344,8 +344,17 @@ def _write(context, filepath,
                             write_scope("*MESH_NUMFACEFLAGS %u" % len(bm.faces))
                             w_new_block("*MESH_FACEFLAGLIST {")
                             for i, tri in enumerate(tris):
-                                write_scope('*MESH_FACEFLAG %u %u' % (i, 0))
+                                # swy: don't set it where it isn't needed
+                                if 0 != 0:
+                                    write_scope('*MESH_FACEFLAG %u %u' % (i, 0))
                             w_end_block("}")
+
+                            w_new_block('*MESH_VERTFLAGSLIST {')
+                            for vidx, vert in enumerate(obj.data.vertices):
+                                # swy: don't set it where it isn't needed
+                                if 0 != 0:
+                                    write_scope('*VFLAG %u %u' % (vidx, 0))
+                            w_end_block('}')
 
                             for indx, mod in enumerate(obj.modifiers):
                                 if mod.type == 'ARMATURE' and mod.object and mod.object.type == 'ARMATURE':
@@ -392,11 +401,6 @@ def _write(context, filepath,
                                         w_end_block('}')
                                         w_end_block('}')
                                         layerIndex +=1
-
-                            w_new_block('*MESH_VERTFLAGSLIST {')
-                            for vidx, vert in enumerate(obj.data.vertices):
-                                write_scope('*VFLAG %u %u' % (vidx, 0))
-                            w_end_block('}')
 
                             #Liberate BM Object
                             bm.free()
