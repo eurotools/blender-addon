@@ -328,17 +328,18 @@ def _write(context, filepath,
 
                             #Face Layers UVs Index
                             layerIndex = 0
-                            #out.write('\t\t*MESH_NUMTFACELAYERS %u\n' % len(bm.loops.layers.uv.items()))
-                            #for name, uv_lay in bm.loops.layers.uv.items():
-                            #    out.write('\t\t*MESH_TFACELAYER %u {\n' % layerIndex)
-                            #    out.write('\t\t\t*MESH_NUMTVFACES %u \n' % len(bm.faces))
-                            #    out.write('\t\t\t*MESH_TFACELIST {\n')           
-                            #    for i, tri in enumerate(tris):
-                            #        out.write('\t\t\t\t*MESH_TFACE %u ' % i)
-                            #        out.write('%u %u %u\n' % (UVVertexList.index(tri[0][uv_lay].uv), UVVertexList.index(tri[1][uv_lay].uv), UVVertexList.index(tri[2][uv_lay].uv)))
-                            #    out.write('\t\t\t}\n')
-                            #    out.write('\t\t}\n')
-                            #    layerIndex += 1
+                            if bm.loops.layers == 1:
+                                #write_scope('*MESH_NUMTFACELAYERS %u' % len(bm.loops.layers.uv.items()))
+                                for name, uv_lay in bm.loops.layers.uv.items():
+                                    #w_new_block('*MESH_TFACELAYER %u {' % layerIndex)
+                                    write_scope('*MESH_NUMTVFACES %u' % len(bm.faces))
+                                    w_new_block('*MESH_TFACELIST {')           
+                                    for i, tri in enumerate(tris):
+                                        write_scope('*MESH_TFACE %u' % i)
+                                        write_scope('%u %u %u' % (UVVertexList.index(tri[0][uv_lay].uv), UVVertexList.index(tri[1][uv_lay].uv), UVVertexList.index(tri[2][uv_lay].uv)))
+                                    w_end_block("}")
+                                    #w_end_block("}")
+                                    layerIndex += 1
 
                             # swy: fix-me: add the custom mesh attributes here
                             write_scope("*MESH_NUMFACEFLAGS %u" % len(bm.faces))
@@ -394,7 +395,7 @@ def _write(context, filepath,
                                         write_scope('*MESH_NUMCVFACES %u ' % len(tris))
                                         w_new_block('*MESH_CFACELIST {')
                                         for i, tri in enumerate(tris):
-                                            write_scope_no_cr('*MESH_CFACE %u ' % i)
+                                            write_scope_no_cr('*MESH_CFACE %5u  ' % i)
                                             for loop in tri:
                                                 out.write('%u ' % VertexColorList.index(loop[cl]))
                                             out.write('\n')
