@@ -353,7 +353,7 @@ def _write(context, filepath,
                                     w_new_block('*SKIN_VERTEX_DATA {')
                                     for vidx, vert in enumerate(obj.data.vertices):
                                         #for bidx, bone in enumerate(armat.data.bones):
-                                            write_scope('*VERTEX %u %u' % (vidx, len(vert.groups)))
+                                            write_scope_no_cr('*VERTEX %u %u' % (vidx, len(vert.groups)))
                                             for gidx, group in enumerate(vert.groups):
                                                 out.write('  %u %f' % (gidx, group.weight))
                                             out.write("\n")
