@@ -336,7 +336,7 @@ def _write(context, filepath,
                                         #for bidx, bone in enumerate(armat.data.bones):
                                             out.write('\t\t\t\t*VERTEX %u %u' % (vidx, len(vert.groups)))
                                             for gidx, group in enumerate(vert.groups):
-                                                out.write(' %u %f' % (gidx, group.weight))
+                                                out.write('  %u %f' % (gidx, group.weight))
                                             out.write("\n")
                                     out.write("\t\t\t}\n")
 
@@ -385,6 +385,16 @@ def _write(context, filepath,
                             if EXPORT_MATERIALS:
                                 out.write('\t*MATERIAL_REF %u\n' % indx)
                             out.write('}\n')
+
+            for indx, obj in enumerate(bpy.context.scene.objects):
+                if obj.type == 'ARMATURE':
+                    for bidx, bone in enumerate(obj.data.bones):
+                        out.write('*BONEOBJECT {\n')
+                        out.write('\t*NODE_NAME "%s"\n' % bone.name)
+                        out.write('\t*NODE_BIPED_BODY\n')
+                        if (bone.parent):
+                            out.write('\t*NODE_PARENT "%s"\n' % bone.parent.name)
+                        out.write('}\n')
 
             #===============================================================================================
             #  CAMERA OBJECT
