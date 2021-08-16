@@ -17,6 +17,7 @@ from mathutils import *
 from math import *
 from pathlib import Path
 from bpy_extras.io_utils import axis_conversion
+from . import bl_info
 
 block_level = 0
 
@@ -74,31 +75,31 @@ def _write(context, filepath,
 
 
             def PrintNODE_TM(object):
-            bpy.context.scene.frame_set(bpy.context.scene.frame_start)
+                    bpy.context.scene.frame_set(bpy.context.scene.frame_start)
 
-            ConvertedMatrix = object.rotation_euler.to_matrix()
-            rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
-            RotationMatrix = rot_mtx.transposed()
+                    ConvertedMatrix = object.rotation_euler.to_matrix()
+                    rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
+                    RotationMatrix = rot_mtx.transposed()
 
-            #Write Matrix
+                    #Write Matrix
                     write_scope('\t\t*NODE_NAME "%s"\n' % object.name)
                     write_scope('\t\t*INHERIT_POS %u %u %u\n' % (0,0,0))
                     write_scope('\t\t*INHERIT_ROT %u %u %u\n' % (0,0,0))
                     write_scope('\t\t*INHERIT_SCL %u %u %u\n' % (1,1,1))
 
-            if object.type == 'CAMERA':
-                #Don't modify this, the cameras rotations works fine with this code.
+                    if object.type == 'CAMERA':
+                        #Don't modify this, the cameras rotations works fine with this code.
                         write_scope('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
                         write_scope('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
                         write_scope('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
-            else:
-                #This other code needs revision, the rotations in the entity editor don't works. 
+                    else:
+                        #This other code needs revision, the rotations in the entity editor don't works. 
                         write_scope('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, RotationMatrix[0].y,      RotationMatrix[0].z     ))
                         write_scope('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y,      RotationMatrix[1].z * -1))
                         write_scope('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
-            
-            #Flip location axis
-            loc_conv = InvertAxisRotationMatrix @ object.location
+                    
+                    #Flip location axis
+                    loc_conv = InvertAxisRotationMatrix @ object.location
                     write_scope('\t\t*TM_ROW3 %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
                     write_scope('\t\t*TM_POS  %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
 
@@ -107,36 +108,38 @@ def _write(context, filepath,
                     write_scope('*NODE_NAME "%s"' % object.name)
                     w_new_block('*TM_ANIM_FRAMES {')
 
-            TimeValueCounter = 0
-            for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
-                bpy.context.scene.frame_set(f)
+                    TimeValueCounter = 0
+                    for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
+                        bpy.context.scene.frame_set(f)
 
-                ConvertedMatrix = object.rotation_euler.to_matrix()
+                        ConvertedMatrix = object.rotation_euler.to_matrix()
 
-                rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
-                RotationMatrix = rot_mtx.transposed()
+                        rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
+                        RotationMatrix = rot_mtx.transposed()
 
-                #Write Time Value
+                        #Write Time Value
                         write_scope('\t\t\t*TM_FRAME  %u' % TimeValueCounter)
 
-                #Write Matrix
+                        #Write Matrix
                         write_scope('%.4f %.4f %.4f' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
                         write_scope('%.4f %.4f %.4f' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
                         write_scope('%.4f %.4f %.4f' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
-                
-                #Flip location axis
-                loc_conv = InvertAxisRotationMatrix @ object.location
+                        
+                        #Flip location axis
+                        loc_conv = InvertAxisRotationMatrix @ object.location
                         write_scope('%.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
 
-                #Update counter
-                TimeValueCounter += TimeValue
+                        #Update counter
+                        TimeValueCounter += TimeValue
                     w_end_block('}')
                     w_end_block('}')
 
 
             #Start writting
             write_scope('*3DSMAX_EUROEXPORT	300')
-            write_scope('*COMMENT "Eurocom Export Version  3.00 - %s"' % (datetime.datetime.utcnow()).strftime('%A %B %d %H:%M:%S %Y'))
+            # swy: turn a (2021, 8, 16) tuple into "2021.08.16"
+            version_date = '.'.join(('%02u' % x) for x in bl_info['version'])
+            write_scope('*COMMENT "Eurocom Export Version %s - %s"' % (version_date, datetime.datetime.utcnow().strftime('%a %b %d %H:%M:%S %Y')))
             write_scope('*COMMENT "Version of Blender that output this file: %s"' % bpy.app.version_string)
             write_scope('*COMMENT "Version of ESE Plug-in: 5.0.0.13"')
             write_scope('')
