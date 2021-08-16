@@ -246,7 +246,7 @@ class ExportESE(bpy.types.Operator, ExportHelper):
                ('MESH', "Mesh", ""),
                ),
         description="Which kind of object to export",
-        default={'CAMERA'}
+        default={'CAMERA', 'LIGHT', 'MESH'}
     )
 
     #Mesh Options
