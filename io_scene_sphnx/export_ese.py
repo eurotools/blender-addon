@@ -39,66 +39,6 @@ def _write(context, filepath,
     #===============================================================================================
     #  FUNCTIONS
     #===============================================================================================
-    def PrintNODE_TM(OutputFile, object):
-            bpy.context.scene.frame_set(bpy.context.scene.frame_start)
-
-            ConvertedMatrix = object.rotation_euler.to_matrix()
-            rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
-            RotationMatrix = rot_mtx.transposed()
-
-            #Write Matrix
-            OutputFile.write('\t\t*NODE_NAME "%s"\n' % object.name)
-            OutputFile.write('\t\t*INHERIT_POS %u %u %u\n' % (0,0,0))
-            OutputFile.write('\t\t*INHERIT_ROT %u %u %u\n' % (0,0,0))
-            OutputFile.write('\t\t*INHERIT_SCL %u %u %u\n' % (1,1,1))
-
-            if object.type == 'CAMERA':
-                #Don't modify this, the cameras rotations works fine with this code.
-                OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
-                OutputFile.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
-                OutputFile.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
-            else:
-                #This other code needs revision, the rotations in the entity editor don't works. 
-                OutputFile.write('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, RotationMatrix[0].y,      RotationMatrix[0].z     ))
-                OutputFile.write('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y,      RotationMatrix[1].z * -1))
-                OutputFile.write('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
-            
-            #Flip location axis
-            loc_conv = InvertAxisRotationMatrix @ object.location
-            OutputFile.write('\t\t*TM_ROW3 %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
-            OutputFile.write('\t\t*TM_POS  %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
-
-    def PrintTM_ANIMATION(OutputFile, object, TimeValue):
-            OutputFile.write('\t*TM_ANIMATION {\n')
-            OutputFile.write('\t\t*NODE_NAME "%s"\n' % object.name)
-            OutputFile.write('\t\t*TM_ANIM_FRAMES {\n')
-
-            TimeValueCounter = 0
-            for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
-                bpy.context.scene.frame_set(f)
-
-                ConvertedMatrix = object.rotation_euler.to_matrix()
-
-                rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
-                RotationMatrix = rot_mtx.transposed()
-
-                #Write Time Value
-                OutputFile.write('\t\t\t*TM_FRAME  %u ' % TimeValueCounter)
-
-                #Write Matrix
-                OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
-                OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
-                OutputFile.write('%.4f %.4f %.4f  ' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
-                
-                #Flip location axis
-                loc_conv = InvertAxisRotationMatrix @ object.location
-                OutputFile.write('%.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
-
-                #Update counter
-                TimeValueCounter += TimeValue
-            OutputFile.write('\t\t}\n')
-            OutputFile.write('\t}\n')
-
     def GetMaterialCount():
         Materials_Number = 0
         for indx, MeshObj in enumerate(bpy.context.scene.objects):
@@ -132,6 +72,68 @@ def _write(context, filepath,
                 global block_level; block_level -= 1
                 write_scope(dump)
 
+
+            def PrintNODE_TM(object):
+            bpy.context.scene.frame_set(bpy.context.scene.frame_start)
+
+            ConvertedMatrix = object.rotation_euler.to_matrix()
+            rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
+            RotationMatrix = rot_mtx.transposed()
+
+            #Write Matrix
+                    write_scope('\t\t*NODE_NAME "%s"\n' % object.name)
+                    write_scope('\t\t*INHERIT_POS %u %u %u\n' % (0,0,0))
+                    write_scope('\t\t*INHERIT_ROT %u %u %u\n' % (0,0,0))
+                    write_scope('\t\t*INHERIT_SCL %u %u %u\n' % (1,1,1))
+
+            if object.type == 'CAMERA':
+                #Don't modify this, the cameras rotations works fine with this code.
+                        write_scope('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
+                        write_scope('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
+                        write_scope('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
+            else:
+                #This other code needs revision, the rotations in the entity editor don't works. 
+                        write_scope('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, RotationMatrix[0].y,      RotationMatrix[0].z     ))
+                        write_scope('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y,      RotationMatrix[1].z * -1))
+                        write_scope('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
+            
+            #Flip location axis
+            loc_conv = InvertAxisRotationMatrix @ object.location
+                    write_scope('\t\t*TM_ROW3 %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
+                    write_scope('\t\t*TM_POS  %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
+
+            def PrintTM_ANIMATION(object, TimeValue):
+                    w_new_block('*TM_ANIMATION {')
+                    write_scope('*NODE_NAME "%s"' % object.name)
+                    w_new_block('*TM_ANIM_FRAMES {')
+
+            TimeValueCounter = 0
+            for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
+                bpy.context.scene.frame_set(f)
+
+                ConvertedMatrix = object.rotation_euler.to_matrix()
+
+                rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
+                RotationMatrix = rot_mtx.transposed()
+
+                #Write Time Value
+                        write_scope('\t\t\t*TM_FRAME  %u' % TimeValueCounter)
+
+                #Write Matrix
+                        write_scope('%.4f %.4f %.4f' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
+                        write_scope('%.4f %.4f %.4f' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
+                        write_scope('%.4f %.4f %.4f' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
+                
+                #Flip location axis
+                loc_conv = InvertAxisRotationMatrix @ object.location
+                        write_scope('%.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
+
+                #Update counter
+                TimeValueCounter += TimeValue
+                    w_end_block('}')
+                    w_end_block('}')
+
+
             #Start writting
             write_scope('*3DSMAX_EUROEXPORT	300')
             write_scope('*COMMENT "Eurocom Export Version  3.00 - %s"' % (datetime.datetime.utcnow()).strftime('%A %B %d %H:%M:%S %Y'))
@@ -145,10 +147,10 @@ def _write(context, filepath,
             TimeValue = 4800 / bpy.context.scene.render.fps
 
             w_new_block('*SCENE {')
-            write_scope('*SCENE_FILENAME     "%s"' % os.path.basename(bpy.data.filepath))
-            write_scope('*SCENE_FIRSTFRAME    %u ' % bpy.context.scene.frame_start)
-            write_scope('*SCENE_LASTFRAME     %u ' % bpy.context.scene.frame_end)
-            write_scope('*SCENE_FRAMESPEED    %u ' % bpy.context.scene.render.fps)
+            write_scope('*SCENE_FILENAME "%s"'     % os.path.basename(bpy.data.filepath))
+            write_scope('*SCENE_FIRSTFRAME %u '    % bpy.context.scene.frame_start)
+            write_scope('*SCENE_LASTFRAME %u '     % bpy.context.scene.frame_end)
+            write_scope('*SCENE_FRAMESPEED %u '    % bpy.context.scene.render.fps)
             write_scope('*SCENE_TICKSPERFRAME %u ' % TimeValue)
             w_end_block('}')
 
@@ -282,12 +284,12 @@ def _write(context, filepath,
 
                             #Print Matrix Rotation
                             w_new_block('*NODE_TM {')
-                            PrintNODE_TM(out, obj)
+                            PrintNODE_TM(obj)
                             w_end_block('}')
 
                             #Print Matrix Rotation again ¯\_(ツ)_/¯
                             w_new_block('*PIVOT_TM {')
-                            PrintNODE_TM(out, obj)
+                            PrintNODE_TM(obj)
                             w_end_block('}')
 
                             #MESH Section
@@ -402,7 +404,7 @@ def _write(context, filepath,
                             #  ANIMATION
                             #===============================================================================================
                             if EXPORT_ANIMATION:
-                                PrintTM_ANIMATION(out, obj, TimeValue)
+                                PrintTM_ANIMATION(obj, TimeValue)
                             
                             #Material Reference
                             if EXPORT_MATERIALS:
@@ -437,7 +439,7 @@ def _write(context, filepath,
 
                     #Print Matrix Rotation
                     w_new_block('*NODE_TM {')
-                    PrintNODE_TM(out, CameraObj)
+                    PrintNODE_TM(CameraObj)
                     w_end_block('}')
 
                     #===============================================================================================
@@ -471,7 +473,7 @@ def _write(context, filepath,
                     #  ANIMATION
                     #===============================================================================================
                     if EXPORT_ANIMATION:
-                        PrintTM_ANIMATION(out, CameraObj, TimeValue)
+                        PrintTM_ANIMATION(CameraObj, TimeValue)
 
                     w_end_block('}')
 
@@ -495,7 +497,7 @@ def _write(context, filepath,
 
                         #Print Matrix Rotation
                         w_new_block('*NODE_TM {')
-                        PrintNODE_TM(out, obj)
+                        PrintNODE_TM(obj)
                         w_end_block('}')
 
                         #---------------------------------------------[Light Props]---------------------------------------------
@@ -546,7 +548,7 @@ def _write(context, filepath,
                         #  ANIMATION
                         #===============================================================================================
                         if EXPORT_ANIMATION:
-                            PrintTM_ANIMATION(out, obj, TimeValue)
+                            PrintTM_ANIMATION(obj, TimeValue)
 
                         #Close light object
                         w_end_block('}')
