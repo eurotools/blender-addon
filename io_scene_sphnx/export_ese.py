@@ -18,6 +18,8 @@ from math import *
 from pathlib import Path
 from bpy_extras.io_utils import axis_conversion
 
+block_level = 0
+
 def _write(context, filepath,
             EXPORT_FLIP_POLYGONS,
             EXPORT_OBJECTTYPES,
@@ -114,36 +116,49 @@ def _write(context, filepath,
 
         #Create new file
         with open(filepath, 'w') as out:
+
+            def w_new_block(dump):
+                global block_level
+                out.write(('\t' * block_level) + dump)
+                block_level += 1
+
+            def write_scope(dump):
+                out.write(('\t' * block_level) + dump)
+
+            def w_end_block(dump):
+                global block_level; block_level -= 1
+                out.write(('\t' * block_level) + dump)
+
             #Start writting
-            out.write('*3DSMAX_EUROEXPORT	300\n')
-            out.write('*COMMENT "Eurocom Export Version  3.00 - %s"\n' % (datetime.datetime.utcnow()).strftime('%A %B %d %H:%M:%S %Y'))
-            out.write('*COMMENT "Version of Blender that output this file: %s"\n' % bpy.app.version_string)
-            out.write('*COMMENT "Version of ESE Plug-in: 5.0.0.13"\n')
-            out.write("\n")
+            write_scope('*3DSMAX_EUROEXPORT	300\n')
+            write_scope('*COMMENT "Eurocom Export Version  3.00 - %s"\n' % (datetime.datetime.utcnow()).strftime('%A %B %d %H:%M:%S %Y'))
+            write_scope('*COMMENT "Version of Blender that output this file: %s"\n' % bpy.app.version_string)
+            write_scope('*COMMENT "Version of ESE Plug-in: 5.0.0.13"\n')
+            write_scope("\n")
 
             #===============================================================================================
             #  SCENE INFO
             #=============================================================================================== 
-            TimeValue = 4800/bpy.context.scene.render.fps
+            TimeValue = 4800 / bpy.context.scene.render.fps
 
-            out.write('*SCENE {\n')
-            out.write('\t*SCENE_FILENAME "%s"\n' % os.path.basename(bpy.data.filepath))
-            out.write('\t*SCENE_FIRSTFRAME %u\n' % bpy.context.scene.frame_start)
-            out.write('\t*SCENE_LASTFRAME %u\n' % bpy.context.scene.frame_end)
-            out.write('\t*SCENE_FRAMESPEED %u\n' %  bpy.context.scene.render.fps)
-            out.write('\t*SCENE_TICKSPERFRAME %u\n' % TimeValue)
-            out.write('}\n')
+            w_new_block('*SCENE {\n')
+            write_scope('*SCENE_FILENAME     "%s"\n' % os.path.basename(bpy.data.filepath))
+            write_scope('*SCENE_FIRSTFRAME    %u \n' % bpy.context.scene.frame_start)
+            write_scope('*SCENE_LASTFRAME     %u \n' % bpy.context.scene.frame_end)
+            write_scope('*SCENE_FRAMESPEED    %u \n' % bpy.context.scene.render.fps)
+            write_scope('*SCENE_TICKSPERFRAME %u \n' % TimeValue)
+            w_end_block('}\n')
 
             #===============================================================================================
             #  MATERIAL LIST
             #===============================================================================================
             if EXPORT_MATERIALS:
-                out.write('*MATERIAL_LIST {\n')
-                out.write('\t*MATERIAL_COUNT %u\n' % GetMaterialCount())
+                w_new_block('*MATERIAL_LIST {\n')
+                write_scope('*MATERIAL_COUNT %u\n' % GetMaterialCount())
                 for indx, MeshObj in enumerate(bpy.context.scene.objects):
                         if MeshObj.type == 'MESH':
                             #Material
-                            out.write('\t*MATERIAL %u {\n' % indx)
+                            w_new_block('*MATERIAL %u {\n' % indx)
 
                             #Mesh Materials
                             if len(MeshObj.material_slots) > 0:
@@ -152,11 +167,11 @@ def _write(context, filepath,
                                 #Material Info                                    
                                 MatData = bpy.data.materials[0]
                                 DiffuseColor = MatData.diffuse_color
-                                out.write('\t\t*MATERIAL_NAME "%s"\n' % MatData.name)
-                                out.write('\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-                                out.write('\t\t*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
-                                out.write('\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
-                                out.write('\t\t*NUMSUBMTLS %u \n' % len(MeshObj.material_slots))
+                                write_scope('*MATERIAL_NAME "%s"\n' % MatData.name)
+                                write_scope('*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                                write_scope('*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                                write_scope('*MATERIAL_SHINE %.1f\n' % MatData.metallic)
+                                write_scope('*NUMSUBMTLS %u \n' % len(MeshObj.material_slots))
 
                                 #Loop Trought Submaterials
                                 for indx, Material_Data in enumerate(MeshObj.material_slots):
@@ -169,20 +184,20 @@ def _write(context, filepath,
                                         DiffuseColor = MatData.diffuse_color
 
                                         #Submaterial
-                                        out.write('\t\t*SUBMATERIAL %u {\n' % currentSubMat)
-                                        out.write('\t\t\t*MATERIAL_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
-                                        out.write('\t\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-                                        out.write('\t\t\t*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
-                                        out.write('\t\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
-                                        out.write('\t\t\t*MATERIAL_SELFILLUM %u\n' % int(MatData.use_preview_world))
+                                        w_new_block('*SUBMATERIAL %u {\n' % currentSubMat)
+                                        write_scope('*MATERIAL_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
+                                        write_scope('*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                                        write_scope('*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                                        write_scope('*MATERIAL_SHINE %.1f\n' % MatData.metallic)
+                                        write_scope('*MATERIAL_SELFILLUM %u\n' % int(MatData.use_preview_world))
 
                                         #Map Difuse
-                                        out.write('\t\t\t*MAP_DIFFUSE {\n')
-                                        out.write('\t\t\t\t*MAP_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
-                                        out.write('\t\t\t\t*MAP_CLASS "%s"\n' % "Bitmap")
-                                        out.write('\t\t\t\t*MAP_AMOUNT "%u"\n' % 1)
-                                        out.write('\t\t\t\t*BITMAP "%s"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
-                                        out.write('\t\t\t}\n')
+                                        w_new_block('*MAP_DIFFUSE {\n')
+                                        write_scope('*MAP_NAME "%s"\n' % (os.path.splitext(ImageName)[0]))
+                                        write_scope('*MAP_CLASS "%s"\n' % "Bitmap")
+                                        write_scope('*MAP_AMOUNT "%u"\n' % 1)
+                                        write_scope('*BITMAP "%s"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
+                                        w_end_block('}\n')
 
                                     #Material has no texture
                                     else:
@@ -191,17 +206,17 @@ def _write(context, filepath,
                                         base_color = principled.inputs['Base Color']
                                         color = base_color.default_value
 
-                                        out.write('\t\t*SUBMATERIAL %u {\n' % currentSubMat)
-                                        out.write('\t\t\t*MATERIAL_NAME "%s"\n' % MatData.name)
-                                        out.write('\t\t\t*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % ((color[0] * .5), (color[1] * .5), (color[2] * .5)))
-                                        out.write('\t\t\t*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
-                                        out.write('\t\t\t*MATERIAL_SHINE %.1f\n' % MatData.metallic)
-                                        out.write('\t\t\t*MATERIAL_SELFILLUM %u\n' % int(MatData.use_preview_world))
+                                        w_new_block('*SUBMATERIAL %u {\n' % currentSubMat)
+                                        write_scope('*MATERIAL_NAME "%s"\n' % MatData.name)
+                                        write_scope('*MATERIAL_DIFFUSE %.4f %.4f %.4f\n' % ((color[0] * .5), (color[1] * .5), (color[2] * .5)))
+                                        write_scope('*MATERIAL_SPECULAR %u %u %u\n' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                                        write_scope('*MATERIAL_SHINE %.1f\n' % MatData.metallic)
+                                        write_scope('*MATERIAL_SELFILLUM %u\n' % int(MatData.use_preview_world))
 
-                                    out.write('\t\t}\n')
+                                    w_end_block('}\n')
                                     currentSubMat += 1
-                            out.write('\t}\n')
-                out.write('}\n')
+                            w_end_block('}\n')
+                w_end_block('}\n')
 
             #===============================================================================================
             #  GEOM OBJECT
@@ -259,47 +274,48 @@ def _write(context, filepath,
                                                 VertexColorList.append(color)
 
                             #===========================================[Print Object Data]====================================================       
-                            out.write('*GEOMOBJECT {\n')
-                            out.write('\t*NODE_NAME "%s"\n' % obj.name)
+                            w_new_block('*GEOMOBJECT {\n')
+                            write_scope('*NODE_NAME "%s"\n' % obj.name)
 
                             #Print Matrix Rotation
-                            out.write('\t*NODE_TM {\n')
+                            w_new_block('*NODE_TM {\n')
                             PrintNODE_TM(out, obj)
-                            out.write('\t}\n')
+                            w_end_block('}\n')
 
                             #Print Matrix Rotation again ¯\_(ツ)_/¯
-                            out.write('\t*PIVOT_TM {\n')
+                            w_new_block('*PIVOT_TM {\n')
                             PrintNODE_TM(out, obj)
-                            out.write('\t}\n')
+                            w_end_block('}\n')
 
                             #MESH Section
-                            out.write('\t*MESH {\n')
-                            out.write('\t\t*TIMEVALUE %u\n' % 0)
-                            out.write('\t\t*MESH_NUMVERTEX %u\n' % len(VertexList))
-                            out.write('\t\t*MESH_NUMFACES %u\n' % len(tris))
+                            w_new_block('*MESH {\n')
+                            write_scope('*TIMEVALUE %u\n' % 0)
+                            write_scope('*MESH_NUMVERTEX %u\n' % len(VertexList))
+                            write_scope('*MESH_NUMFACES %u\n' % len(tris))
 
                             #Print Vertex List
-                            out.write('\t\t*MESH_VERTEX_LIST {\n')
+                            w_new_block('*MESH_VERTEX_LIST {\n')
                             for idx, ListItem in enumerate(VertexList):
-                                out.write('\t\t\t*MESH_VERTEX %u %.4f %.4f %.4f\n' % (idx, ListItem[0], ListItem[1], ListItem[2]))
-                            out.write('\t\t}\n')
+                                write_scope('*MESH_VERTEX %u %.4f %.4f %.4f\n' % (idx, ListItem[0], ListItem[1], ListItem[2]))
+                            w_end_block('}\n')
 
                             #Face Vertex Index
-                            out.write('\t\t*MESH_FACE_LIST {\n')   
+                            w_new_block('*MESH_FACE_LIST {\n')   
                             for i, tri in enumerate(tris):
-                                out.write('\t\t\t*MESH_FACE %u: ' % i)
+                                write_scope('*MESH_FACE %u: ' % i)
                                 out.write('A: %u B: %u C: %u ' % (VertexList.index(tri[0].vert.co), VertexList.index(tri[1].vert.co), VertexList.index(tri[2].vert.co)))
                                 out.write('AB: %u BC: %u CA: %u ' % (not tri[0].vert.hide, not tri[1].vert.hide, not tri[2].vert.hide))   
                                 out.write('*MESH_SMOOTHING 1 ')
                                 out.write('*MESH_MTLID %u\n' % tri[0].face.material_index)
-                            out.write('\t\t}\n')
+                            w_end_block('}\n')
 
                             #Texture UVs
-                            out.write('\t\t*MESH_NUMTVERTEX %u\n' % len(UVVertexList))
-                            out.write('\t\t*MESH_TVERTLIST {\n')
-                            for idx, TextUV in enumerate(UVVertexList):
-                                out.write('\t\t\t*MESH_TVERT %u %.4f %.4f\n' % (idx, TextUV[0], TextUV[1]))
-                            out.write('\t\t}\n')
+                            if len(UVVertexList) > 0:
+                                write_scope('*MESH_NUMTVERTEX %u\n' % len(UVVertexList))
+                                w_new_block('*MESH_TVERTLIST {\n')
+                                for idx, TextUV in enumerate(UVVertexList):
+                                    write_scope('*MESH_TVERT %u %.4f %.4f\n' % (idx, TextUV[0], TextUV[1]))
+                                w_end_block('}\n')
 
                             #Face Layers UVs Index
                             layerIndex = 0
@@ -316,69 +332,69 @@ def _write(context, filepath,
                             #    layerIndex += 1
 
                             # swy: fix-me: add the custom mesh attributes here
-                            out.write("\t\t*MESH_NUMFACEFLAGS %u\n" % len(bm.faces))
-                            out.write("\t\t*MESH_FACEFLAGLIST {\n")
+                            write_scope("*MESH_NUMFACEFLAGS %u\n" % len(bm.faces))
+                            w_new_block("*MESH_FACEFLAGLIST {\n")
                             for i, tri in enumerate(tris):
-                                out.write('\t\t\t*MESH_FACEFLAG %u %u\n' % (i, 0))
-                            out.write("\t\t}\n")
+                                write_scope('*MESH_FACEFLAG %u %u\n' % (i, 0))
+                            w_end_block("}\n")
 
                             for indx, mod in enumerate(obj.modifiers):
                                 if mod.type == 'ARMATURE' and mod.object and mod.object.type == 'ARMATURE':
                                     armat = mod.object
-                                    out.write("\t\t*SKIN_DATA {\n")
-                                    out.write("\t\t\t*BONE_LIST {\n")
+                                    w_new_block("*SKIN_DATA {\n")
+                                    w_new_block("*BONE_LIST {\n")
                                     for bidx, bone in enumerate(armat.data.bones):
-                                        out.write('\t\t\t\t*BONE %u "%s"\n' % (bidx, bone.name))
-                                    out.write("\t\t\t}\n")
+                                        write_scope('*BONE %u "%s"\n' % (bidx, bone.name))
+                                    w_end_block("}\n")
 
-                                    out.write('\t\t\t*SKIN_VERTEX_DATA {\n')
+                                    w_new_block('*SKIN_VERTEX_DATA {\n')
                                     for vidx, vert in enumerate(obj.data.vertices):
                                         #for bidx, bone in enumerate(armat.data.bones):
-                                            out.write('\t\t\t\t*VERTEX %u %u' % (vidx, len(vert.groups)))
+                                            write_scope('*VERTEX %u %u' % (vidx, len(vert.groups)))
                                             for gidx, group in enumerate(vert.groups):
                                                 out.write('  %u %f' % (gidx, group.weight))
                                             out.write("\n")
-                                    out.write("\t\t\t}\n")
+                                    w_end_block("}\n")
 
-                                    out.write("\t\t}\n")
+                                    w_end_block("}\n")
 
                                     break
 
                             if True:
                                 #Vertex Colors List
-                                out.write('\t\t*MESH_NUMCVERTEX %u\n' % len(VertexColorList))
-                                out.write('\t\t*MESH_CVERTLIST {\n')
+                                write_scope('*MESH_NUMCVERTEX %u\n' % len(VertexColorList))
+                                w_new_block('*MESH_CVERTLIST {\n')
                                 for idx, ColorArray in enumerate(VertexColorList):
-                                    out.write('\t\t\t*MESH_VERTCOL %u %.4f %.4f %.4f %u\n' % (idx, (ColorArray[0] * .5), (ColorArray[1] * .5), (ColorArray[2] * .5), 1))
-                                out.write('\t\t}\n')
+                                    write_scope('*MESH_VERTCOL %u %.4f %.4f %.4f %u\n' % (idx, (ColorArray[0] * .5), (ColorArray[1] * .5), (ColorArray[2] * .5), 1))
+                                w_end_block('}\n')
 
                                 #Face Color Vertex Index
                                 layerIndex = 0
                                 if len(bm.loops.layers.color.items()) > 0:
-                                    out.write('\t\t*MESH_NUMCFACELAYERS %u\n' % len(bm.loops.layers.color.items()))
+                                    write_scope('*MESH_NUMCFACELAYERS %u\n' % len(bm.loops.layers.color.items()))
                                     for name, cl in bm.loops.layers.color.items():
-                                        out.write('\t\t*MESH_CFACELAYER %u {\n' % layerIndex)
-                                        out.write('\t\t\t*MESH_NUMCVFACES %u \n' % len(tris))
-                                        out.write('\t\t\t*MESH_CFACELIST {\n')
+                                        w_new_block('*MESH_CFACELAYER %u {\n' % layerIndex)
+                                        write_scope('*MESH_NUMCVFACES %u \n' % len(tris))
+                                        w_new_block('*MESH_CFACELIST {\n')
                                         for i, tri in enumerate(tris):
-                                            out.write('\t\t\t\t*MESH_CFACE %u ' % i)
+                                            write_scope('*MESH_CFACE %u ' % i)
                                             for loop in tri:
                                                 out.write('%u ' % VertexColorList.index(loop[cl]))
                                             out.write('\n')
-                                        out.write('\t\t\t}\n')
-                                        out.write('\t\t}\n')
+                                        w_end_block('}\n')
+                                        w_end_block('}\n')
                                         layerIndex +=1
 
-                            out.write('\t\t*MESH_VERTFLAGSLIST {\n')
+                            w_new_block('*MESH_VERTFLAGSLIST {\n')
                             for vidx, vert in enumerate(obj.data.vertices):
-                                out.write('\t\t\t*VFLAG %u %u\n' % (vidx, 0))
-                            out.write('\t\t}\n')
+                                write_scope('*VFLAG %u %u\n' % (vidx, 0))
+                            w_end_block('}\n')
 
                             #Liberate BM Object
                             bm.free()
 
                             #Close blocks
-                            out.write('\t}\n')
+                            w_end_block('}\n')
 
                             #===============================================================================================
                             #  ANIMATION
@@ -388,18 +404,18 @@ def _write(context, filepath,
                             
                             #Material Reference
                             if EXPORT_MATERIALS:
-                                out.write('\t*MATERIAL_REF %u\n' % indx)
-                            out.write('}\n')
+                                write_scope('*MATERIAL_REF %u\n' % indx)
+                            w_end_block('}\n')
 
             for indx, obj in enumerate(bpy.context.scene.objects):
                 if obj.type == 'ARMATURE':
                     for bidx, bone in enumerate(obj.data.bones):
-                        out.write('*BONEOBJECT {\n')
-                        out.write('\t*NODE_NAME "%s"\n' % bone.name)
-                        out.write('\t*NODE_BIPED_BODY\n')
+                        w_new_block('*BONEOBJECT {\n')
+                        write_scope('*NODE_NAME "%s"\n' % bone.name)
+                        write_scope('*NODE_BIPED_BODY\n')
                         if (bone.parent):
-                            out.write('\t*NODE_PARENT "%s"\n' % bone.parent.name)
-                        out.write('}\n')
+                            write_scope('*NODE_PARENT "%s"\n' % bone.parent.name)
+                        w_end_block('}\n')
 
             #===============================================================================================
             #  CAMERA OBJECT
@@ -413,41 +429,41 @@ def _write(context, filepath,
                 CamerasList.sort(key = lambda o: o.name)
 
                 for CameraObj in CamerasList:  
-                    out.write('*CAMERAOBJECT {\n')
-                    out.write('\t*NODE_NAME "%s"\n' % CameraObj.name)
-                    out.write('\t*CAMERA_TYPE %s\n' % "Target")
+                    w_new_block('*CAMERAOBJECT {\n')
+                    write_scope('*NODE_NAME "%s"\n' % CameraObj.name)
+                    write_scope('*CAMERA_TYPE %s\n' % "Target")
 
                     #Print Matrix Rotation
-                    out.write('\t*NODE_TM {\n')
+                    w_new_block('*NODE_TM {\n')
                     PrintNODE_TM(out, CameraObj)
-                    out.write('\t}\n')
+                    w_end_block('}\n')
 
                     #===============================================================================================
                     #  CAMERA SETTINGS
                     #=============================================================================================== 
-                    out.write('\t*CAMERA_SETTINGS {\n')
-                    out.write('\t\t*TIMEVALUE %u\n' % 0)
-                    out.write('\t\t*CAMERA_FOV %.4f\n'% CameraObj.data.angle)
-                    out.write('\t}\n')
+                    w_new_block('*CAMERA_SETTINGS {\n')
+                    write_scope('*TIMEVALUE %u\n' % 0)
+                    write_scope('*CAMERA_FOV %.4f\n'% CameraObj.data.angle)
+                    w_end_block('}\n')
 
                     #===============================================================================================
                     #  CAMERA ANIMATION
                     #===============================================================================================
                     if EXPORT_ANIMATION:
-                        out.write('\t*CAMERA_ANIMATION {\n')
+                        w_new_block('*CAMERA_ANIMATION {\n')
                         
                         TimeValueCounter = 0
                         for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
                             bpy.context.scene.frame_set(f)
 
-                            out.write('\t\t*CAMERA_SETTINGS {\n')
-                            out.write('\t\t\t*TIMEVALUE %u\n' % TimeValueCounter)
-                            out.write('\t\t\t*CAMERA_FOV %.4f\n'% CameraObj.data.angle)
-                            out.write('\t\t}\n')
+                            w_new_block('*CAMERA_SETTINGS {\n')
+                            write_scope('*TIMEVALUE %u\n' % TimeValueCounter)
+                            write_scope('*CAMERA_FOV %.4f\n'% CameraObj.data.angle)
+                            w_end_block('}\n')
 
                             TimeValueCounter += TimeValue
 
-                        out.write('\t}\n')
+                        w_end_block('}\n')
 
                     #===============================================================================================
                     #  ANIMATION
@@ -455,7 +471,7 @@ def _write(context, filepath,
                     if EXPORT_ANIMATION:
                         PrintTM_ANIMATION(out, CameraObj, TimeValue)
 
-                    out.write('}\n')
+                    w_end_block('}\n')
 
             #===============================================================================================
             #  LIGHT OBJECT
@@ -463,9 +479,9 @@ def _write(context, filepath,
             if 'LIGHT' in EXPORT_OBJECTTYPES:
                 for obj in bpy.context.scene.objects:
                     if obj.type == 'LIGHT':
-                        out.write('*LIGHTOBJECT {\n')
-                        out.write('\t*NODE_NAME "%s"\n' % obj.name)
-                        out.write('\t*NODE_PARENT "%s"\n' % obj.name)
+                        w_new_block('*LIGHTOBJECT {\n')
+                        write_scope('*NODE_NAME "%s"\n' % obj.name)
+                        write_scope('*NODE_PARENT "%s"\n' % obj.name)
 
                         type_lut = {}
                         type_lut['POINT'] = 'Omni'
@@ -473,56 +489,56 @@ def _write(context, filepath,
                         type_lut['SUN'  ] = 'TargetDirect'
                         type_lut['AREA' ] = 'TargetDirect' # swy: this is sort of wrong ¯\_(ツ)_/¯
 
-                        out.write('\t*LIGHT_TYPE %s\n' % type_lut[obj.data.type]) #Seems that always used "Omni" lights in 3dsMax, in blender is called "Point"
+                        write_scope('*LIGHT_TYPE %s\n' % type_lut[obj.data.type]) #Seems that always used "Omni" lights in 3dsMax, in blender is called "Point"
 
                         #Print Matrix Rotation
-                        out.write('\t*NODE_TM {\n')
+                        w_new_block('*NODE_TM {\n')
                         PrintNODE_TM(out, obj)
-                        out.write('\t}\n')
+                        w_end_block('}\n')
 
                         #---------------------------------------------[Light Props]---------------------------------------------
-                        out.write('\t*LIGHT_DECAY %s\n' % "InvSquare") # swy: this is the only supported mode
-                        out.write('\t*LIGHT_AFFECT_DIFFUSE %s\n' % "Off") #for now
+                        write_scope('*LIGHT_DECAY %s\n' % "InvSquare") # swy: this is the only supported mode
+                        write_scope('*LIGHT_AFFECT_DIFFUSE %s\n' % "Off") #for now
                         if (obj.data.specular_factor > 0.001):
-                            out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "On") #for now
+                            write_scope('*LIGHT_AFFECT_SPECULAR %s\n' % "On") #for now
                         else:
-                            out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "Off") #for now
-                        out.write('\t*LIGHT_AMBIENT_ONLY %s\n' % "Off") #for now
+                            write_scope('*LIGHT_AFFECT_SPECULAR %s\n' % "Off") #for now
+                        write_scope('*LIGHT_AMBIENT_ONLY %s\n' % "Off") #for now
 
                         #---------------------------------------------[Light Settings]---------------------------------------------           
-                        out.write('\t*LIGHT_SETTINGS {\n')
-                        out.write('\t\t*TIMEVALUE %u\n' % 0)
-                        out.write('\t\t*COLOR %.4f %.4f %.4f\n' % (obj.data.color.r, obj.data.color.g, obj.data.color.b))
-                        out.write('\t\t*FAR_ATTEN %.4f %.4f\n' % (obj.data.distance, obj.data.cutoff_distance))
+                        w_new_block('*LIGHT_SETTINGS {\n')
+                        write_scope('*TIMEVALUE %u\n' % 0)
+                        write_scope('*COLOR %.4f %.4f %.4f\n' % (obj.data.color.r, obj.data.color.g, obj.data.color.b))
+                        write_scope('*FAR_ATTEN %.4f %.4f\n' % (obj.data.distance, obj.data.cutoff_distance))
                         if (obj.data.type == 'SUN'):
-                            out.write('\t\t*HOTSPOT %u\n' % math.degrees(obj.data.angle))
+                            write_scope('*HOTSPOT %u\n' % math.degrees(obj.data.angle))
                         else:
-                            out.write('\t\t*HOTSPOT %u\n' % 0)
-                        out.write('\t}\n')
+                            write_scope('*HOTSPOT %u\n' % 0)
+                        w_end_block('}\n')
 
                         #===============================================================================================
                         #  LIGHT ANIMATION
                         #=============================================================================================== 
                         if EXPORT_ANIMATION:
-                            out.write('\t*LIGHT_ANIMATION {\n')
+                            w_new_block('*LIGHT_ANIMATION {\n')
 
                             TimeValueCounter = 0
                             for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
                                 bpy.context.scene.frame_set(f)
 
-                                out.write('\t\t*LIGHT_SETTINGS {\n')
-                                out.write('\t\t\t*TIMEVALUE %u\n' % TimeValueCounter)
-                                out.write('\t\t\t*COLOR %.4f %.4f %.4f\n' % (obj.data.color.r, obj.data.color.g, obj.data.color.b))
-                                out.write('\t\t\t*FAR_ATTEN %.4f %.4f\n' % (obj.data.distance, obj.data.cutoff_distance))
+                                w_new_block('*LIGHT_SETTINGS {\n')
+                                write_scope('*TIMEVALUE %u\n' % TimeValueCounter)
+                                write_scope('*COLOR %.4f %.4f %.4f\n' % (obj.data.color.r, obj.data.color.g, obj.data.color.b))
+                                write_scope('*FAR_ATTEN %.4f %.4f\n' % (obj.data.distance, obj.data.cutoff_distance))
                                 if (obj.data.type == 'SUN'):
-                                    out.write('\t\t\t*HOTSPOT %u\n' % math.degrees(obj.data.angle))
+                                    write_scope('*HOTSPOT %u\n' % math.degrees(obj.data.angle))
                                 else:
-                                    out.write('\t\t\t*HOTSPOT %u\n' % 0)
-                                out.write('\t\t}\n')
+                                    write_scope('*HOTSPOT %u\n' % 0)
+                                w_end_block('}\n')
 
                                 TimeValueCounter += TimeValue
 
-                            out.write('\t}\n')
+                            w_end_block('}\n')
 
                         #===============================================================================================
                         #  ANIMATION
@@ -531,7 +547,7 @@ def _write(context, filepath,
                             PrintTM_ANIMATION(out, obj, TimeValue)
 
                         #Close light object
-                        out.write('}\n')
+                        w_end_block('}\n')
             #Close File
             out.flush()
             out.close()
