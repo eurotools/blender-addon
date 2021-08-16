@@ -369,6 +369,11 @@ def _write(context, filepath,
                                         out.write('\t\t}\n')
                                         layerIndex +=1
 
+                            out.write('\t\t*MESH_VERTFLAGSLIST {\n')
+                            for vidx, vert in enumerate(obj.data.vertices):
+                                out.write('\t\t\t*VFLAG %u %u\n' % (vidx, 0))
+                            out.write('\t\t}\n')
+
                             #Liberate BM Object
                             bm.free()
 
