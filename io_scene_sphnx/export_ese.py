@@ -82,26 +82,26 @@ def _write(context, filepath,
                     RotationMatrix = rot_mtx.transposed()
 
                     #Write Matrix
-                    write_scope('\t\t*NODE_NAME "%s"\n' % object.name)
-                    write_scope('\t\t*INHERIT_POS %u %u %u\n' % (0,0,0))
-                    write_scope('\t\t*INHERIT_ROT %u %u %u\n' % (0,0,0))
-                    write_scope('\t\t*INHERIT_SCL %u %u %u\n' % (1,1,1))
+                    write_scope('*NODE_NAME "%s"' % object.name)
+                    write_scope('*INHERIT_POS %u %u %u' % (0,0,0))
+                    write_scope('*INHERIT_ROT %u %u %u' % (0,0,0))
+                    write_scope('*INHERIT_SCL %u %u %u' % (1,1,1))
 
                     if object.type == 'CAMERA':
                         #Don't modify this, the cameras rotations works fine with this code.
-                        write_scope('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
-                        write_scope('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
-                        write_scope('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
+                        write_scope('*TM_ROW0 %.4f %.4f %.4f' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
+                        write_scope('*TM_ROW1 %.4f %.4f %.4f' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
+                        write_scope('*TM_ROW2 %.4f %.4f %.4f' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
                     else:
                         #This other code needs revision, the rotations in the entity editor don't works. 
-                        write_scope('\t\t*TM_ROW0 %.4f %.4f %.4f\n' % (RotationMatrix[0].x, RotationMatrix[0].y,      RotationMatrix[0].z     ))
-                        write_scope('\t\t*TM_ROW1 %.4f %.4f %.4f\n' % (RotationMatrix[1].x, RotationMatrix[1].y,      RotationMatrix[1].z * -1))
-                        write_scope('\t\t*TM_ROW2 %.4f %.4f %.4f\n' % (RotationMatrix[2].x, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
+                        write_scope('*TM_ROW0 %.4f %.4f %.4f' % (RotationMatrix[0].x, RotationMatrix[0].y,      RotationMatrix[0].z     ))
+                        write_scope('*TM_ROW1 %.4f %.4f %.4f' % (RotationMatrix[1].x, RotationMatrix[1].y,      RotationMatrix[1].z * -1))
+                        write_scope('*TM_ROW2 %.4f %.4f %.4f' % (RotationMatrix[2].x, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
                     
                     #Flip location axis
                     loc_conv = InvertAxisRotationMatrix @ object.location
-                    write_scope('\t\t*TM_ROW3 %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
-                    write_scope('\t\t*TM_POS  %.4f %.4f %.4f\n' % (loc_conv.x, loc_conv.y, loc_conv.z))
+                    write_scope('*TM_ROW3 %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
+                    write_scope('*TM_POS  %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
 
             def PrintTM_ANIMATION(object, TimeValue):
                     w_new_block('*TM_ANIMATION {')
@@ -118,16 +118,17 @@ def _write(context, filepath,
                         RotationMatrix = rot_mtx.transposed()
 
                         #Write Time Value
-                        write_scope('\t\t\t*TM_FRAME  %u' % TimeValueCounter)
+                        write_scope_no_cr('*TM_FRAME  %5u' % TimeValueCounter)
 
                         #Write Matrix
-                        write_scope('%.4f %.4f %.4f' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
-                        write_scope('%.4f %.4f %.4f' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
-                        write_scope('%.4f %.4f %.4f' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
+                        out.write('  %.4f %.4f %.4f' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
+                        out.write('  %.4f %.4f %.4f' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
+                        out.write('  %.4f %.4f %.4f' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
                         
                         #Flip location axis
                         loc_conv = InvertAxisRotationMatrix @ object.location
-                        write_scope('%.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
+                        out.write('  %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
+                        out.write('\n')
 
                         #Update counter
                         TimeValueCounter += TimeValue
@@ -304,7 +305,7 @@ def _write(context, filepath,
                             #Print Vertex List
                             w_new_block('*MESH_VERTEX_LIST {')
                             for idx, ListItem in enumerate(VertexList):
-                                write_scope('*MESH_VERTEX %u %.4f %.4f %.4f' % (idx, ListItem[0], ListItem[1], ListItem[2]))
+                                write_scope('*MESH_VERTEX  %5u  %.4f %.4f %.4f' % (idx, ListItem[0], ListItem[1], ListItem[2]))
                             w_end_block('}')
 
                             #Face Vertex Index
@@ -382,7 +383,7 @@ def _write(context, filepath,
                                     for name, cl in bm.loops.layers.color.items():
                                         w_new_block('*MESH_CFACELAYER %u {' % layerIndex)
                                         write_scope('*MESH_NUMCVFACES %u ' % len(tris))
-                                        w_new_block('*MESH_CFACELIST {\n')
+                                        w_new_block('*MESH_CFACELIST {')
                                         for i, tri in enumerate(tris):
                                             write_scope_no_cr('*MESH_CFACE %u ' % i)
                                             for loop in tri:
