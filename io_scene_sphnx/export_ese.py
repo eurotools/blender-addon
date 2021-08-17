@@ -425,14 +425,16 @@ def _write(context, filepath,
                             w_end_block('}')
 
                             for key in obj.data.shape_keys.key_blocks:
-                                w_new_block('*MORPH_LIST {')
-                                w_new_block('*MORPH_TARGET "%s" %u {' % (key.name, len(key.data)))
-                                
-                                for vidx, vert in enumerate(key.data):
-                                    write_scope('%f %f %f' % (vert.co[0], vert.co[2], vert.co[2]))
+                                # swy: don't export the 'Basis' one that is just the normal mesh data other keys are relative/substracted to
+                                if key.relative_key != key:
+                                    w_new_block('*MORPH_LIST {')
+                                    w_new_block('*MORPH_TARGET "%s" %u {' % (key.name, len(key.data)))
+                                    
+                                    for vidx, vert in enumerate(key.data):
+                                        write_scope('%f %f %f' % (vert.co[0], vert.co[2], vert.co[2]))
 
-                                w_end_block('}')
-                                w_end_block('}')
+                                    w_end_block('}')
+                                    w_end_block('}')
                             #Liberate BM Object
                             bm.free()
 
