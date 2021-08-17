@@ -357,28 +357,6 @@ def _write(context, filepath,
                                     write_scope('*VFLAG %u %u' % (vidx, 0))
                             w_end_block('}')
 
-
-                            for indx, mod in enumerate(obj.modifiers):
-                                if mod.type == 'ARMATURE' and mod.object and mod.object.type == 'ARMATURE':
-                                    armat = mod.object
-                                    w_new_block("*SKIN_DATA {")
-                                    w_new_block("*BONE_LIST {")
-                                    for bidx, bone in enumerate(armat.data.bones):
-                                        write_scope('*BONE %u "%s"' % (bidx, bone.name))
-                                    w_end_block("}")
-
-                                    w_new_block('*SKIN_VERTEX_DATA {')
-                                    for vidx, vert in enumerate(obj.data.vertices):
-                                        #for bidx, bone in enumerate(armat.data.bones):
-                                            write_scope_no_cr('*VERTEX %u %u' % (vidx, len(vert.groups)))
-                                            for gidx, group in enumerate(vert.groups):
-                                                out.write('  %u %f' % (gidx, group.weight))
-                                            out.write("\n")
-                                    w_end_block("}")
-                                    w_end_block("}")
-
-                                    break
-
                             if True:
                                 #Vertex Colors List
                                 write_scope('*MESH_NUMCVERTEX %u' % len(VertexColorList))
@@ -428,6 +406,27 @@ def _write(context, filepath,
                                         write_scope('%u %f' % (f, key.value))
                                     w_end_block('}')
                             w_end_block('}')
+
+                            for indx, mod in enumerate(obj.modifiers):
+                                if mod.type == 'ARMATURE' and mod.object and mod.object.type == 'ARMATURE':
+                                    armat = mod.object
+                                    w_new_block("*SKIN_DATA {")
+                                    w_new_block("*BONE_LIST {")
+                                    for bidx, bone in enumerate(armat.data.bones):
+                                        write_scope('*BONE %u "%s"' % (bidx, bone.name))
+                                    w_end_block("}")
+
+                                    w_new_block('*SKIN_VERTEX_DATA {')
+                                    for vidx, vert in enumerate(obj.data.vertices):
+                                        #for bidx, bone in enumerate(armat.data.bones):
+                                            write_scope_no_cr('*VERTEX %u %u' % (vidx, len(vert.groups)))
+                                            for gidx, group in enumerate(vert.groups):
+                                                out.write('  %u %f' % (gidx, group.weight))
+                                            out.write("\n")
+                                    w_end_block("}")
+                                    w_end_block("}")
+
+                                    break
 
                             w_end_block('}')
 
