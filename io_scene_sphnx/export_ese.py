@@ -357,6 +357,13 @@ def _write(context, filepath,
                                     write_scope('*VFLAG %u %u' % (vidx, 0))
                             w_end_block('}')
 
+                            #w_new_block('*MORPH_LIST {')
+                            #write_scope('*MORPH_TARGET %s %u' % (vidx, len(obj.data.vertices)))
+                            #
+                            #for vidx, vert in enumerate(obj.data.vertices):
+                            #    write_scope('%f %f %f' % (vert.co[0], vert.co[2], vert.co[2]))
+                            #w_end_block('}')
+
                             for indx, mod in enumerate(obj.modifiers):
                                 if mod.type == 'ARMATURE' and mod.object and mod.object.type == 'ARMATURE':
                                     armat = mod.object
@@ -403,9 +410,6 @@ def _write(context, filepath,
                                         w_end_block('}')
                                         layerIndex +=1
 
-                            #Liberate BM Object
-                            bm.free()
-
                             #Close blocks
                             w_end_block('}')
 
@@ -419,6 +423,18 @@ def _write(context, filepath,
                             if EXPORT_MATERIALS:
                                 write_scope('*MATERIAL_REF %u' % indx)
                             w_end_block('}')
+
+                            for key in obj.data.shape_keys.key_blocks:
+                                w_new_block('*MORPH_LIST {')
+                                write_scope('*MORPH_TARGET %s %u' % (key.name, len(key.data)))
+                                
+                                for vidx, vert in enumerate(key.data):
+                                    write_scope('%f %f %f' % (vert.co[0], vert.co[2], vert.co[2]))
+
+                                w_end_block('}')
+
+                            #Liberate BM Object
+                            bm.free()
 
             for indx, obj in enumerate(bpy.context.scene.objects):
                 if obj.type == 'ARMATURE':
