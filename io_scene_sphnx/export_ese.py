@@ -417,11 +417,12 @@ def _write(context, filepath,
                             if EXPORT_MATERIALS:
                                 write_scope('*MATERIAL_REF %u' % indx)
 
-
+                            # swy: here go the blend shape weights with the mixed-in amount for each frame in the timeline
                             w_new_block('*MORPH_DATA {')
                             for key in obj.data.shape_keys.key_blocks:
                                 if key.relative_key != key:
-                                    w_new_block('*MORPH_FRAMES "%s" %u {' % (key.name, bpy.context.scene.frame_end - bpy.context.scene.frame_start + 1))
+                                    frame_count = bpy.context.scene.frame_end - bpy.context.scene.frame_start + 1
+                                    w_new_block('*MORPH_FRAMES "%s" %u {' % (key.name, frame_count))
                                     for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
                                         bpy.context.scene.frame_set(f)
                                         write_scope('%u %f' % (f, key.value))
@@ -430,6 +431,7 @@ def _write(context, filepath,
 
                             w_end_block('}')
 
+                            # swy: here goes the changed geometry/vertex positions for each of the shape keys, globally. they are referenced by name
                             for key in obj.data.shape_keys.key_blocks:
                                 # swy: don't export the 'Basis' one that is just the normal mesh data other keys are relative/substracted to
                                 if key.relative_key != key:
