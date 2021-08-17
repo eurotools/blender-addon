@@ -420,10 +420,12 @@ def _write(context, filepath,
 
                             w_new_block('*MORPH_DATA {')
                             for key in obj.data.shape_keys.key_blocks:
-                                write_scope('*MORPH_FRAMES "%s" %u' % (key.name, bpy.context.scene.frame_end - bpy.context.scene.frame_start))
-                                for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
-                                    bpy.context.scene.frame_set(f)
-                                    write_scope('%u %f' % (f, key.value))
+                                if key.relative_key != key:
+                                    w_new_block('*MORPH_FRAMES "%s" %u {' % (key.name, bpy.context.scene.frame_end - bpy.context.scene.frame_start + 1))
+                                    for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
+                                        bpy.context.scene.frame_set(f)
+                                        write_scope('%u %f' % (f, key.value))
+                                    w_end_block('}')
                             w_end_block('}')
 
                             w_end_block('}')
