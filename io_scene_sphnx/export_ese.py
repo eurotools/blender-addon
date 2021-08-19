@@ -172,7 +172,7 @@ def _write(context, filepath,
                             #Mesh Materials
                             if len(MeshObj.material_slots) > 0:
                                 currentSubMat = 0
-
+                                
                                 #Material Info                                    
                                 MatData = bpy.data.materials[0]
                                 DiffuseColor = MatData.diffuse_color
@@ -180,6 +180,8 @@ def _write(context, filepath,
                                 write_scope('*MATERIAL_DIFFUSE %.4f %.4f %.4f' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
                                 write_scope('*MATERIAL_SPECULAR %u %u %u' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
                                 write_scope('*MATERIAL_SHINE %.1f' % MatData.metallic)
+                                if not MatData.use_backface_culling:
+                                    write_scope('*MATERIAL_TWOSIDED')
                                 write_scope('*NUMSUBMTLS %u ' % len(MeshObj.material_slots))
 
                                 #Loop Trought Submaterials
