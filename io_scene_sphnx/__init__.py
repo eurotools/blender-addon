@@ -431,78 +431,6 @@ class EuroProperties(bpy.types.PropertyGroup):
         update = update_after_enum
     )
     
-# swy: the functional meat for the buttons in the Mesh > Eurocom Tools panel
-class EApplyFlags(bpy.types.Operator):
-    """Assigns toggled flags from the panel in the current selection"""
-    bl_idname  = "wm.ea"
-    bl_label   = "Apply selected flags"
-    bl_options = {'PRESET', 'UNDO'}
-
-    def execute(self, context):
-        print("EApplyFlags: ", context)
-
-
-        ob = bpy.context.active_object
-        me = ob.data
-        bm = bmesh.from_edit_mesh(me)
-
-        add = set()
-
-        toggled_flags = enum_property_to_bitfield(context.mesh.euroland.vertex_flags)
-
-        if 'euro_vtx_flags' not in bm.verts.layers.int:
-             bm.verts.layers.int.new('euro_vtx_flags')
-
-        if 'euro_fac_flags' not in bm.faces.layers.int:
-             bm.faces.layers.int.new('euro_fac_flags')
-
-        euro_vtx_flags = bm.verts.layers.int['euro_vtx_flags']
-
-        for v in bm.verts:
-            if v.select:
-                v[euro_vtx_flags] = toggled_flags
-
-        return {'FINISHED'}
-
-    def draw(self, context):    
-        pass
-        
-class ESelectChFlags(bpy.types.Operator):
-    """Select any elements with this combination of flags"""
-    bl_idname  = "wm.eb"
-    bl_label   = "Select any elements with this combination of flags"
-    bl_options = {'PRESET', 'UNDO'}
-
-    def execute(self, context):
-        print("ESelectChFlags: ", context)
-
-        me = bpy.context.active_object.data
-        bm = bmesh.from_edit_mesh(me)
-
-        add = set()
-
-        toggled_flags = enum_property_to_bitfield(context.mesh.euroland.vertex_flags)
-
-        if 'euro_vtx_flags' not in bm.verts.layers.int:
-             bm.verts.layers.int.new('euro_vtx_flags')
-
-        if 'euro_fac_flags' not in bm.faces.layers.int:
-             bm.faces.layers.int.new('euro_fac_flags')
-
-        euro_vtx_flags = bm.verts.layers.int['euro_vtx_flags']
-
-        for v in bm.verts:
-            v.select = (v[euro_vtx_flags] & toggled_flags) and True or False
-
-        # swy: without this it doesn't work: https://blender.stackexchange.com/a/188323/42781
-        bm.select_flush_mode()
-        bmesh.update_edit_mesh(me)
-
-        return {'FINISHED'}
-
-    def draw(self, context):
-        pass
-
 def select_mess(context, func):
     me = bpy.context.active_object.data
     bm = bmesh.from_edit_mesh(me)
@@ -528,6 +456,51 @@ def select_mess(context, func):
     # swy: without this it doesn't work: https://blender.stackexchange.com/a/188323/42781
     bm.select_flush_mode()
     bmesh.update_edit_mesh(me)
+
+# swy: the functional meat for the buttons in the Mesh > Eurocom Tools panel
+class EApplyFlags(bpy.types.Operator):
+    """Assigns toggled flags from the panel in the current selection"""
+    bl_idname  = "wm.ea"
+    bl_label   = "Apply selected flags"
+    bl_options = {'PRESET', 'UNDO'}
+
+    def execute(self, context):
+        print("EApplyFlags: ", context)
+
+        toggled_flags = enum_property_to_bitfield(context.mesh.euroland.vertex_flags)
+
+        def callback(elem, layer):
+            if (elem.select):
+                elem[layer] = toggled_flags
+
+        select_mess(context, callback)
+
+        return {'FINISHED'}
+
+    def draw(self, context):    
+        pass
+        
+class ESelectChFlags(bpy.types.Operator):
+    """Select any elements with this combination of flags"""
+    bl_idname  = "wm.eb"
+    bl_label   = "Select any elements with this combination of flags"
+    bl_options = {'PRESET', 'UNDO'}
+
+    def execute(self, context):
+        print("ESelectChFlags: ", context)
+
+        toggled_flags = enum_property_to_bitfield(context.mesh.euroland.vertex_flags)
+
+        def callback(elem, layer):
+            elem.select = (elem[layer] & toggled_flags) and True or False
+
+        select_mess(context, callback)
+
+        return {'FINISHED'}
+
+    def draw(self, context):
+        pass
+
 
 
 class ESelectNoFlags(bpy.types.Operator):
