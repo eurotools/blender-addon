@@ -144,10 +144,12 @@ def _write(context, filepath,
                     w_end_block('}') # TM_ANIMATION
 
 
-            #Start writting
+            # here's the first line that gets written; we start here, with the basic header
             write_scope('*3DSMAX_EUROEXPORT	300')
+            
             # swy: turn a (2021, 8, 16) tuple into "2021.08.16"
             version_date = '.'.join(('%02u' % x) for x in bl_info['version'])
+
             write_scope('*COMMENT "Eurocom Export Version %s - %s"' % (version_date, datetime.datetime.utcnow().strftime('%a %b %d %H:%M:%S %Y')))
             write_scope('*COMMENT "Version of Blender that output this file: %s"' % bpy.app.version_string)
             write_scope('*COMMENT "Version of ESE Plug-in: 5.0.0.13"')
@@ -308,9 +310,8 @@ def _write(context, filepath,
 
                             #MESH Section
                             w_new_block('*MESH {')
-                            write_scope('*TIMEVALUE %u' % 0)
                             write_scope('*MESH_NUMVERTEX %u' % len(VertexList))
-                            write_scope('*MESH_NUMFACES %u' % len(tris))
+                            write_scope('*MESH_NUMFACES %u'  % len(tris))
 
                             #Print Vertex List
                             w_new_block('*MESH_VERTEX_LIST {')
@@ -372,7 +373,11 @@ def _write(context, filepath,
                                 write_scope('*MESH_NUMCVERTEX %u' % len(VertexColorList))
                                 w_new_block('*MESH_CVERTLIST {')
                                 for idx, ColorArray in enumerate(VertexColorList):
-                                    write_scope('*MESH_VERTCOL %u %.4f %.4f %.4f %u' % (idx, (ColorArray[0] * .5), (ColorArray[1] * .5), (ColorArray[2] * .5), 1))
+                                    write_scope('*MESH_VERTCOL %u %.4f %.4f %.4f %u' % (idx,
+                                        (ColorArray[0] * .5),
+                                        (ColorArray[1] * .5),
+                                        (ColorArray[2] * .5), 1) # swy: fix dumping the alpha channel
+                                    )
                                 w_end_block('}') # MESH_CVERTLIST
 
                                 #Face Color Vertex Index
