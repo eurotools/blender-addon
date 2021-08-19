@@ -159,77 +159,6 @@ def _write(context, filepath,
             w_end_block('}')
 
             #===============================================================================================
-            #  MATERIAL LIST
-            #===============================================================================================
-            if EXPORT_MATERIALS:
-                w_new_block('*MATERIAL_LIST {')
-                write_scope('*MATERIAL_COUNT %u' % GetMaterialCount())
-                for indx, MeshObj in enumerate(bpy.context.scene.objects):
-                        if MeshObj.type == 'MESH':
-                            #Material
-                            w_new_block('*MATERIAL %u {' % indx)
-
-                            #Mesh Materials
-                            if len(MeshObj.material_slots) > 0:
-                                currentSubMat = 0
-                                
-                                #Material Info                                    
-                                MatData = bpy.data.materials[0]
-                                DiffuseColor = MatData.diffuse_color
-                                write_scope('*MATERIAL_NAME "%s"' % MatData.name)
-                                write_scope('*MATERIAL_DIFFUSE %.4f %.4f %.4f' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-                                write_scope('*MATERIAL_SPECULAR %u %u %u' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
-                                write_scope('*MATERIAL_SHINE %.1f' % MatData.metallic)
-                                if not MatData.use_backface_culling:
-                                    write_scope('*MATERIAL_TWOSIDED')
-                                write_scope('*NUMSUBMTLS %u ' % len(MeshObj.material_slots))
-
-                                #Loop Trought Submaterials
-                                for indx, Material_Data in enumerate(MeshObj.material_slots):
-                                    MatData = bpy.data.materials[Material_Data.name]
-
-                                    #Material has texture
-                                    if MatData.node_tree.nodes.get('Image Texture', None):
-                                        ImageNode = MatData.node_tree.nodes.get('Image Texture', None)
-                                        ImageName = ImageNode.image.name
-                                        DiffuseColor = MatData.diffuse_color
-
-                                        #Submaterial
-                                        w_new_block('*SUBMATERIAL %u {' % currentSubMat)
-                                        write_scope('*MATERIAL_NAME "%s"' % (os.path.splitext(ImageName)[0]))
-                                        write_scope('*MATERIAL_DIFFUSE %.4f %.4f %.4f' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-                                        write_scope('*MATERIAL_SPECULAR %u %u %u' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
-                                        write_scope('*MATERIAL_SHINE %.1f' % MatData.metallic)
-                                        write_scope('*MATERIAL_SELFILLUM %u' % int(MatData.use_preview_world))
-
-                                        #Map Difuse
-                                        w_new_block('*MAP_DIFFUSE {')
-                                        write_scope('*MAP_NAME "%s"' % (os.path.splitext(ImageName)[0]))
-                                        write_scope('*MAP_CLASS "%s"' % "Bitmap")
-                                        write_scope('*MAP_AMOUNT "%u"' % 1)
-                                        write_scope('*BITMAP "%s"' % (bpy.path.abspath(ImageNode.image.filepath)))
-                                        w_end_block('}')
-
-                                    #Material has no texture
-                                    else:
-                                        #Submaterial
-                                        principled = next(n for n in MatData.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
-                                        base_color = principled.inputs['Base Color']
-                                        color = base_color.default_value
-
-                                        w_new_block('*SUBMATERIAL %u {' % currentSubMat)
-                                        write_scope('*MATERIAL_NAME "%s"' % MatData.name)
-                                        write_scope('*MATERIAL_DIFFUSE %.4f %.4f %.4f' % ((color[0] * .5), (color[1] * .5), (color[2] * .5)))
-                                        write_scope('*MATERIAL_SPECULAR %u %u %u' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
-                                        write_scope('*MATERIAL_SHINE %.1f' % MatData.metallic)
-                                        write_scope('*MATERIAL_SELFILLUM %u' % int(MatData.use_preview_world))
-
-                                    w_end_block('}')
-                                    currentSubMat += 1
-                            w_end_block('}')
-                w_end_block('}')
-
-            #===============================================================================================
             #  GEOM OBJECT
             #===============================================================================================
             if 'MESH' in EXPORT_OBJECTTYPES:
@@ -283,6 +212,76 @@ def _write(context, filepath,
                                             color = loop[cl] # gives a Vector((R, G, B, A))
                                             if color not in VertexColorList:
                                                 VertexColorList.append(color)
+
+
+                        #===============================================================================================
+                        #  MATERIAL LIST
+                        #===============================================================================================
+                        w_new_block('*MATERIAL_LIST {')
+                        write_scope('*MATERIAL_COUNT %u' % GetMaterialCount())
+                        w_new_block('*MATERIAL %u {' % indx)
+
+                        #Mesh Materials
+                        if len(obj.material_slots) > 0:
+                            currentSubMat = 0
+
+                            #Material Info                                    
+                            MatData = bpy.data.materials[0]
+                            DiffuseColor = MatData.diffuse_color
+                            write_scope('*MATERIAL_NAME "%s"' % MatData.name)
+                            write_scope('*MATERIAL_DIFFUSE %.4f %.4f %.4f' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                            write_scope('*MATERIAL_SPECULAR %u %u %u' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                            write_scope('*MATERIAL_SHINE %.1f' % MatData.metallic)
+                            if not MatData.use_backface_culling:
+                                write_scope('*MATERIAL_TWOSIDED')
+                            write_scope('*NUMSUBMTLS %u ' % len(obj.material_slots))
+
+                            #Loop Trought Submaterials
+                            for indx, Material_Data in enumerate(obj.material_slots):
+                                MatData = bpy.data.materials[Material_Data.name]
+
+                                #Material has texture
+                                if MatData.node_tree.nodes.get('Image Texture', None):
+                                    ImageNode = MatData.node_tree.nodes.get('Image Texture', None)
+                                    ImageName = ImageNode.image.name
+                                    DiffuseColor = MatData.diffuse_color
+
+                                    #Submaterial
+                                    w_new_block('*SUBMATERIAL %u {' % currentSubMat)
+                                    write_scope('*MATERIAL_NAME "%s"' % (os.path.splitext(ImageName)[0]))
+                                    write_scope('*MATERIAL_DIFFUSE %.4f %.4f %.4f' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
+                                    write_scope('*MATERIAL_SPECULAR %u %u %u' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                                    write_scope('*MATERIAL_SHINE %.1f' % MatData.metallic)
+                                    write_scope('*MATERIAL_SELFILLUM %u' % int(MatData.use_preview_world))
+
+                                    #Map Difuse
+                                    w_new_block('*MAP_DIFFUSE {')
+                                    write_scope('*MAP_NAME "%s"' % (os.path.splitext(ImageName)[0]))
+                                    write_scope('*MAP_CLASS "%s"' % "Bitmap")
+                                    write_scope('*MAP_AMOUNT "%u"' % 1)
+                                    write_scope('*BITMAP "%s"' % (bpy.path.abspath(ImageNode.image.filepath)))
+                                    w_end_block('}')
+
+                                #Material has no texture
+                                else:
+                                    #Submaterial
+                                    principled = next(n for n in MatData.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
+                                    base_color = principled.inputs['Base Color']
+                                    color = base_color.default_value
+
+                                    w_new_block('*SUBMATERIAL %u {' % currentSubMat)
+                                    write_scope('*MATERIAL_NAME "%s"' % MatData.name)
+                                    write_scope('*MATERIAL_DIFFUSE %.4f %.4f %.4f' % ((color[0] * .5), (color[1] * .5), (color[2] * .5)))
+                                    write_scope('*MATERIAL_SPECULAR %u %u %u' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                                    write_scope('*MATERIAL_SHINE %.1f' % MatData.metallic)
+                                    write_scope('*MATERIAL_SELFILLUM %u' % int(MatData.use_preview_world))
+
+                                w_end_block('}')
+                                currentSubMat += 1
+                            w_end_block('}')
+                            w_end_block('}')
+
+
 
                             #===========================================[Print Object Data]====================================================       
                             w_new_block('*GEOMOBJECT {')
