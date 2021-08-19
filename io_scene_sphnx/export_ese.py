@@ -254,6 +254,9 @@ def _write(context, filepath,
                                     write_scope('*MATERIAL_SHINE %.1f' % MatData.metallic)
                                     write_scope('*MATERIAL_SELFILLUM %u' % int(MatData.use_preview_world))
 
+                                    # swy: wireframe color was added on Blender 2.8 and is a per-object thing in Object Properties > Viewport Display > Color
+                                    write_scope('*WIREFRAME_COLOR %.4f %.4f %.4f' % (obj.color[0], obj.color[1], obj.color[2]))
+
                                     #Map Difuse
                                     w_new_block('*MAP_DIFFUSE {')
                                     write_scope('*MAP_NAME "%s"' % (os.path.splitext(ImageName)[0]))
