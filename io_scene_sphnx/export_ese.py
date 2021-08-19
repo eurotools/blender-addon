@@ -396,16 +396,17 @@ def _write(context, filepath,
                                 write_scope('*MATERIAL_REF %u' % indx)
 
                             # swy: here go the blend shape weights with the mixed-in amount for each frame in the timeline
-                            w_new_block('*MORPH_DATA {')
-                            for key in obj.data.shape_keys.key_blocks:
-                                if key.relative_key != key:
-                                    frame_count = bpy.context.scene.frame_end - bpy.context.scene.frame_start + 1
-                                    w_new_block('*MORPH_FRAMES "%s" %u {' % (key.name, frame_count))
-                                    for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
-                                        bpy.context.scene.frame_set(f)
-                                        write_scope('%u %f' % (f, key.value))
-                                    w_end_block('}')
-                            w_end_block('}')
+                            if obj.data.shape_keys:
+                                w_new_block('*MORPH_DATA {')
+                                for key in obj.data.shape_keys.key_blocks:
+                                    if key.relative_key != key:
+                                        frame_count = bpy.context.scene.frame_end - bpy.context.scene.frame_start + 1
+                                        w_new_block('*MORPH_FRAMES "%s" %u {' % (key.name, frame_count))
+                                        for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
+                                            bpy.context.scene.frame_set(f)
+                                            write_scope('%u %f' % (f, key.value))
+                                        w_end_block('}')
+                                w_end_block('}')
 
                             for indx, mod in enumerate(obj.modifiers):
                                 if mod.type == 'ARMATURE' and mod.object and mod.object.type == 'ARMATURE':
@@ -418,11 +419,10 @@ def _write(context, filepath,
 
                                     w_new_block('*SKIN_VERTEX_DATA {')
                                     for vidx, vert in enumerate(obj.data.vertices):
-                                        #for bidx, bone in enumerate(armat.data.bones):
-                                            write_scope_no_cr('*VERTEX %u %u' % (vidx, len(vert.groups)))
-                                            for gidx, group in enumerate(vert.groups):
-                                                out.write('  %u %f' % (gidx, group.weight))
-                                            out.write("\n")
+                                        write_scope_no_cr('*VERTEX %5u %u' % (vidx, len(vert.groups)))
+                                        for gidx, group in enumerate(vert.groups):
+                                            out.write('  %u %f' % (gidx, group.weight))
+                                        out.write("\n")
                                     w_end_block("}")
                                     w_end_block("}")
 
@@ -431,17 +431,18 @@ def _write(context, filepath,
                             w_end_block('}')
 
                             # swy: here goes the changed geometry/vertex positions for each of the shape keys, globally. they are referenced by name
-                            for key in obj.data.shape_keys.key_blocks:
-                                # swy: don't export the 'Basis' one that is just the normal mesh data other keys are relative/substracted to
-                                if key.relative_key != key:
-                                    w_new_block('*MORPH_LIST {')
-                                    w_new_block('*MORPH_TARGET "%s" %u {' % (key.name, len(key.data)))
-                                    
-                                    for vidx, vert in enumerate(key.data):
-                                        write_scope('%f %f %f' % (vert.co[0], vert.co[1], vert.co[2]))
+                            if obj.data.shape_keys:
+                                for key in obj.data.shape_keys.key_blocks:
+                                    # swy: don't export the 'Basis' one that is just the normal mesh data other keys are relative/substracted to
+                                    if key.relative_key != key:
+                                        w_new_block('*MORPH_LIST {')
+                                        w_new_block('*MORPH_TARGET "%s" %u {' % (key.name, len(key.data)))
+                                        
+                                        for vidx, vert in enumerate(key.data):
+                                            write_scope('%f %f %f' % (vert.co[0], vert.co[1], vert.co[2]))
 
-                                    w_end_block('}')
-                                    w_end_block('}')
+                                        w_end_block('}')
+                                        w_end_block('}')
                             #Liberate BM Object
                             bm.free()
 
