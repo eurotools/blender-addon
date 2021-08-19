@@ -515,21 +515,21 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
         else:
             # swy: bad selection mode; tell the user about it
             box.alignment = 'CENTER'
-            row = box.column_flow(columns=1)
+            text_row = box.column_flow(columns=1)
 
-            a = box.row()
-            a.alignment = 'CENTER'
-            a.label(icon='FACESEL')
-            a.label(icon='VERTEXSEL')
+            icon_row = text_row.row()
+            icon_row.alignment = 'CENTER'
+            icon_row.label(icon='FACESEL')
+            icon_row.label(icon='VERTEXSEL')
 
             # swy: this is a bit of a silly way of wrapping the text and overflowing
             #      into various lines across the box
             text_list = textwrap.wrap(
-                "Go into either «face» or «vertex» select mode to edit the Eurocom flags...",
-                width=context.region.width / 7.2
+                "Go into either the «face» or «vertex» select mode to edit the Eurocom flags...",
+                width = (context.region.width / 7.2) / context.preferences.system.ui_scale
             )
             for line in text_list:
-                row.label(text=(' ' * 6) + line)
+                text_row.label(text=(' ' * 6) + line)
 
 
 # swy: global variable to store icons in
