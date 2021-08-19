@@ -463,7 +463,7 @@ class EApplyFlags(bpy.types.Operator):
 
         return {'FINISHED'}
 
-    def draw(self, context):
+    def draw(self, context):    
         pass
         
 class ESelectChFlags(bpy.types.Operator):
@@ -475,8 +475,7 @@ class ESelectChFlags(bpy.types.Operator):
     def execute(self, context):
         print("ESelectChFlags: ", context)
 
-        ob = bpy.context.active_object
-        me = ob.data
+        me = bpy.context.active_object.data
         bm = bmesh.from_edit_mesh(me)
 
         add = set()
@@ -492,7 +491,7 @@ class ESelectChFlags(bpy.types.Operator):
         euro_vtx_flags = bm.verts.layers.int['euro_vtx_flags']
 
         for v in bm.verts:
-            v.select = True # (v[euro_vtx_flags] == toggled_flags) and True or False
+            v.select = (v[euro_vtx_flags] & toggled_flags) and True or False
 
         # swy: without this it doesn't work: https://blender.stackexchange.com/a/188323/42781
         bm.select_flush_mode()
@@ -511,6 +510,34 @@ class ESelectNoFlags(bpy.types.Operator):
 
     def execute(self, context):
         print("ESelectNoFlags: ", context)
+
+        me = bpy.context.active_object.data
+        bm = bmesh.from_edit_mesh(me)
+
+        toggled_flags = enum_property_to_bitfield(context.mesh.euroland.vertex_flags)
+
+        if 'euro_vtx_flags' not in bm.verts.layers.int:
+             bm.verts.layers.int.new('euro_vtx_flags')
+
+        if 'euro_fac_flags' not in bm.faces.layers.int:
+             bm.faces.layers.int.new('euro_fac_flags')
+
+        euro_vtx_flags = bm.verts.layers.int['euro_vtx_flags']
+        euro_fac_flags = bm.faces.layers.int['euro_fac_flags']
+
+        in_vtx_sel_mode = context.tool_settings.mesh_select_mode[0]
+
+        if in_vtx_sel_mode:
+            for v in bm.verts:
+                v.select = (v[euro_vtx_flags] == 0) and True or False
+        else:
+            for f in bm.faces:
+                f.select = (f[euro_fac_flags] == 0) and True or False
+
+        # swy: without this it doesn't work: https://blender.stackexchange.com/a/188323/42781
+        bm.select_flush_mode()
+        bmesh.update_edit_mesh(me)
+
         return {'FINISHED'}
 
     def draw(self, context):
@@ -558,25 +585,6 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
         row = box.column_flow(columns=2)
 
         # --
-        ob = bpy.context.active_object
-        me = ob.data
-        bm = bmesh.from_edit_mesh(me)
-
-        add = set()
-
-        if 'euro_vtx_flags' not in bm.verts.layers.int:
-             bm.verts.layers.int.new('euro_vtx_flags')
-        else:
-            node_width_key = bm.verts.layers.int['euro_vtx_flags']
-
-            #for v in bm.verts:
-                #if v.select:
-                    #print(v)
-                    #add |= v[node_width_key]
-
-        thing = 0b10000000000000
-
-        asdfasdf = context.mesh.euroland.vertex_flags
 
         qqqq = enum_property_to_bitfield(context.mesh.euroland.vertex_flags)
         ssss = bitfield_to_enum_property(context.mesh.euroland, 'vertex_flags', qqqq)
@@ -697,13 +705,14 @@ def register():
     custom_icons.load('sphinx_ico', os.path.join(os.path.dirname(__file__), 'icons/sphinx.png'), 'IMAGE')
 
 def unregister():
+    global custom_icons; custom_icons.clear()
     bpy.utils.previews.remove(custom_icons)
 
     for m in reversed(menu_export):
-        bpy.types.TOPBAR_MT_file_export.append(m)
+        bpy.types.TOPBAR_MT_file_export.remove(m)
 
     for m in reversed(menu_import):
-        bpy.types.TOPBAR_MT_file_import.append(m)
+        bpy.types.TOPBAR_MT_file_import.remove(m)
 
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
