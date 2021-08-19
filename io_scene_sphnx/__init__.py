@@ -395,8 +395,8 @@ class EuroProperties(bpy.types.PropertyGroup):
             ("0x01000000", "No collision",           "0x01000000"),
             ("0x02000000", "Always backface culled", "0x02000000")
         ],
-        default=set(),
-        update=update_after_enum
+        default = set(),
+        update = update_after_enum
     )
     vertex_flags: bpy.props.EnumProperty(
         name = "Eurocom vertex flags",
@@ -424,15 +424,15 @@ class EuroProperties(bpy.types.PropertyGroup):
             ("0x4000", "Cloth Vertex",         "0x4000"),
             ("0x8000", "Fixed Cloth Vertex",   "0x8000"),
         ],
-        default=set(),
-        update=update_after_enum
+        default = set(),
+        update = update_after_enum
     )
     
 # swy: the functional meat for the buttons in the Mesh > Eurocom Tools panel
 class EApplyFlags(bpy.types.Operator):
     """Assigns toggled flags from the panel in the current selection"""
-    bl_idname = "wm.ea"
-    bl_label = "Apply selected flags"
+    bl_idname  = "wm.ea"
+    bl_label   = "Apply selected flags"
     bl_options = {'PRESET', 'UNDO'}
 
     def execute(self, context):
@@ -444,8 +444,8 @@ class EApplyFlags(bpy.types.Operator):
         
 class ESelectChFlags(bpy.types.Operator):
     """Select any elements with this combination of flags"""
-    bl_idname = "wm.eb"
-    bl_label = "Select any elements with this combination of flags"
+    bl_idname  = "wm.eb"
+    bl_label   = "Select any elements with this combination of flags"
     bl_options = {'PRESET', 'UNDO'}
 
     def execute(self, context):
@@ -468,6 +468,8 @@ class ESelectNoFlags(bpy.types.Operator):
     def draw(self, context):
         pass
 
+import textwrap
+
 @classmethod
 def poll(cls, context):
     return False
@@ -480,21 +482,55 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
 
     @classmethod
     def poll(cls, context):
-        return (context.object is not None and context.object.type == 'MESH')
+        return (context.object is not None and context.object.type == 'MESH' and bpy.context.mode == 'EDIT_MESH')
 
     def draw(self, context):
         box = self.layout.box()
         row = box.column_flow(columns=2)
-        row.prop(context.mesh.euroland, "face_flags",   expand=True)
-        row.prop(context.mesh.euroland, "vertex_flags", expand=True)
-        box.operator(EApplyFlags.bl_idname, icon='MODIFIER', text='Apply to selected')
-        
-        butt = self.layout.split()
-        butt.label(text="Select any elements with...")
-        
-        butt = self.layout.split(align=True)
-        butt.operator(ESelectChFlags.bl_idname, text='These flags checked')
-        butt.operator(ESelectNoFlags.bl_idname, text='No flags checked')
+
+        # swy: this is a bit backwards, because you can select both at the same time, but works
+        in_vtx_sel_mode = context.tool_settings.mesh_select_mode[0]
+        in_fac_sel_mode = context.tool_settings.mesh_select_mode[2]
+
+        # swy: make it not work at all in edge mode or whenever both of them are toggled on use an
+        #      exclusive or / xor operation, so that we only return True if either of them is on
+        if in_vtx_sel_mode ^ in_fac_sel_mode:
+
+            if in_fac_sel_mode:
+                row.prop(context.mesh.euroland, "face_flags",   expand=True)
+            if in_vtx_sel_mode:
+                row.prop(context.mesh.euroland, "vertex_flags", expand=True)
+
+            box.operator(
+                EApplyFlags.bl_idname, icon=(in_fac_sel_mode and 'FACESEL' or 'VERTEXSEL'),
+                text='Apply to selected ' + (in_fac_sel_mode and 'faces'   or 'vertices')
+            )
+
+            butt = self.layout.split()
+            butt.label(text="Select any elements with...")
+            
+            butt = self.layout.split(align=True)
+            butt.operator(ESelectChFlags.bl_idname, text='These flags checked')
+            butt.operator(ESelectNoFlags.bl_idname, text='No flags checked')
+        else:
+            # swy: bad selection mode; tell the user about it
+            box.alignment = 'CENTER'
+            row = box.column_flow(columns=1)
+
+            a = box.row()
+            a.alignment = 'CENTER'
+            a.label(icon='FACESEL')
+            a.label(icon='VERTEXSEL')
+
+            # swy: this is a bit of a silly way of wrapping the text and overflowing
+            #      into various lines across the box
+            text_list = textwrap.wrap(
+                "Go into either «face» or «vertex» select mode to edit the Eurocom flags...",
+                width=context.region.width / 7.2
+            )
+            for line in text_list:
+                row.label(text=(' ' * 6) + line)
+
 
 # swy: global variable to store icons in
 custom_icons = None
