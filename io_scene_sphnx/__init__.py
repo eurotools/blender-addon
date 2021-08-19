@@ -431,7 +431,10 @@ class EuroProperties(bpy.types.PropertyGroup):
         update = update_after_enum
     )
     
-def select_mess(context, func):
+# swy: use a callback function to iterate across the whole thing,
+#      works with vertices and faces, depending on the context:
+#      https://stackoverflow.com/a/42544997/674685
+def iterate_over_mesh(context, func):
     me = bpy.context.active_object.data
     bm = bmesh.from_edit_mesh(me)
 
@@ -469,11 +472,12 @@ class EApplyFlags(bpy.types.Operator):
 
         toggled_flags = enum_property_to_bitfield(context.mesh.euroland.vertex_flags)
 
+        # swy: if this element is selected; overwrite the whole layer flag value with our own
         def callback(elem, layer):
             if (elem.select):
                 elem[layer] = toggled_flags
 
-        select_mess(context, callback)
+        iterate_over_mesh(context, callback)
 
         return {'FINISHED'}
 
@@ -491,10 +495,11 @@ class ESelectChFlags(bpy.types.Operator):
 
         toggled_flags = enum_property_to_bitfield(context.mesh.euroland.vertex_flags)
 
+        # swy: if the flag in the layer is part of the toggled flags (one of many); select it, and deselect everything else
         def callback(elem, layer):
             elem.select = (elem[layer] & toggled_flags) and True or False
 
-        select_mess(context, callback)
+        iterate_over_mesh(context, callback)
 
         return {'FINISHED'}
 
@@ -512,10 +517,11 @@ class ESelectNoFlags(bpy.types.Operator):
     def execute(self, context):
         print("ESelectNoFlags: ", context)
 
+        # swy: if the flag in the layer says zero; select it, and deselect everything else
         def callback(elem, layer):
             elem.select = (elem[layer] == 0) and True or False
 
-        select_mess(context, callback)
+        iterate_over_mesh(context, callback)
 
         return {'FINISHED'}
 
