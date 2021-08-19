@@ -57,6 +57,7 @@ def _write(context, filepath,
 
         #Create new file
         with open(filepath, 'w') as out:
+            # swy: reset the indentation level to zero
             global block_level; block_level = 0
 
             # swy: make a no-carriage-return version
@@ -109,27 +110,37 @@ def _write(context, filepath,
                     write_scope('*NODE_NAME "%s"' % object.name)
                     w_new_block('*TM_ANIM_FRAMES {')
 
+                    last_matrix = False
                     TimeValueCounter = 0
                     for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
                         bpy.context.scene.frame_set(f)
 
-                        ConvertedMatrix = object.rotation_euler.to_matrix()
+                        print(f, "last", last_matrix)
+                        print(f, object.matrix_world, object.rotation_euler, object.location)
 
-                        rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
-                        RotationMatrix = rot_mtx.transposed()
-
-                        #Write Time Value
-                        write_scope_no_cr('*TM_FRAME  %5u' % TimeValueCounter)
-
-                        #Write Matrix
-                        out.write('  %.4f %.4f %.4f' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
-                        out.write('  %.4f %.4f %.4f' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
-                        out.write('  %.4f %.4f %.4f' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
+                        cur_matrix = [object.rotation_euler.copy(), object.location.copy()]
+                        print(cur_matrix == last_matrix)
                         
-                        #Flip location axis
-                        loc_conv = InvertAxisRotationMatrix @ object.location
-                        out.write('  %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
-                        out.write('\n')
+                        if (cur_matrix != last_matrix):
+                            last_matrix = cur_matrix
+
+                            ConvertedMatrix = object.rotation_euler.to_matrix()
+
+                            rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
+                            RotationMatrix = rot_mtx.transposed()
+
+                            #Write Time Value
+                            write_scope_no_cr('*TM_FRAME  %5u' % TimeValueCounter)
+
+                            #Write Matrix
+                            out.write('  %.4f %.4f %.4f' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
+                            out.write('  %.4f %.4f %.4f' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
+                            out.write('  %.4f %.4f %.4f' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
+                            
+                            #Flip location axis
+                            loc_conv = InvertAxisRotationMatrix @ object.location
+                            out.write('  %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
+                            out.write('\n')
 
                         #Update counter
                         TimeValueCounter += TimeValue
@@ -149,7 +160,7 @@ def _write(context, filepath,
             #===============================================================================================
             #  SCENE INFO
             #=============================================================================================== 
-            TimeValue = 4800 / bpy.context.scene.render.fps
+            TimeValue = 1 # 4800 / bpy.context.scene.render.fps
 
             w_new_block('*SCENE {')
             write_scope('*SCENE_FILENAME "%s"'     % os.path.basename(bpy.data.filepath))
