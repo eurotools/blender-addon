@@ -18,6 +18,7 @@ bl_info = {
 import os
 import bpy
 import bpy.utils.previews
+import bmesh
 
 from bpy.props import(
         BoolProperty,
@@ -502,6 +503,33 @@ class ESelectChFlags(bpy.types.Operator):
     def draw(self, context):
         pass
 
+def select_mess(context, func):
+    me = bpy.context.active_object.data
+    bm = bmesh.from_edit_mesh(me)
+
+    if 'euro_vtx_flags' not in bm.verts.layers.int:
+            bm.verts.layers.int.new('euro_vtx_flags')
+
+    if 'euro_fac_flags' not in bm.faces.layers.int:
+            bm.faces.layers.int.new('euro_fac_flags')
+
+    euro_vtx_flags = bm.verts.layers.int['euro_vtx_flags']
+    euro_fac_flags = bm.faces.layers.int['euro_fac_flags']
+
+    in_vtx_sel_mode = context.tool_settings.mesh_select_mode[0]
+
+    if in_vtx_sel_mode:
+        for v in bm.verts:
+            func(v, euro_vtx_flags)
+    else:
+        for f in bm.faces:
+            func(f, euro_fac_flags)
+
+    # swy: without this it doesn't work: https://blender.stackexchange.com/a/188323/42781
+    bm.select_flush_mode()
+    bmesh.update_edit_mesh(me)
+
+
 class ESelectNoFlags(bpy.types.Operator):
     """Select any elements with no flags checked"""
     bl_idname = "wm.ec"
@@ -511,32 +539,10 @@ class ESelectNoFlags(bpy.types.Operator):
     def execute(self, context):
         print("ESelectNoFlags: ", context)
 
-        me = bpy.context.active_object.data
-        bm = bmesh.from_edit_mesh(me)
+        def callback(elem, layer):
+            elem.select = (elem[layer] == 0) and True or False
 
-        toggled_flags = enum_property_to_bitfield(context.mesh.euroland.vertex_flags)
-
-        if 'euro_vtx_flags' not in bm.verts.layers.int:
-             bm.verts.layers.int.new('euro_vtx_flags')
-
-        if 'euro_fac_flags' not in bm.faces.layers.int:
-             bm.faces.layers.int.new('euro_fac_flags')
-
-        euro_vtx_flags = bm.verts.layers.int['euro_vtx_flags']
-        euro_fac_flags = bm.faces.layers.int['euro_fac_flags']
-
-        in_vtx_sel_mode = context.tool_settings.mesh_select_mode[0]
-
-        if in_vtx_sel_mode:
-            for v in bm.verts:
-                v.select = (v[euro_vtx_flags] == 0) and True or False
-        else:
-            for f in bm.faces:
-                f.select = (f[euro_fac_flags] == 0) and True or False
-
-        # swy: without this it doesn't work: https://blender.stackexchange.com/a/188323/42781
-        bm.select_flush_mode()
-        bmesh.update_edit_mesh(me)
+        select_mess(context, callback)
 
         return {'FINISHED'}
 
@@ -544,7 +550,6 @@ class ESelectNoFlags(bpy.types.Operator):
         pass
 
 import textwrap
-import bmesh
 
 @classmethod
 def poll(cls, context):
