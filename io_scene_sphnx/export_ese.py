@@ -188,7 +188,7 @@ def _write(context, filepath,
                                 continue
 
                             #===========================================[Apply Matrix]====================================================
-                            MeshObject.transform(EXPORT_GLOBAL_MATRIX @ obj.matrix_world)
+                            #MeshObject.transform(EXPORT_GLOBAL_MATRIX @ obj.matrix_world)
                             if EXPORT_FLIP_POLYGONS:
                                 MeshObject.flip_normals()
 
