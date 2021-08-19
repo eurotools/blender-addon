@@ -352,8 +352,10 @@ class ESE_EXPORT_PT_scale(bpy.types.Panel):
         self.layout.prop(context.space_data.active_operator, "global_scale")
 
 
+
 def update_after_enum(self, context):
     print('self.face_flags ---->', self.face_flags)
+    
 
 class EuroProperties(bpy.types.PropertyGroup):
     ''' Per-face bitfield for Euroland entities. ''' 
@@ -469,6 +471,7 @@ class ESelectNoFlags(bpy.types.Operator):
         pass
 
 import textwrap
+import bmesh
 
 @classmethod
 def poll(cls, context):
@@ -487,6 +490,38 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
     def draw(self, context):
         box = self.layout.box()
         row = box.column_flow(columns=2)
+
+        # --
+        ob = bpy.context.active_object
+        me = ob.data
+        bm = bmesh.from_edit_mesh(me)
+
+        add = set()
+
+        if 'euro_vtx_flags' not in bm.verts.layers.int:
+             bm.verts.layers.int.new('euro_vtx_flags')
+        else:
+            node_width_key = bm.verts.layers.int['euro_vtx_flags']
+
+            #for v in bm.verts:
+                #if v.select:
+                    #print(v)
+                    #add |= v[node_width_key]
+
+        thing = 0b111
+
+        for i,item in enumerate(context.mesh.euroland.bl_rna.properties['face_flags'].enum_items):
+            print(i, item.name, hex(item.value), item.description, int(item.description, 16) )
+
+            if int(item.description, 16) & thing:
+                add.add(item)
+
+
+
+        print(add)
+        # context.mesh.euroland.vertex_flags = add # "0x0008"
+
+        # --
 
         # swy: this is a bit backwards, because you can select both at the same time, but works
         in_vtx_sel_mode = context.tool_settings.mesh_select_mode[0]
@@ -525,7 +560,7 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
             # swy: this is a bit of a silly way of wrapping the text and overflowing
             #      into various lines across the box
             text_list = textwrap.wrap(
-                "Go into either the «face» or «vertex» select mode to edit the Eurocom flags...",
+                "Go into either the «face» or «vertex» select mode to edit the EuroLand flags...",
                 width = (context.region.width / 7.2) / context.preferences.system.ui_scale
             )
             for line in text_list:
