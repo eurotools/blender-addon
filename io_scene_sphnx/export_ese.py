@@ -85,9 +85,6 @@ def _write(context, filepath,
 
                     #Write Matrix
                     write_scope('*NODE_NAME "%s"' % object.name)
-                    write_scope('*INHERIT_POS %u %u %u' % (0,0,0))
-                    write_scope('*INHERIT_ROT %u %u %u' % (0,0,0))
-                    write_scope('*INHERIT_SCL %u %u %u' % (1,1,1))
 
                     if object.type == 'CAMERA':
                         #Don't modify this, the cameras rotations works fine with this code.
@@ -95,7 +92,7 @@ def _write(context, filepath,
                         write_scope('*TM_ROW1 %.4f %.4f %.4f' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
                         write_scope('*TM_ROW2 %.4f %.4f %.4f' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
                     else:
-                        #This other code needs revision, the rotations in the entity editor don't works. 
+                        #This other code needs revision, the rotations in the entity editor don't work. 
                         write_scope('*TM_ROW0 %.4f %.4f %.4f' % (RotationMatrix[0].x, RotationMatrix[0].y,      RotationMatrix[0].z     ))
                         write_scope('*TM_ROW1 %.4f %.4f %.4f' % (RotationMatrix[1].x, RotationMatrix[1].y,      RotationMatrix[1].z * -1))
                         write_scope('*TM_ROW2 %.4f %.4f %.4f' % (RotationMatrix[2].x, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
@@ -108,8 +105,8 @@ def _write(context, filepath,
             def PrintTM_ANIMATION(object, TimeValue):
                     w_new_block('*TM_ANIMATION {')
                     write_scope('*NODE_NAME "%s"' % object.name)
-                    w_new_block('*TM_ANIM_FRAMES {')
 
+                    w_new_block('*TM_ANIM_FRAMES {')
                     last_matrix = False
                     TimeValueCounter = 0
                     for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
@@ -143,8 +140,8 @@ def _write(context, filepath,
 
                         #Update counter
                         TimeValueCounter += TimeValue
-                    w_end_block('}')
-                    w_end_block('}')
+                    w_end_block('}') # NODE_NAME
+                    w_end_block('}') # TM_ANIMATION
 
 
             #Start writting
@@ -167,7 +164,7 @@ def _write(context, filepath,
             write_scope('*SCENE_LASTFRAME %u '     % bpy.context.scene.frame_end)
             write_scope('*SCENE_FRAMESPEED %u '    % bpy.context.scene.render.fps)
             write_scope('*SCENE_TICKSPERFRAME %u ' % TimeValue)
-            w_end_block('}')
+            w_end_block('}') # SCENE
 
             #===============================================================================================
             #  GEOM OBJECT
@@ -189,6 +186,7 @@ def _write(context, filepath,
 
                             #===========================================[Apply Matrix]====================================================
                             #MeshObject.transform(EXPORT_GLOBAL_MATRIX @ obj.matrix_world)
+
                             if EXPORT_FLIP_POLYGONS:
                                 MeshObject.flip_normals()
 
@@ -289,8 +287,8 @@ def _write(context, filepath,
 
                                     w_end_block('}')
                                     currentSubMat += 1
-                                w_end_block('}')
-                                w_end_block('}')
+                                w_end_block('}') # MATERIAL
+                                w_end_block('}') # MATERIAL_LIST
 
 
 
@@ -301,12 +299,12 @@ def _write(context, filepath,
                             #Print Matrix Rotation
                             w_new_block('*NODE_TM {')
                             PrintNODE_TM(obj)
-                            w_end_block('}')
+                            w_end_block('}') # NODE_TM
 
                             #Print Matrix Rotation again ¯\_(ツ)_/¯
                             w_new_block('*PIVOT_TM {')
                             PrintNODE_TM(obj)
-                            w_end_block('}')
+                            w_end_block('}') # PIVOT_TM
 
                             #MESH Section
                             w_new_block('*MESH {')
@@ -318,7 +316,7 @@ def _write(context, filepath,
                             w_new_block('*MESH_VERTEX_LIST {')
                             for idx, ListItem in enumerate(VertexList):
                                 write_scope('*MESH_VERTEX  %5u  %.4f %.4f %.4f' % (idx, ListItem[0], ListItem[1], ListItem[2]))
-                            w_end_block('}')
+                            w_end_block('}') # MESH_VERTEX_LIST
 
                             #Face Vertex Index
                             w_new_block('*MESH_FACE_LIST {')   
@@ -328,7 +326,7 @@ def _write(context, filepath,
                                 out.write('  AB: %u BC: %u CA: %u' % (not tri[0].vert.hide, not tri[1].vert.hide, not tri[2].vert.hide))   
                                 out.write('  *MESH_SMOOTHING 1')
                                 out.write('  *MESH_MTLID %u\n' % tri[0].face.material_index)
-                            w_end_block('}')
+                            w_end_block('}') # MESH_FACE
 
                             #Texture UVs
                             if len(UVVertexList) > 0:
@@ -336,7 +334,7 @@ def _write(context, filepath,
                                 w_new_block('*MESH_TVERTLIST {')
                                 for idx, TextUV in enumerate(UVVertexList):
                                     write_scope('*MESH_TVERT %u %.4f %.4f' % (idx, TextUV[0], TextUV[1]))
-                                w_end_block('}')
+                                w_end_block('}') # MESH_TVERTLIST
 
                             #Face Layers UVs Index
                             layerIndex = 0
@@ -349,7 +347,7 @@ def _write(context, filepath,
                                     for i, tri in enumerate(tris):
                                         write_scope('*MESH_TFACE %u' % i)
                                         write_scope('%u %u %u' % (UVVertexList.index(tri[0][uv_lay].uv), UVVertexList.index(tri[1][uv_lay].uv), UVVertexList.index(tri[2][uv_lay].uv)))
-                                    w_end_block("}")
+                                    w_end_block("}") # MESH_TFACELIST
                                     #w_end_block("}")
                                     layerIndex += 1
 
@@ -360,14 +358,14 @@ def _write(context, filepath,
                                 # swy: don't set it where it isn't needed
                                 if 0 != 0:
                                     write_scope('*MESH_FACEFLAG %u %u' % (i, 0))
-                            w_end_block("}")
+                            w_end_block("}") # MESH_NUMFACEFLAGS
 
                             w_new_block('*MESH_VERTFLAGSLIST {')
                             for vidx, vert in enumerate(obj.data.vertices):
                                 # swy: don't set it where it isn't needed
                                 if 0 != 0:
                                     write_scope('*VFLAG %u %u' % (vidx, 0))
-                            w_end_block('}')
+                            w_end_block('}') # MESH_VERTFLAGSLIST
 
                             if True:
                                 #Vertex Colors List
@@ -375,7 +373,7 @@ def _write(context, filepath,
                                 w_new_block('*MESH_CVERTLIST {')
                                 for idx, ColorArray in enumerate(VertexColorList):
                                     write_scope('*MESH_VERTCOL %u %.4f %.4f %.4f %u' % (idx, (ColorArray[0] * .5), (ColorArray[1] * .5), (ColorArray[2] * .5), 1))
-                                w_end_block('}')
+                                w_end_block('}') # MESH_CVERTLIST
 
                                 #Face Color Vertex Index
                                 layerIndex = 0
@@ -390,12 +388,12 @@ def _write(context, filepath,
                                             for loop in tri:
                                                 out.write('%u ' % VertexColorList.index(loop[cl]))
                                             out.write('\n')
-                                        w_end_block('}')
-                                        w_end_block('}')
+                                        w_end_block('}') # MESH_CFACELIST
+                                        w_end_block('}') # MESH_CFACELAYER
                                         layerIndex +=1
 
                             #Close blocks
-                            w_end_block('}')
+                            w_end_block('}') # MESH
 
                             # swy: wireframe color was added on Blender 2.8 and is a per-object thing in Object Properties > Viewport Display > Color
                             write_scope('*WIREFRAME_COLOR %.4f %.4f %.4f' % (obj.color[0], obj.color[1], obj.color[2]))
@@ -420,8 +418,8 @@ def _write(context, filepath,
                                         for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
                                             bpy.context.scene.frame_set(f)
                                             write_scope('%u %f' % (f, key.value))
-                                        w_end_block('}')
-                                w_end_block('}')
+                                        w_end_block('}') # MORPH_FRAMES
+                                w_end_block('}') # MORPH_DATA
 
                             for indx, mod in enumerate(obj.modifiers):
                                 if mod.type == 'ARMATURE' and mod.object and mod.object.type == 'ARMATURE':
@@ -430,7 +428,7 @@ def _write(context, filepath,
                                     w_new_block("*BONE_LIST {")
                                     for bidx, bone in enumerate(armat.data.bones):
                                         write_scope('*BONE %u "%s"' % (bidx, bone.name))
-                                    w_end_block("}")
+                                    w_end_block("}") # BONE_LIST
 
                                     w_new_block('*SKIN_VERTEX_DATA {')
                                     for vidx, vert in enumerate(obj.data.vertices):
@@ -438,14 +436,15 @@ def _write(context, filepath,
                                         for gidx, group in enumerate(vert.groups):
                                             out.write('  %u %f' % (gidx, group.weight))
                                         out.write("\n")
-                                    w_end_block("}")
-                                    w_end_block("}")
+                                    w_end_block("}") # SKIN_VERTEX_DATA
+                                    w_end_block("}") # SKIN_DATA
 
                                     break
 
                             w_end_block('}')
 
-                            # swy: here goes the changed geometry/vertex positions for each of the shape keys, globally. they are referenced by name
+                            # swy: here goes the changed geometry/vertex positions for each of the shape keys, globally.
+                            #      they are referenced by name.
                             if obj.data.shape_keys:
                                 for key in obj.data.shape_keys.key_blocks:
                                     # swy: don't export the 'Basis' one that is just the normal mesh data other keys are relative/substracted to
@@ -456,8 +455,8 @@ def _write(context, filepath,
                                         for vidx, vert in enumerate(key.data):
                                             write_scope('%f %f %f' % (vert.co[0], vert.co[1], vert.co[2]))
 
-                                        w_end_block('}')
-                                        w_end_block('}')
+                                        w_end_block('}') # MORPH_TARGET
+                                        w_end_block('}') # MORPH_LIST
                             #Liberate BM Object
                             bm.free()
 
@@ -469,7 +468,7 @@ def _write(context, filepath,
                         write_scope('*NODE_BIPED_BODY')
                         if (bone.parent):
                             write_scope('*NODE_PARENT "%s"' % bone.parent.name)
-                        w_end_block('}')
+                        w_end_block('}') # BONEOBJECT
 
             #===============================================================================================
             #  CAMERA OBJECT
@@ -490,7 +489,7 @@ def _write(context, filepath,
                     #Print Matrix Rotation
                     w_new_block('*NODE_TM {')
                     PrintNODE_TM(CameraObj)
-                    w_end_block('}')
+                    w_end_block('}') # NODE_TM
 
                     #===============================================================================================
                     #  CAMERA SETTINGS
@@ -498,7 +497,7 @@ def _write(context, filepath,
                     w_new_block('*CAMERA_SETTINGS {')
                     write_scope('*TIMEVALUE %u' % 0)
                     write_scope('*CAMERA_FOV %.4f'% CameraObj.data.angle)
-                    w_end_block('}')
+                    w_end_block('}') # CAMERA_SETTINGS
 
                     #===============================================================================================
                     #  CAMERA ANIMATION
@@ -517,7 +516,7 @@ def _write(context, filepath,
 
                             TimeValueCounter += TimeValue
 
-                        w_end_block('}')
+                        w_end_block('}') # CAMERA_ANIMATION
 
                     #===============================================================================================
                     #  ANIMATION
@@ -525,7 +524,7 @@ def _write(context, filepath,
                     if EXPORT_ANIMATION:
                         PrintTM_ANIMATION(CameraObj, TimeValue)
 
-                    w_end_block('}')
+                    w_end_block('}') # CAMERAOBJECT
 
             #===============================================================================================
             #  LIGHT OBJECT
@@ -548,7 +547,7 @@ def _write(context, filepath,
                         #Print Matrix Rotation
                         w_new_block('*NODE_TM {')
                         PrintNODE_TM(obj)
-                        w_end_block('}')
+                        w_end_block('}') # NODE_TM
 
                         #---------------------------------------------[Light Props]---------------------------------------------
                         write_scope('*LIGHT_DECAY %s' % "InvSquare") # swy: this is the only supported mode
@@ -568,7 +567,7 @@ def _write(context, filepath,
                             write_scope('*HOTSPOT %u' % math.degrees(obj.data.angle))
                         else:
                             write_scope('*HOTSPOT %u' % 0)
-                        w_end_block('}')
+                        w_end_block('}') # LIGHTOBJECT
 
                         #===============================================================================================
                         #  LIGHT ANIMATION
@@ -588,11 +587,11 @@ def _write(context, filepath,
                                     write_scope('*HOTSPOT %u' % math.degrees(obj.data.angle))
                                 else:
                                     write_scope('*HOTSPOT %u' % 0)
-                                w_end_block('}')
+                                w_end_block('}') # LIGHT_SETTINGS
 
                                 TimeValueCounter += TimeValue
 
-                            w_end_block('}')
+                            w_end_block('}') # LIGHT_ANIMATION
 
                         #===============================================================================================
                         #  ANIMATION
