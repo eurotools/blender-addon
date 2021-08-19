@@ -439,6 +439,28 @@ class EApplyFlags(bpy.types.Operator):
 
     def execute(self, context):
         print("EApplyFlags: ", context)
+
+
+        ob = bpy.context.active_object
+        me = ob.data
+        bm = bmesh.from_edit_mesh(me)
+
+        add = set()
+
+        toggled_flags = enum_property_to_bitfield(context.mesh.euroland.vertex_flags)
+
+        if 'euro_vtx_flags' not in bm.verts.layers.int:
+             bm.verts.layers.int.new('euro_vtx_flags')
+
+        if 'euro_fac_flags' not in bm.faces.layers.int:
+             bm.faces.layers.int.new('euro_fac_flags')
+
+        euro_vtx_flags = bm.verts.layers.int['euro_vtx_flags']
+
+        for v in bm.verts:
+            if v.select:
+                v[euro_vtx_flags] = toggled_flags
+
         return {'FINISHED'}
 
     def draw(self, context):
@@ -452,6 +474,30 @@ class ESelectChFlags(bpy.types.Operator):
 
     def execute(self, context):
         print("ESelectChFlags: ", context)
+
+        ob = bpy.context.active_object
+        me = ob.data
+        bm = bmesh.from_edit_mesh(me)
+
+        add = set()
+
+        toggled_flags = enum_property_to_bitfield(context.mesh.euroland.vertex_flags)
+
+        if 'euro_vtx_flags' not in bm.verts.layers.int:
+             bm.verts.layers.int.new('euro_vtx_flags')
+
+        if 'euro_fac_flags' not in bm.faces.layers.int:
+             bm.faces.layers.int.new('euro_fac_flags')
+
+        euro_vtx_flags = bm.verts.layers.int['euro_vtx_flags']
+
+        for v in bm.verts:
+            v.select = True # (v[euro_vtx_flags] == toggled_flags) and True or False
+
+        # swy: without this it doesn't work: https://blender.stackexchange.com/a/188323/42781
+        bm.select_flush_mode()
+        bmesh.update_edit_mesh(me)
+
         return {'FINISHED'}
 
     def draw(self, context):
@@ -477,26 +523,23 @@ import bmesh
 def poll(cls, context):
     return False
 
-# swy: for this to work the description of each enum element must be an hex string
+# swy: for this to work the identifier of each enum element must be an hex string
 def bitfield_to_enum_property(prop_group, prop, bitfield):
     result = set()
 
+    # swy: why make it easy to retrieve the properties: https://blender.stackexchange.com/a/153365/42781
     for i, item in enumerate(prop_group.bl_rna.properties[prop].enum_items):
-        #print(i, item.name, hex(item.value), item.description, int(item.description, 16) )
-
         # swy: is this bit one of the toggled on thingies in the bitfield? add it
-        if int(item.description, 16) & bitfield:
+        if int(item.identifier, 16) & bitfield:
             result.add(item)
 
     return result
 
-def enum_property_to_bitfield(prop_group, prop, qq):
+def enum_property_to_bitfield(prop_val):
     bitfield = 0
 
-    for i, item in enumerate(prop_group.bl_rna.properties[prop].enum_items):
-        # swy: is this bit one of the toggled on thingies in the EnumProp? add it
-        if item.identifier in qq:
-            bitfield |= int(item.description, 16)
+    for item in prop_val:
+        bitfield |= int(item, 16)
 
     return bitfield
 
@@ -535,17 +578,9 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
 
         asdfasdf = context.mesh.euroland.vertex_flags
 
-        qqqq = enum_property_to_bitfield(context.mesh.euroland, 'vertex_flags', context.mesh.euroland.vertex_flags)
+        qqqq = enum_property_to_bitfield(context.mesh.euroland.vertex_flags)
+        ssss = bitfield_to_enum_property(context.mesh.euroland, 'vertex_flags', qqqq)
 
-        for i,item in enumerate(context.mesh.euroland.bl_rna.properties['face_flags'].enum_items):
-            print(i, item.name, hex(item.value), item.description, int(item.description, 16) )
-
-            if int(item.description, 16) & thing:
-                add.add(item)
-
-
-
-        print(add)
         # context.mesh.euroland.vertex_flags = add # "0x0008"
 
         # --
