@@ -477,6 +477,29 @@ import bmesh
 def poll(cls, context):
     return False
 
+# swy: for this to work the description of each enum element must be an hex string
+def bitfield_to_enum_property(prop_group, prop, bitfield):
+    result = set()
+
+    for i, item in enumerate(prop_group.bl_rna.properties[prop].enum_items):
+        #print(i, item.name, hex(item.value), item.description, int(item.description, 16) )
+
+        # swy: is this bit one of the toggled on thingies in the bitfield? add it
+        if int(item.description, 16) & bitfield:
+            result.add(item)
+
+    return result
+
+def enum_property_to_bitfield(prop_group, prop, qq):
+    bitfield = 0
+
+    for i, item in enumerate(prop_group.bl_rna.properties[prop].enum_items):
+        # swy: is this bit one of the toggled on thingies in the EnumProp? add it
+        if item.identifier in qq:
+            bitfield |= int(item.description, 16)
+
+    return bitfield
+
 class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
     bl_label = 'Eurocom Tools'
     bl_space_type = 'PROPERTIES'
@@ -508,7 +531,11 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
                     #print(v)
                     #add |= v[node_width_key]
 
-        thing = 0b111
+        thing = 0b10000000000000
+
+        asdfasdf = context.mesh.euroland.vertex_flags
+
+        qqqq = enum_property_to_bitfield(context.mesh.euroland, 'vertex_flags', context.mesh.euroland.vertex_flags)
 
         for i,item in enumerate(context.mesh.euroland.bl_rna.properties['face_flags'].enum_items):
             print(i, item.name, hex(item.value), item.description, int(item.description, 16) )
