@@ -113,15 +113,14 @@ def _write(context, filepath,
                     last_matrix = False
                     TimeValueCounter = 0
                     for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
+
+                        bpy.context.scene.frame_set(f + 1)
+                        nex_matrix = [object.rotation_euler.copy(), object.location.copy()]
+
                         bpy.context.scene.frame_set(f)
-
-                        print(f, "last", last_matrix)
-                        print(f, object.matrix_world, object.rotation_euler, object.location)
-
                         cur_matrix = [object.rotation_euler.copy(), object.location.copy()]
-                        print(cur_matrix == last_matrix)
-                        
-                        if (cur_matrix != last_matrix):
+
+                        if True: # (cur_matrix != last_matrix or cur_matrix != nex_matrix):
                             last_matrix = cur_matrix
 
                             ConvertedMatrix = object.rotation_euler.to_matrix()
@@ -130,7 +129,7 @@ def _write(context, filepath,
                             RotationMatrix = rot_mtx.transposed()
 
                             #Write Time Value
-                            write_scope_no_cr('*TM_FRAME  %5u' % TimeValueCounter)
+                            write_scope_no_cr('*TM_FRAME  %5u' % f)
 
                             #Write Matrix
                             out.write('  %.4f %.4f %.4f' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
