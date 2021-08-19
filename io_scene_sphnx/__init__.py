@@ -353,12 +353,12 @@ class ESE_EXPORT_PT_scale(bpy.types.Panel):
 
 
 def update_after_enum(self, context):
-    print('self.my_enum ---->', self.my_enum)
+    print('self.face_flags ---->', self.face_flags)
 
 class EuroProperties(bpy.types.PropertyGroup):
     ''' Per-face bitfield for Euroland entities. ''' 
-    my_enum: bpy.props.EnumProperty(
-        name = "Eurocom flags",
+    face_flags: bpy.props.EnumProperty(
+        name = "Eurocom face flags",
         options = {'ENUM_FLAG'},
         items = [
             # swy: configurable per-project flags
@@ -394,6 +394,35 @@ class EuroProperties(bpy.types.PropertyGroup):
             ("0x00200000", "Clip Portal",            "0x00200000"),
             ("0x01000000", "No collision",           "0x01000000"),
             ("0x02000000", "Always backface culled", "0x02000000")
+        ],
+        default=set(),
+        update=update_after_enum
+    )
+    vertex_flags: bpy.props.EnumProperty(
+        name = "Eurocom vertex flags",
+        options = {'ENUM_FLAG'},
+        items = [
+            # swy: configurable per-project flags
+            ("", "Project Flags", ""),
+            ("0x0001", "Soft Skin Normal",     "0x0001"),
+            ("0x0002", "Flag2",                "0x0002"),
+            ("0x0004", "Flag3",                "0x0004"),
+            ("0x0008", "Flag4",                "0x0008"),
+            (None),
+            ("0x0010", "Flag5",                "0x0010"),
+            ("0x0020", "Flag6",                "0x0020"),
+            ("0x0040", "Flag7",                "0x0040"),
+            ("0x0080", "Flag8",                "0x0080"),
+            (None),
+            ("0x0100", "User Flag 1",          "0x0100"),
+            ("0x0200", "User Flag 2",          "0x0200"),
+            ("0x0400", "User Flag 3",          "0x0400"),
+            ("0x0800", "User Flag 4",          "0x0800"),
+            (None),
+            ("0x1000", "Cloth Handrail",       "0x1000"),
+            ("0x2000", "Cloth Breakpoint",     "0x2000"),
+            ("0x4000", "Cloth Vertex",         "0x4000"),
+            ("0x8000", "Fixed Cloth Vertex",   "0x8000"),
         ],
         default=set(),
         update=update_after_enum
@@ -456,7 +485,8 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
     def draw(self, context):
         box = self.layout.box()
         row = box.column_flow(columns=2)
-        row.prop(context.mesh.euroland, "my_enum", expand=True)
+        row.prop(context.mesh.euroland, "face_flags",   expand=True)
+        row.prop(context.mesh.euroland, "vertex_flags", expand=True)
         box.operator(EApplyFlags.bl_idname, icon='MODIFIER', text='Apply to selected')
         
         butt = self.layout.split()
