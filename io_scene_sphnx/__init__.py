@@ -352,12 +352,17 @@ class ESE_EXPORT_PT_scale(bpy.types.Panel):
     def draw(self, context):
         self.layout.prop(context.space_data.active_operator, "global_scale")
 
+last_sel_object = False
+last_sel_indexes = False
 
 def scene_update_post_handler(scene):
     context = bpy.context
 
     if not (context.object is not None and context.object.type == 'MESH' and bpy.context.mode == 'EDIT_MESH'):
         return
+
+    cur_sel_object = context.object
+    cur_sel_indexes = []
 
     # swy: this is a bit backwards, because you can select both at the same time, but works
     in_vtx_sel_mode = context.tool_settings.mesh_select_mode[0]
@@ -370,21 +375,34 @@ def scene_update_post_handler(scene):
 
         def callback(elem, layer):
             # use the parent function's scope: https://stackoverflow.com/a/8178808/674685
-            nonlocal thing
+            nonlocal thing; nonlocal cur_sel_indexes
             if (elem.select):
                 thing |= elem[layer]
+                cur_sel_indexes.append(elem.index)
 
         iterate_over_mesh(context, callback)
+
+        global last_sel_object; 
+        global last_sel_indexes
+
+        #if cur_sel_object == last_sel_object:
+        #    return
+
+        if cur_sel_indexes == last_sel_indexes:
+            return
+
+        last_sel_object = cur_sel_object
+        last_sel_indexes = cur_sel_indexes
 
         if in_vtx_sel_mode:
             selected = bitfield_to_enum_property(context.active_object.data.euroland, 'vertex_flags', thing)
             if context.active_object.data.euroland.vertex_flags != selected:
-                context.active_object.data.euroland.vertex_flags.add(frozenset(i) for i in selected)
+                context.active_object.data.euroland.vertex_flags = set((i.identifier) for i in selected)
                 context.active_object.data.euroland.vertex_flags.update()
         elif in_fac_sel_mode:
             selected = bitfield_to_enum_property(context.active_object.data.euroland, 'face_flags', thing)
             if context.active_object.data.euroland.face_flags != selected:
-                context.active_object.data.euroland.face_flags.add(frozenset(i) for i in selected)
+                context.active_object.data.euroland.face_flags = set((i.identifier) for i in selected)
                 context.active_object.data.euroland.face_flags.update()
     return
 
