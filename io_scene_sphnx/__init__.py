@@ -650,20 +650,25 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
 # swy: global variable to store icons in
 custom_icons = None
 
+def sphinx_ico():
+    if 'sphinx_ico' in custom_icons:
+        return custom_icons['sphinx_ico'].icon_id
+    return None
+
 def menu_func_eif_import(self, context):
-    self.layout.operator(ImportEIF.bl_idname, icon_value=custom_icons['sphinx_ico'].icon_id, text='Eurocom Interchange File (.eif)')
+    self.layout.operator(ImportEIF.bl_idname, icon_value=sphinx_ico(), text='Eurocom Interchange File (.eif)')
 def menu_func_eif_export(self, context):
-    self.layout.operator(ExportEIF.bl_idname, icon_value=custom_icons['sphinx_ico'].icon_id, text='Eurocom Interchange File (.eif)')
+    self.layout.operator(ExportEIF.bl_idname, icon_value=sphinx_ico(), text='Eurocom Interchange File (.eif)')
 
 def menu_func_rtg_import(self, context):
-    self.layout.operator(ImportRTG.bl_idname, icon_value=custom_icons['sphinx_ico'].icon_id, text='Eurocom Real Time Game (.rtg)')
+    self.layout.operator(ImportRTG.bl_idname, icon_value=sphinx_ico(), text='Eurocom Real Time Game (.rtg)')
 def menu_func_rtg_export(self, context):
-    self.layout.operator(ExportRTG.bl_idname, icon_value=custom_icons['sphinx_ico'].icon_id, text='Eurocom Real Time Game (.rtg)')
+    self.layout.operator(ExportRTG.bl_idname, icon_value=sphinx_ico(), text='Eurocom Real Time Game (.rtg)')
 
 def menu_func_ese_import(self, context):
-    self.layout.operator(ImportESE.bl_idname, icon_value=custom_icons['sphinx_ico'].icon_id, text='Eurocom Scene Export (.ese)')
+    self.layout.operator(ImportESE.bl_idname, icon_value=sphinx_ico(), text='Eurocom Scene Export (.ese)')
 def menu_func_ese_export(self, context):
-    self.layout.operator(ExportESE.bl_idname, icon_value=custom_icons['sphinx_ico'].icon_id, text='Eurocom Scene Export (.ese)')
+    self.layout.operator(ExportESE.bl_idname, icon_value=sphinx_ico(), text='Eurocom Scene Export (.ese)')
 
 # swy: un/register the whole thing in one go, see below
 classes = (
@@ -720,7 +725,10 @@ def unregister():
     global custom_icons; custom_icons.clear()
     bpy.utils.previews.remove(custom_icons)
 
-    bpy.app.handlers.depsgraph_update_post.remove(scene_update_post_handler)
+    if scene_update_post_handler in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.remove(scene_update_post_handler)
+
+    bpy.utils.unregister_class(EuroProperties)
 
     for m in reversed(menu_export):
         bpy.types.TOPBAR_MT_file_export.remove(m)
@@ -729,7 +737,7 @@ def unregister():
         bpy.types.TOPBAR_MT_file_import.remove(m)
 
     for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
+        bpy.utils.unregister_class(cls) 
 
 if __name__ == '__main__':
     register()
