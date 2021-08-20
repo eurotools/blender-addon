@@ -146,7 +146,7 @@ def _write(context, filepath,
 
             # here's the first line that gets written; we start here, with the basic header
             write_scope('*3DSMAX_EUROEXPORT	300')
-            
+
             # swy: turn a (2021, 8, 16) tuple into "2021.08.16"
             version_date = '.'.join(('%02u' % x) for x in bl_info['version'])
 
@@ -352,20 +352,30 @@ def _write(context, filepath,
                                     #w_end_block("}")
                                     layerIndex += 1
 
-                            # swy: fix-me: add the custom mesh attributes here
+                            # swy: refresh the custom mesh layer/attributes in case they don't exist
+                            if 'euro_vtx_flags' not in bm.verts.layers.int:
+                                    bm.verts.layers.int.new('euro_vtx_flags')
+
+                            if 'euro_fac_flags' not in bm.faces.layers.int:
+                                    bm.faces.layers.int.new('euro_fac_flags')
+
+                            euro_vtx_flags = bm.verts.layers.int['euro_vtx_flags']
+                            euro_fac_flags = bm.faces.layers.int['euro_fac_flags']
+
+                            # swy: add the custom mesh attributes here
                             write_scope("*MESH_NUMFACEFLAGS %u" % len(bm.faces))
                             w_new_block("*MESH_FACEFLAGLIST {")
-                            for i, tri in enumerate(tris):
+                            for faci, face in enumerate(bm.faces):
                                 # swy: don't set it where it isn't needed
-                                if 0 != 0:
-                                    write_scope('*MESH_FACEFLAG %u %u' % (i, 0))
+                                if face[euro_fac_flags] != 0:
+                                    write_scope('*MESH_FACEFLAG %u %u' % (faci, face[euro_fac_flags]))
                             w_end_block("}") # MESH_NUMFACEFLAGS
 
                             w_new_block('*MESH_VERTFLAGSLIST {')
-                            for vidx, vert in enumerate(obj.data.vertices):
+                            for vidx, vert in enumerate(bm.verts):
                                 # swy: don't set it where it isn't needed
-                                if 0 != 0:
-                                    write_scope('*VFLAG %u %u' % (vidx, 0))
+                                if vert[euro_vtx_flags] != 0:
+                                    write_scope('*VFLAG %u %u' % (vidx, vert[euro_vtx_flags]))
                             w_end_block('}') # MESH_VERTFLAGSLIST
 
                             if True:

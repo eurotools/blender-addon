@@ -380,10 +380,12 @@ def scene_update_post_handler(scene):
             selected = bitfield_to_enum_property(context.active_object.data.euroland, 'vertex_flags', thing)
             if context.active_object.data.euroland.vertex_flags != selected:
                 context.active_object.data.euroland.vertex_flags.add(frozenset(i) for i in selected)
+                context.active_object.data.euroland.vertex_flags.update()
         elif in_fac_sel_mode:
             selected = bitfield_to_enum_property(context.active_object.data.euroland, 'face_flags', thing)
             if context.active_object.data.euroland.face_flags != selected:
                 context.active_object.data.euroland.face_flags.add(frozenset(i) for i in selected)
+                context.active_object.data.euroland.face_flags.update()
     return
 
 def update_after_enum(self, context):
