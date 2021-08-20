@@ -494,6 +494,11 @@ def iterate_over_mesh(context, func):
     bm.select_flush_mode()
     bmesh.update_edit_mesh(me)
 
+def get_toggled_flags(context):
+    in_vtx_sel_mode = context.tool_settings.mesh_select_mode[0]
+    return enum_property_to_bitfield(in_vtx_sel_mode and context.mesh.euroland.vertex_flags or
+                                                         context.mesh.euroland.face_flags)
+
 # swy: the functional meat for the buttons in the Mesh > Eurocom Tools panel
 class EApplyFlags(bpy.types.Operator):
     """Assigns toggled flags from the panel in the current selection"""
@@ -504,7 +509,7 @@ class EApplyFlags(bpy.types.Operator):
     def execute(self, context):
         print("EApplyFlags: ", context)
 
-        toggled_flags = enum_property_to_bitfield(context.mesh.euroland.vertex_flags)
+        toggled_flags = get_toggled_flags(context)
 
         # swy: if this element is selected; overwrite the whole layer flag value with our own
         def callback(elem, layer):
@@ -527,10 +532,11 @@ class ESelectChFlags(bpy.types.Operator):
     def execute(self, context):
         print("ESelectChFlags: ", context)
 
-        toggled_flags = enum_property_to_bitfield(context.mesh.euroland.vertex_flags)
+        toggled_flags = get_toggled_flags(context)
 
         # swy: if the flag in the layer is part of the toggled flags (one of many); select it, and deselect everything else
         def callback(elem, layer):
+            print(elem, elem[layer])
             elem.select = (elem[layer] & toggled_flags) and True or False
 
         iterate_over_mesh(context, callback)
@@ -650,10 +656,11 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
 # swy: global variable to store icons in
 custom_icons = None
 
+# swy: avoid dereferencing non-existing icons, just in case
 def sphinx_ico():
     if 'sphinx_ico' in custom_icons:
         return custom_icons['sphinx_ico'].icon_id
-    return None
+    return 'EXPERIMENTAL'
 
 def menu_func_eif_import(self, context):
     self.layout.operator(ImportEIF.bl_idname, icon_value=sphinx_ico(), text='Eurocom Interchange File (.eif)')
@@ -693,7 +700,9 @@ classes = (
     TOOLS_PANEL_PT_eurocom,
     EApplyFlags,
     ESelectChFlags,
-    ESelectNoFlags
+    ESelectNoFlags,
+
+    EuroProperties
 )
 
 menu_import = (menu_func_eif_import, menu_func_rtg_import, menu_func_ese_import)
@@ -712,7 +721,6 @@ def register():
 
     # swy: this is a bit of a dummy property for flag display; we actually
     #      retrieve the contents from a custom mesh layer, no other way
-    bpy.utils.register_class(EuroProperties)
     bpy.types.Mesh.euroland = bpy.props.PointerProperty(type=EuroProperties)
 
     # swy: load every custom icon image from here; as an image preview
@@ -722,13 +730,11 @@ def register():
     bpy.app.handlers.depsgraph_update_post.append(scene_update_post_handler)
 
 def unregister():
-    global custom_icons; custom_icons.clear()
-    bpy.utils.previews.remove(custom_icons)
-
     if scene_update_post_handler in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(scene_update_post_handler)
 
-    bpy.utils.unregister_class(EuroProperties)
+    global custom_icons; custom_icons.clear()
+    bpy.utils.previews.remove(custom_icons)
 
     for m in reversed(menu_export):
         bpy.types.TOPBAR_MT_file_export.remove(m)
