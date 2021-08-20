@@ -382,17 +382,21 @@ def scene_update_post_handler(scene):
 
         iterate_over_mesh(context, callback)
 
+        # swy: detect if we need to refresh the currently toggled flag elements;
+        #      only do that if the selection changes; different, not every time
+        #      Note: if we don't do this, we won't let the user change it
         global last_sel_object; 
         global last_sel_indexes
 
-        #if cur_sel_object == last_sel_object:
-        #    return
+        if cur_sel_object != last_sel_object:
+            last_sel_indexes = False
 
         if cur_sel_indexes == last_sel_indexes:
             return
 
-        last_sel_object = cur_sel_object
+        last_sel_object  = cur_sel_object
         last_sel_indexes = cur_sel_indexes
+        # --
 
         if in_vtx_sel_mode:
             selected = bitfield_to_enum_property(context.active_object.data.euroland, 'vertex_flags', thing)
@@ -554,7 +558,6 @@ class ESelectChFlags(bpy.types.Operator):
 
         # swy: if the flag in the layer is part of the toggled flags (one of many); select it, and deselect everything else
         def callback(elem, layer):
-            print(elem, elem[layer])
             elem.select = (elem[layer] & toggled_flags) and True or False
 
         iterate_over_mesh(context, callback)
