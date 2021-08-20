@@ -353,18 +353,11 @@ class ESE_EXPORT_PT_scale(bpy.types.Panel):
         self.layout.prop(context.space_data.active_operator, "global_scale")
 
 
-num_objects = 0
-thing = 0
-
 def scene_update_post_handler(scene):
-    global num_objects
-    #if len(scene.objects) == num_objects:
-        # Nothing to do
-    #    return
-    num_objects = len(scene.objects) 
-    # Your code here    
-
     context = bpy.context
+
+    if not (context.object is not None and context.object.type == 'MESH' and bpy.context.mode == 'EDIT_MESH'):
+        return
 
     # swy: this is a bit backwards, because you can select both at the same time, but works
     in_vtx_sel_mode = context.tool_settings.mesh_select_mode[0]
@@ -373,24 +366,24 @@ def scene_update_post_handler(scene):
     # swy: make it not work at all in edge mode or whenever both of them are toggled on use an
     #      exclusive or / xor operation, so that we only return True if either of them is on
     if in_vtx_sel_mode ^ in_fac_sel_mode:
-        #qqqq = enum_property_to_bitfield(context.mesh.euroland.vertex_flags)
-        #ssss = bitfield_to_enum_property(context.mesh.euroland, 'vertex_flags', thing)
-        global thing
         thing = 0
 
         def callback(elem, layer):
+            # use the parent function's scope: https://stackoverflow.com/a/8178808/674685
+            nonlocal thing
             if (elem.select):
-                global thing
-                thing |=  elem[layer]
+                thing |= elem[layer]
 
         iterate_over_mesh(context, callback)
 
-        ssss = bitfield_to_enum_property(context.active_object.data.euroland, 'vertex_flags', thing)
-
-        if context.active_object.data.euroland.vertex_flags != ssss:
-            context.active_object.data.euroland.vertex_flags = set(context.active_object.data.euroland.) # "0x0008"
-
-
+        if in_vtx_sel_mode:
+            selected = bitfield_to_enum_property(context.active_object.data.euroland, 'vertex_flags', thing)
+            if context.active_object.data.euroland.vertex_flags != selected:
+                context.active_object.data.euroland.vertex_flags.add(frozenset(i) for i in selected)
+        elif in_fac_sel_mode:
+            selected = bitfield_to_enum_property(context.active_object.data.euroland, 'face_flags', thing)
+            if context.active_object.data.euroland.face_flags != selected:
+                context.active_object.data.euroland.face_flags.add(frozenset(i) for i in selected)
     return
 
 def update_after_enum(self, context):
