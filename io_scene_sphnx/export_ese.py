@@ -370,7 +370,7 @@ def _write(context, filepath,
                                 # swy: don't set it where it isn't needed
                                 print(face[euro_fac_flags])
                                 if face[euro_fac_flags] != 0:
-                                    write_scope('*MESH_FACEFLAG %u %uq' % (face.index, face[euro_fac_flags]))
+                                    write_scope('*MESH_FACEFLAG %u %u' % (face.index, face[euro_fac_flags]))
                             w_end_block("}") # MESH_NUMFACEFLAGS
 
                             w_new_block('*MESH_VERTFLAGSLIST {')

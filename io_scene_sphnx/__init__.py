@@ -368,7 +368,7 @@ def scene_update_post_handler(scene):
     in_vtx_sel_mode = context.tool_settings.mesh_select_mode[0]
     in_fac_sel_mode = context.tool_settings.mesh_select_mode[2]
 
-    # swy: make it not work at all in edge mode or whenever both of them are toggled on use an
+    # swy: make it not work at all in edge mode or whenever both of them are toggled on; use an
     #      exclusive or / xor operation, so that we only return True if either of them is on
     if in_vtx_sel_mode ^ in_fac_sel_mode:
         thing = 0
@@ -635,7 +635,7 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
         in_vtx_sel_mode = context.tool_settings.mesh_select_mode[0]
         in_fac_sel_mode = context.tool_settings.mesh_select_mode[2]
 
-        # swy: make it not work at all in edge mode or whenever both of them are toggled on use an
+        # swy: make it not work at all in edge mode or whenever both of them are toggled on; use an
         #      exclusive or / xor operation, so that we only return True if either of them is on
         if in_vtx_sel_mode ^ in_fac_sel_mode:
             if in_fac_sel_mode:
