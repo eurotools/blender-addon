@@ -316,13 +316,13 @@ def _write(context, filepath,
                             #Print Vertex List
                             w_new_block('*MESH_VERTEX_LIST {')
                             for idx, ListItem in enumerate(VertexList):
-                                write_scope('*MESH_VERTEX  %5u  %.4f %.4f %.4f' % (idx, ListItem[0], ListItem[1], ListItem[2]))
+                                write_scope('*MESH_VERTEX  %5u  %4.4f %4.4f %4.4f' % (idx, ListItem[0], ListItem[1], ListItem[2]))
                             w_end_block('}') # MESH_VERTEX_LIST
 
                             #Face Vertex Index
                             w_new_block('*MESH_FACE_LIST {')   
                             for i, tri in enumerate(tris):
-                                write_scope_no_cr('*MESH_FACE %u:' % i)
+                                write_scope_no_cr('*MESH_FACE %3u:' % i)
                                 out.write('  A: %u B: %u C: %u' % (VertexList.index(tri[0].vert.co), VertexList.index(tri[1].vert.co), VertexList.index(tri[2].vert.co)))
                                 out.write('  AB: %u BC: %u CA: %u' % (not tri[0].vert.hide, not tri[1].vert.hide, not tri[2].vert.hide))   
                                 out.write('  *MESH_SMOOTHING 1')
@@ -334,7 +334,7 @@ def _write(context, filepath,
                                 write_scope('*MESH_NUMTVERTEX %u' % len(UVVertexList))
                                 w_new_block('*MESH_TVERTLIST {')
                                 for idx, TextUV in enumerate(UVVertexList):
-                                    write_scope('*MESH_TVERT %u %.4f %.4f' % (idx, TextUV[0], TextUV[1]))
+                                    write_scope('*MESH_TVERT %3u %.4f %.4f' % (idx, TextUV[0], TextUV[1]))
                                 w_end_block('}') # MESH_TVERTLIST
 
                             #Face Layers UVs Index
