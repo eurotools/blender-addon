@@ -17,7 +17,7 @@ jobs:
     - name: Pack things up
       id: pack
       run: |
-        prev_run_sha="`curl -s --location --fail-with-body 'https://api.github.com/repos/eurotools/blender-addon/actions/workflows/2949131/runs' | jq -r .workflow_runs[1].head_sha`"
+        prev_run_sha="`curl -s --location --fail 'https://api.github.com/repos/eurotools/blender-addon/actions/workflows/2949131/runs' | jq -r .workflow_runs[1].head_sha`"
         echo "prev=$prev_run_sha cur=`git rev-parse --short HEAD`"
         
         # swy: replace the versioned date in the script descriptor; (2020, 10, 10) -> (2021, 05, 22)
@@ -44,7 +44,7 @@ jobs:
         echo "$GH_ASSET"; echo "$FILENAME"
         
         if [[ -f "$FILENAME" ]]; then
-          curl --fail-with-body --location --data-binary @"$FILENAME" -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" "$GH_ASSET"
+          curl --fail --location --data-binary @"$FILENAME" -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" "$GH_ASSET"
         else
           echo "[no changes in the add-on folder this time around; skipped]"
         fi
