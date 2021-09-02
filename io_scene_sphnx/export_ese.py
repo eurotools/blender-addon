@@ -273,21 +273,25 @@ def _write(context, filepath,
                                         write_scope('*BITMAP "%s"' % (bpy.path.abspath(ImageNode.image.filepath)))
                                         w_end_block('}')
 
+                                        w_end_block('}') # SUBMATERIAL
+
                                     #Material has no texture
                                     else:
                                         #Submaterial
-                                        principled = next(n for n in MatData.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
-                                        base_color = principled.inputs['Base Color']
-                                        color = base_color.default_value
+                                        principled = [n for n in MatData.node_tree.nodes if n.type == 'BSDF_PRINCIPLED']
+                                        if principled:
+                                            principled = next(n for n in MatData.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
+                                            base_color = principled.inputs['Base Color']
+                                            color = base_color.default_value
 
-                                        w_new_block('*SUBMATERIAL %u {' % currentSubMat)
-                                        write_scope('*MATERIAL_NAME "%s"' % MatData.name)
-                                        write_scope('*MATERIAL_DIFFUSE %.4f %.4f %.4f' % ((color[0] * .5), (color[1] * .5), (color[2] * .5)))
-                                        write_scope('*MATERIAL_SPECULAR %u %u %u' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
-                                        write_scope('*MATERIAL_SHINE %.1f' % MatData.metallic)
-                                        write_scope('*MATERIAL_SELFILLUM %u' % int(MatData.use_preview_world))
+                                            w_new_block('*SUBMATERIAL %u {' % currentSubMat)
+                                            write_scope('*MATERIAL_NAME "%s"' % MatData.name)
+                                            write_scope('*MATERIAL_DIFFUSE %.4f %.4f %.4f' % ((color[0] * .5), (color[1] * .5), (color[2] * .5)))
+                                            write_scope('*MATERIAL_SPECULAR %u %u %u' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
+                                            write_scope('*MATERIAL_SHINE %.1f' % MatData.metallic)
+                                            write_scope('*MATERIAL_SELFILLUM %u' % int(MatData.use_preview_world))
+                                            w_end_block('}') # SUBMATERIAL
 
-                                    w_end_block('}')
                                     currentSubMat += 1
                                 w_end_block('}') # MATERIAL
                                 w_end_block('}') # MATERIAL_LIST
@@ -321,7 +325,7 @@ def _write(context, filepath,
 
                             # swy: the calc_loop_triangles() doesn't modify the original faces, and instead does temporary ad-hoc triangulation
                             #      returning us a list of three loops per "virtual triangle" that only exists in the returned thingie
-                            #      i.e. len(tri_loop) should always be 3, but internally for each loop .face we're a member of
+                            #      i.e. len(tri_loop) should always be 3, but internally, for each loop .face we're a member of
                             #           still has 4 vertices and the four (different) loops of an n-gon, and .link_loop_next
                             #           points to the original model's loop chain; the loops of our triangle aren't really linked
                             def tri_edge_is_from_ngon(tri_loop, tri_idx):
