@@ -324,7 +324,7 @@ def _write(context, filepath,
                             #      i.e. len(tri_loop) should always be 3, but internally for each loop .face we're a member of
                             #           still has 4 vertices and the four (different) loops of an n-gon, and .link_loop_next
                             #           points to the original model's loop chain; the loops of our triangle aren't really linked
-                            def edge_is_from_triang(tri_loop, tri_idx):
+                            def tri_edge_is_from_ngon(tri_loop, tri_idx):
                                 return tri_loop[(tri_idx + 1) % len(tri_loop)] == tri_loop[tri_idx].link_loop_next
 
                             #Face Vertex Index
@@ -332,7 +332,7 @@ def _write(context, filepath,
                             for i, tri in enumerate(tris):
                                 write_scope_no_cr('*MESH_FACE %3u:' % i)
                                 out.write('  A: %u B: %u C: %u' % (VertexList.index(tri[0].vert.co), VertexList.index(tri[1].vert.co), VertexList.index(tri[2].vert.co)))
-                                out.write('  AB: %u BC: %u CA: %u' % (edge_is_from_triang(tri, 0), edge_is_from_triang(tri, 1), edge_is_from_triang(tri, 2)))   
+                                out.write('  AB: %u BC: %u CA: %u' % (tri_edge_is_from_ngon(tri, 0), tri_edge_is_from_ngon(tri, 1), tri_edge_is_from_ngon(tri, 2)))   
                                 out.write('  *MESH_SMOOTHING 1')
                                 out.write('  *MESH_MTLID %u\n' % tri[0].face.material_index)
                             w_end_block('}') # MESH_FACE
@@ -387,7 +387,7 @@ def _write(context, filepath,
                                 print(vert[euro_vtx_flags])
                                 a = vert[euro_vtx_flags]
                                 if vert[euro_vtx_flags] != 0:
-                                    write_scope('*VFLAG %u %u' % (vert.index, vert[euro_vtx_flags]))
+                                    write_scope('*VFLAG %u %u' % (VertexList.index(vert.co), vert[euro_vtx_flags]))
                             w_end_block('}') # MESH_VERTFLAGSLIST
 
                             if True:
