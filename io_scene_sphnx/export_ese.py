@@ -324,7 +324,7 @@ def _write(context, filepath,
                             for i, tri in enumerate(tris):
                                 write_scope_no_cr('*MESH_FACE %3u:' % i)
                                 out.write('  A: %u B: %u C: %u' % (VertexList.index(tri[0].vert.co), VertexList.index(tri[1].vert.co), VertexList.index(tri[2].vert.co)))
-                                out.write('  AB: %u BC: %u CA: %u' % (not tri[0].vert.hide, not tri[1].vert.hide, not tri[2].vert.hide))   
+                                out.write('  AB: %u BC: %u CA: %u' % (len(tri[0].vert.link_edges) > 1, not tri[1].vert.hide, not tri[2].vert.hide))   
                                 out.write('  *MESH_SMOOTHING 1')
                                 out.write('  *MESH_MTLID %u\n' % tri[0].face.material_index)
                             w_end_block('}') # MESH_FACE
