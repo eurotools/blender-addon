@@ -76,8 +76,9 @@ def _write(context, filepath,
                 write_scope(dump)
 
 
-            def PrintNODE_TM(object):
+            def PrintNODE_TM(tag_name, object):
                     bpy.context.scene.frame_set(bpy.context.scene.frame_start)
+                    w_new_block('*' + tag_name + ' {')
 
                     ConvertedMatrix = object.rotation_euler.to_matrix()
                     rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
@@ -101,6 +102,8 @@ def _write(context, filepath,
                     loc_conv = InvertAxisRotationMatrix @ object.location
                     write_scope('*TM_ROW3 %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
                     write_scope('*TM_POS  %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
+
+                    w_end_block('}')
 
             def PrintTM_ANIMATION(object, TimeValue):
                     w_new_block('*TM_ANIMATION {')
@@ -293,8 +296,8 @@ def _write(context, filepath,
                                             w_end_block('}') # SUBMATERIAL
 
                                     currentSubMat += 1
-                                w_end_block('}') # MATERIAL
-                                w_end_block('}') # MATERIAL_LIST
+                            w_end_block('}') # MATERIAL
+                            w_end_block('}') # MATERIAL_LIST
 
 
 
@@ -303,14 +306,10 @@ def _write(context, filepath,
                             write_scope('*NODE_NAME "%s"' % obj.name)
 
                             #Print Matrix Rotation
-                            w_new_block('*NODE_TM {')
-                            PrintNODE_TM(obj)
-                            w_end_block('}') # NODE_TM
+                            PrintNODE_TM('NODE_TM', obj)
 
                             #Print Matrix Rotation again ¯\_(ツ)_/¯
-                            w_new_block('*PIVOT_TM {')
-                            PrintNODE_TM(obj)
-                            w_end_block('}') # PIVOT_TM
+                            PrintNODE_TM('PIVOT_TM', obj)
 
                             #MESH Section
                             w_new_block('*MESH {')
@@ -518,9 +517,7 @@ def _write(context, filepath,
                     write_scope('*CAMERA_TYPE %s' % "Target")
 
                     #Print Matrix Rotation
-                    w_new_block('*NODE_TM {')
-                    PrintNODE_TM(CameraObj)
-                    w_end_block('}') # NODE_TM
+                    PrintNODE_TM('NODE_TM', CameraObj)
 
                     #===============================================================================================
                     #  CAMERA SETTINGS
@@ -576,9 +573,7 @@ def _write(context, filepath,
                         write_scope('*LIGHT_TYPE %s' % type_lut[obj.data.type]) #Seems that always used "Omni" lights in 3dsMax, in blender is called "Point"
 
                         #Print Matrix Rotation
-                        w_new_block('*NODE_TM {')
-                        PrintNODE_TM(obj)
-                        w_end_block('}') # NODE_TM
+                        PrintNODE_TM('NODE_TM', obj)
 
                         #---------------------------------------------[Light Props]---------------------------------------------
                         write_scope('*LIGHT_DECAY %s' % "InvSquare") # swy: this is the only supported mode
