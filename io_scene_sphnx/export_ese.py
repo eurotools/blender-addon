@@ -162,6 +162,7 @@ def _write(context, filepath,
             #  SCENE INFO
             #=============================================================================================== 
             TimeValue = 1 # 4800 / bpy.context.scene.render.fps
+            frame_count = bpy.context.scene.frame_end - bpy.context.scene.frame_start + 1
 
             w_new_block('*SCENE {')
             write_scope('*SCENE_FILENAME "%s"'     % os.path.basename(bpy.data.filepath))
@@ -431,23 +432,24 @@ def _write(context, filepath,
                             #===============================================================================================
                             #  ANIMATION
                             #===============================================================================================
-                            if EXPORT_ANIMATION:
+                            if frame_count > 1:
                                 PrintTM_ANIMATION(obj, TimeValue)
                             
                             #Material Reference
                             if EXPORT_MATERIALS:
                                 write_scope('*MATERIAL_REF %u' % indx)
 
-                            # swy: here go the blend shape weights with the mixed-in amount for each frame in the timeline
+                            # swy: here go our blend shape weights with the mixed-in amount for each frame in the timeline
                             if obj.data.shape_keys:
                                 w_new_block('*MORPH_DATA {')
                                 for key in obj.data.shape_keys.key_blocks:
                                     if key.relative_key != key:
-                                        frame_count = bpy.context.scene.frame_end - bpy.context.scene.frame_start + 1
                                         w_new_block('*MORPH_FRAMES "%s" %u {' % (key.name, frame_count))
+
                                         for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
                                             bpy.context.scene.frame_set(f)
                                             write_scope('%u %f' % (f, key.value))
+
                                         w_end_block('}') # MORPH_FRAMES
                                 w_end_block('}') # MORPH_DATA
 
@@ -530,7 +532,7 @@ def _write(context, filepath,
                     #===============================================================================================
                     #  CAMERA ANIMATION
                     #===============================================================================================
-                    if EXPORT_ANIMATION:
+                    if frame_count > 1:
                         w_new_block('*CAMERA_ANIMATION {')
                         
                         TimeValueCounter = 0
@@ -546,10 +548,6 @@ def _write(context, filepath,
 
                         w_end_block('}') # CAMERA_ANIMATION
 
-                    #===============================================================================================
-                    #  ANIMATION
-                    #===============================================================================================
-                    if EXPORT_ANIMATION:
                         PrintTM_ANIMATION(CameraObj, TimeValue)
 
                     w_end_block('}') # CAMERAOBJECT
@@ -598,7 +596,7 @@ def _write(context, filepath,
                         #===============================================================================================
                         #  LIGHT ANIMATION
                         #=============================================================================================== 
-                        if EXPORT_ANIMATION:
+                        if frame_count > 1:
                             w_new_block('*LIGHT_ANIMATION {')
 
                             TimeValueCounter = 0
@@ -622,7 +620,7 @@ def _write(context, filepath,
                         #===============================================================================================
                         #  ANIMATION
                         #===============================================================================================
-                        if EXPORT_ANIMATION:
+                        if frame_count > 1:
                             PrintTM_ANIMATION(obj, TimeValue)
 
                         #Close light object
