@@ -56,7 +56,7 @@ def _write(context, filepath,
             out.write('\t*AMBIENTSTATIC %.6f %.6f %.6f\n' %(AmbientValue, AmbientValue, AmbientValue))
             out.write('}\n')
             out.write('\n')
-            
+
             #===============================================================================================
             #  MATERIAL LIST
             #===============================================================================================
@@ -100,7 +100,7 @@ def _write(context, filepath,
                                     SurfType = str(n.type)
                                     if SurfType.startswith('BSDF'):
                                         GetBaseColor = n.inputs.get('Base Color', None)
-                                        if GetBaseColor is not None: 
+                                        if GetBaseColor is not None:
                                             base_color = n.inputs['Base Color']
                                             break
                                         else:
@@ -127,11 +127,11 @@ def _write(context, filepath,
 
                             #Apply default *GEOMNODE Location
                             obj.location = (0,0,0)
-                        
+
                         #===========================================[Clone Object]====================================================
                         depsgraph = bpy.context.evaluated_depsgraph_get()
                         ob_for_convert = obj.evaluated_get(depsgraph)
-                        
+
                         try:
                             MeshObject = ob_for_convert.to_mesh()
                         except RuntimeError:
@@ -143,7 +143,7 @@ def _write(context, filepath,
                         MeshObject.transform(EXPORT_GLOBAL_MATRIX @ ob_for_convert.matrix_world)
                         if (EXPORT_GLOBAL_MATRIX @ ob_for_convert.matrix_world).determinant() < 0.0:
                             MeshObject.flip_normals()
-                        
+
                         #===========================================[Get Object Data]====================================================
                         #Get vertex list without duplicates
                         VertexList = []
@@ -174,7 +174,7 @@ def _write(context, filepath,
                         #Remove duplicates
                         VertexColList = list(dict.fromkeys(VertexColList))
 
-                        #===========================================[Print Object Data]==================================================== 
+                        #===========================================[Print Object Data]====================================================
                         out.write('*MESH {\n')
                         out.write('\t*NAME "%s"\n' % obj.name)
                         out.write('\t*VERTCOUNT %d\n' % len(VertexList))
@@ -187,7 +187,7 @@ def _write(context, filepath,
                             out.write('\t*FACELAYERSCOUNT %d\n' % len(MeshObject.uv_layers))
                         else:
                             out.write('\t*FACELAYERSCOUNT %d\n' % 1)
-                            
+
                         if len(MeshObject.uv_layers) > 1:
                             out.write('\t*FACESHADERCOUNT %d\n' % len(obj.material_slots))
 
@@ -288,7 +288,7 @@ def _write(context, filepath,
             #===============================================================================================
             for obj in bpy.context.scene.objects:
                 if obj.type == 'MESH':
-                    if hasattr(obj, 'data'):        
+                    if hasattr(obj, 'data'):
                         out.write('*GEOMNODE {\n')
                         out.write('\t*NAME "%s"\n' % (obj.name))
                         out.write('\t*MESH "%s"\n' % (obj.name))
@@ -317,15 +317,15 @@ def _write(context, filepath,
                         if hasattr(obj, 'data'):
                             # Axis Conversion
                             InvertAxisMatrix = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0)))
-        
+
                             out.write('*PLACENODE {\n')
                             out.write('\t*NAME "%s"\n' % (obj.name))
                             out.write('\t*MESH "%s"\n' % (obj.name))
                             out.write('\t*WORLD_TM {\n')
-                            
+
                             #Jump to the first frame
                             bpy.context.scene.frame_set(bpy.context.scene.frame_start)
-                            
+
                             #Print Roation matrix
                             out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (1,0,0,0))
                             out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (0,1,0,0))

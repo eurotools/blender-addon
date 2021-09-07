@@ -43,23 +43,23 @@ def save(context,
     camera_num = 0
     out = open(filepath, "w")
     sce = bpy.context.scene
-    
+
     out.write("EUROCOM_RTG 5.01"+"\n")
     out.write("\n")
-    
+
     for ob in sce.objects:
         if ob.type == 'CAMERA':
             out.write("*SCENE_HIERARCHY {"+"\n")
             out.write("\tCamera" + str(camera_num) +" 1 CAMERA "+ ob.name + "\n")
             out.write("}" + "\n")
             out.write("\n")
-            
+
             out.write("*SCENE_FRAMES_PER_SECOND %u" % bpy.context.scene.render.fps + "\n")
             out.write("\n")
-            
+
             keyframes = []
             keyframes_obj = []
-            keyframes_cam = [] 
+            keyframes_cam = []
             if ob.animation_data:
                 if ob.animation_data.action is not None:
                     for curve in ob.animation_data.action.fcurves:
@@ -69,12 +69,12 @@ def save(context,
                             key_val = key.co[1]
                             # swy: append it to the keyframe list
                             keyframes_obj.append(key_idx)
-                            # The curve's points has a 'co' vector giving the frame and the value 
+                            # The curve's points has a 'co' vector giving the frame and the value
                             print('frame: ', key_idx, ' value: ', key_val)
-                        
+
             print(keyframes_obj)
-             
-            if ob.data.animation_data is not None:             
+
+            if ob.data.animation_data is not None:
                 fcurves = ob.data.animation_data.action.fcurves
                 lens_fcurve = fcurves.find('lens')
                 if lens_fcurve is not None:
@@ -83,39 +83,39 @@ def save(context,
                         len_val = lens.co[1]
                         # swy: append it to the keyframe list
                         keyframes_cam.append(len_idx)
-                        # The curve's points has a 'co' vector giving the frame and the value         
-            
-            
+                        # The curve's points has a 'co' vector giving the frame and the value
+
+
             # swy: deduplicate and sort the keyframe list
             keyframes_obj=sorted(set(keyframes_obj))
             print(keyframes_obj)
-            
+
             keyframes = keyframes_obj + keyframes_cam
-            
+
             # swy: deduplicate and sort the keyframe list
             keyframes=sorted(set(keyframes))
             print(keyframes)
-            
+
             InvertAxisRotationMatrix = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0)))
-            
+
             #for f in keyframes_obj:
             for f in range(sce.frame_start, sce.frame_end + 1):
                 sce.frame_set(f)
-                
+
                 ConvertedMatrix = ob.rotation_euler.to_matrix()
                 rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
-                RotationMatrix = rot_mtx.transposed()         
+                RotationMatrix = rot_mtx.transposed()
 
                 loc_conv = InvertAxisRotationMatrix @ ob.location
-                
+
                 out.write("*SCENE_FRAME %u {\n" % f)
                 out.write('\tCamera' + str(camera_num) + ' %.6f %.6f %.6f'% (RotationMatrix[0].x, (RotationMatrix[0].y * -1), RotationMatrix[0].z))
                 out.write(' %.6f %.6f %.6f' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
                 out.write(' %.6f %.6f %.6f' % ((RotationMatrix[2].x * -1), (RotationMatrix[2].y * -1), (RotationMatrix[2].z) * -1))
-                out.write(' %.6f %.6f %.6f\n' % (loc_conv.x, loc_conv.y, (loc_conv.z * -1))) 
+                out.write(' %.6f %.6f %.6f\n' % (loc_conv.x, loc_conv.y, (loc_conv.z * -1)))
                 out.write("}" + "\n")
                 out.write("\n")
-                
+
             out.write("*CAMERA_LIST {" + "\n")
             out.write(" Camera0 %g %g  %g  %g %g  1" % (.4, .1, ob.data.lens, ob.data.clip_start, ob.data.clip_end) + "\n")
             out.write("}" + "\n")
@@ -127,10 +127,10 @@ def save(context,
                     sce.frame_set(f)
                     len_idx = f
                     len_val = ob.data.lens
-                    # The curve's points has a 'co' vector giving the frame and the value 
+                    # The curve's points has a 'co' vector giving the frame and the value
                     out.write("%u %u " % (len_idx, len_val))
                 out.write("\n}" + "\n")
-                    
+
         camera_num += 1
     out.close()
 

@@ -385,7 +385,7 @@ def scene_update_post_handler(scene):
         # swy: detect if we need to refresh the currently toggled flag elements;
         #      only do that if the selection changes; different, not every time
         #      Note: if we don't do this, we won't let the user change it
-        global last_sel_object; 
+        global last_sel_object;
         global last_sel_indexes
 
         if cur_sel_object != last_sel_object:
@@ -412,10 +412,10 @@ def scene_update_post_handler(scene):
 
 def update_after_enum(self, context):
     print('self.face_flags ---->', self.face_flags)
-    
+
 
 class EuroProperties(bpy.types.PropertyGroup):
-    ''' Per-face bitfield for Euroland entities. ''' 
+    ''' Per-face bitfield for Euroland entities. '''
     face_flags: bpy.props.EnumProperty(
         name = "Eurocom face flags",
         options = {'ENUM_FLAG'},
@@ -486,7 +486,7 @@ class EuroProperties(bpy.types.PropertyGroup):
         default = set(),
         update = update_after_enum
     )
-    
+
 # swy: use a callback function to iterate across the whole thing,
 #      works with vertices and faces, depending on the context:
 #      https://stackoverflow.com/a/42544997/674685
@@ -542,9 +542,9 @@ class EApplyFlags(bpy.types.Operator):
 
         return {'FINISHED'}
 
-    def draw(self, context):    
+    def draw(self, context):
         pass
-        
+
 class ESelectChFlags(bpy.types.Operator):
     """Select any elements with this combination of flags"""
     bl_idname  = "wm.eb"
@@ -650,7 +650,7 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
 
             butt = self.layout.split()
             butt.label(text="Select any elements with...")
-            
+
             butt = self.layout.split(align=True)
             butt.operator(ESelectChFlags.bl_idname, text='These flags checked')
             butt.operator(ESelectNoFlags.bl_idname, text='No flags checked')
@@ -764,7 +764,7 @@ def unregister():
         bpy.types.TOPBAR_MT_file_import.remove(m)
 
     for cls in reversed(classes):
-        bpy.utils.unregister_class(cls) 
+        bpy.utils.unregister_class(cls)
 
 if __name__ == '__main__':
     register()
