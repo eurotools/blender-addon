@@ -8,6 +8,7 @@ Group: 'Export'
 Tooltip: 'Blender EIF Exporter for EuroLand'
 Authors: Swyter and Jmarti856
 """
+
 import bpy
 import os
 import math

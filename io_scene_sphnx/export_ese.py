@@ -2,12 +2,13 @@
 #  SPDX-License-Identifier: Zlib
 
 """
-Name: 'EUROEXPORT'
+Name: 'Eurocom Scene Export'
 Blender: 2.90.1
 Group: 'Export'
 Tooltip: 'Blender ESE Exporter for EuroLand'
 Authors: Swyter and Jmarti856
 """
+
 import bpy
 import os
 import math

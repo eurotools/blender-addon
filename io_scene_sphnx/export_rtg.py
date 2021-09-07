@@ -1,6 +1,14 @@
 #  Copyright (c) 2020-2021 Swyter <swyterzone+sphinx@gmail.com>
 #  SPDX-License-Identifier: Zlib
 
+"""
+Name: 'Eurocom Real Time Game'
+Blender: 2.90.1
+Group: 'Export'
+Tooltip: 'Blender RTG Exporter for EuroLand'
+Authors: Swyter and Jmarti856
+"""
+
 import bpy
 import os
 import math
