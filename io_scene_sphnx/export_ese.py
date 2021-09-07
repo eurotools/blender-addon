@@ -445,7 +445,7 @@ def _write(context, filepath,
                                 w_new_block('*MORPH_DATA {')
                                 for key in obj.data.shape_keys.key_blocks:
                                     if key.relative_key != key:
-                                        w_new_block('*MORPH_FRAMES "%s" %u {' % (key.name, frame_count))
+                                        w_new_block('*MORPH_FRAMES "%s" %u {' % (key.name.replace(' ', '_'), frame_count))
 
                                         for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
                                             bpy.context.scene.frame_set(f)
@@ -483,7 +483,7 @@ def _write(context, filepath,
                                     # swy: don't export the 'Basis' one that is just the normal mesh data other keys are relative/substracted to
                                     if key.relative_key != key:
                                         w_new_block('*MORPH_LIST {')
-                                        w_new_block('*MORPH_TARGET "%s" %u {' % (key.name, len(key.data)))
+                                        w_new_block('*MORPH_TARGET "%s" %u {' % (key.name.replace(' ', '_'), len(key.data)))
 
                                         for vidx, vert in enumerate(key.data):
                                             write_scope('%f %f %f' % (vert.co[0], vert.co[1], vert.co[2]))
