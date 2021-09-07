@@ -473,12 +473,21 @@ def _write(context, filepath,
                                     for vidx, vert in enumerate(obj.data.vertices):
                                         write_scope_no_cr('*VERTEX %5u %u' % (vidx, len(vert.groups)))
 
+                                        # swy: make it so that the bones that have more influence appear first
+                                        #      in the listing, otherwise order seems random.
                                         sorted_groups = sorted(vert.groups, key = lambda i: (i.weight), reverse=True)
 
                                         for gidx, group in enumerate(sorted_groups):
-                                            aa = vgroup_names[group.group]
-                                            bb = bone_names.index(aa)
-                                            out.write('  %u %f' % (bb, group.weight))
+                                            # swy: get the actual vertex group name from the local index (the .group thing)
+                                            cur_vgroup_name = vgroup_names[group.group]
+                                            # swy: and test it to see if it matches a bone name from the bound armature/skeleton
+                                            #      otherwise it probably isn't a weighting group and is used for something else
+                                            if cur_vgroup_name not in bone_names:
+                                                continue
+
+                                            # swy: because the bone names are in the same order as in the BONE_LIST above everything works out
+                                            global_bone_index = bone_names.index(cur_vgroup_name)
+                                            out.write('  %u %f' % (global_bone_index, group.weight))
                                         out.write("\n")
                                     w_end_block("}") # SKIN_VERTEX_DATA
                                     w_end_block("}") # SKIN_DATA
