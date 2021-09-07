@@ -457,9 +457,17 @@ def _write(context, filepath,
                                     armat = mod.object
                                     w_new_block("*SKIN_DATA {")
                                     w_new_block("*BONE_LIST {")
+
+                                    # create a skeletal lookup dictionary for names
+                                    bone_names = [bone.name for index, bone in enumerate(armat.data.bones)]
+
                                     for bidx, bone in enumerate(armat.data.bones):
                                         write_scope('*BONE %u "%s"' % (bidx, bone.name))
                                     w_end_block("}") # BONE_LIST
+
+                                    # create a vertex group lookup dictionary for names
+                                    # https://blender.stackexchange.com/a/28273/42781
+                                    vgroup_names = [vgroup.name for vgroup in obj.vertex_groups]
 
                                     w_new_block('*SKIN_VERTEX_DATA {')
                                     for vidx, vert in enumerate(obj.data.vertices):
@@ -468,7 +476,9 @@ def _write(context, filepath,
                                         sorted_groups = sorted(vert.groups, key = lambda i: (i.weight), reverse=True)
 
                                         for gidx, group in enumerate(sorted_groups):
-                                            out.write('  %u %f' % (group.group, group.weight))
+                                            aa = vgroup_names[group.group]
+                                            bb = bone_names.index(aa)
+                                            out.write('  %u %f' % (bb, group.weight))
                                         out.write("\n")
                                     w_end_block("}") # SKIN_VERTEX_DATA
                                     w_end_block("}") # SKIN_DATA
