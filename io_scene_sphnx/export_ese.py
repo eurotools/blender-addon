@@ -337,7 +337,6 @@ def _write(context, filepath,
                                 write_scope_no_cr('*MESH_FACE %3u:' % i)
                                 out.write('  A: %u B: %u C: %u' % (VertexList.index(tri[0].vert.co), VertexList.index(tri[1].vert.co), VertexList.index(tri[2].vert.co)))
                                 out.write('  AB: %u BC: %u CA: %u' % (tri_edge_is_from_ngon(tri, 0), tri_edge_is_from_ngon(tri, 1), tri_edge_is_from_ngon(tri, 2)))   
-                                out.write('  *MESH_SMOOTHING 1')
                                 out.write('  *MESH_MTLID %u\n' % tri[0].face.material_index)
                             w_end_block('}') # MESH_FACE
 
@@ -394,7 +393,7 @@ def _write(context, filepath,
                                     write_scope('*VFLAG %u %u' % (VertexList.index(vert.co), vert[euro_vtx_flags]))
                             w_end_block('}') # MESH_VERTFLAGSLIST
 
-                            if True:
+                            if len(VertexColorList) > 0:
                                 #Vertex Colors List
                                 write_scope('*MESH_NUMCVERTEX %u' % len(VertexColorList))
                                 w_new_block('*MESH_CVERTLIST {')
@@ -406,6 +405,7 @@ def _write(context, filepath,
                                     )
                                 w_end_block('}') # MESH_CVERTLIST
 
+                            if True:
                                 #Face Color Vertex Index
                                 layerIndex = 0
                                 if len(bm.loops.layers.color.items()) > 0:
@@ -516,7 +516,6 @@ def _write(context, filepath,
                 for CameraObj in CamerasList:  
                     w_new_block('*CAMERAOBJECT {')
                     write_scope('*NODE_NAME "%s"' % CameraObj.name)
-                    write_scope('*CAMERA_TYPE %s' % "Target")
 
                     #Print Matrix Rotation
                     PrintNODE_TM('NODE_TM', CameraObj)
@@ -526,7 +525,7 @@ def _write(context, filepath,
                     #=============================================================================================== 
                     w_new_block('*CAMERA_SETTINGS {')
                     write_scope('*TIMEVALUE %u' % 0)
-                    write_scope('*CAMERA_FOV %.4f'% CameraObj.data.angle)
+                    write_scope('*CAMERA_FOV %.4f' % CameraObj.data.angle)
                     w_end_block('}') # CAMERA_SETTINGS
 
                     #===============================================================================================
@@ -617,10 +616,6 @@ def _write(context, filepath,
 
                             w_end_block('}') # LIGHT_ANIMATION
 
-                        #===============================================================================================
-                        #  ANIMATION
-                        #===============================================================================================
-                        if frame_count > 1:
                             PrintTM_ANIMATION(obj, TimeValue)
 
                         #Close light object
