@@ -205,10 +205,8 @@ def _write(context, filepath,
                             #===========================================[Get Object Data]====================================================
                             #Get vertex list without duplicates
                             VertexList = []
-                            for tri in tris:
-                                for loop in tri:
-                                    if loop.vert.co not in VertexList:
-                                        VertexList.append(loop.vert.co)
+                            for vert in obj.data.vertices:
+                                VertexList.append(vert.co)
 
                             #Get UV Layer Active
                             UVVertexList = []
