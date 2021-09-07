@@ -458,14 +458,14 @@ def _write(context, filepath,
                                     w_new_block("*SKIN_DATA {")
                                     w_new_block("*BONE_LIST {")
 
-                                    # create a skeletal lookup dictionary for names
-                                    bone_names = [bone.name for index, bone in enumerate(armat.data.bones)]
+                                    # create a skeletal lookup list for bone names
+                                    bone_names = [bone.name for bone in armat.data.bones]
 
                                     for bidx, bone in enumerate(armat.data.bones):
                                         write_scope('*BONE %u "%s"' % (bidx, bone.name))
                                     w_end_block("}") # BONE_LIST
 
-                                    # create a vertex group lookup dictionary for names
+                                    # create a vertex group lookup list for names
                                     # https://blender.stackexchange.com/a/28273/42781
                                     vgroup_names = [vgroup.name for vgroup in obj.vertex_groups]
 
@@ -475,7 +475,7 @@ def _write(context, filepath,
 
                                         # swy: make it so that the bones that have more influence appear first
                                         #      in the listing, otherwise order seems random.
-                                        sorted_groups = sorted(vert.groups, key = lambda i: (i.weight), reverse=True)
+                                        sorted_groups = sorted(vert.groups, key = lambda i: i.weight, reverse = True)
 
                                         for gidx, group in enumerate(sorted_groups):
                                             # swy: get the actual vertex group name from the local index (the .group thing)
