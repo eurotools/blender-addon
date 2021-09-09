@@ -1,7 +1,6 @@
 # Euroland Blender add-on
 
-Import and export intermediate Eurocom formats for *Sphinx and the Cursed Mummy* in Blender.
-Heavily work in progress.
+Import and export intermediate Eurocom formats for *Sphinx and the Cursed Mummy* in Blender. This project aims to reimplement the missing *3ds Max* (EIF, ESE) and *Maya* (RTG) plug-ins and make creating Euroland assets possible. Heavily work in progress.
 
 > ➥ *You can [download the latest version from the Releases tab](https://github.com/Swyter/sphinx-euroland/releases/tag/latest)*.
 
@@ -34,8 +33,13 @@ For more info about which things each format supports, you can look at the [wiki
   - [X] Maps: Issues with rotations
 
 * ESE (_Eurocom Export Scene_)
-  - [x] Arbitrary polygons: Visible vertex edges is not implemented yet
+  - [x] Arbitrary polygons
+  - [x] Edge visibility: recombining the right triangles back into n-gons.
   - [x] Vertex colors
+  - [x] Shape keys, or morph targets
+  - [x] Mesh skeletal rigging
+  - [x] Lights and animated lights
+  - [x] Cameras and animated cameras
   - [ ] Layers
   - [ ] Maps
   - [ ] Animations + Skins
@@ -49,7 +53,8 @@ For more info about which things each format supports, you can look at the [wiki
   - [ ] Hard edges
   - [ ] Maps
   - [ ] Animations + Skins
-  - [ ] Scripts: Only Animated cameras, but rotations need fixing
+  - [ ] Scripts
+  - [x] Cameras and camera animations, but rotations need fixing
 
 
 # To develop
@@ -72,5 +77,7 @@ A normal cycle should be; save, switch to the Blender window and quickly press *
 
 ## Useful tools
 Other useful tools during development are the _Python Console_ (_Shift + F4_) to view the internal data structures, and the _System Console_ (_Window > Toggle System Console_) to view possible Python error output and dumping debug `print("LOL")` calls.
+
+Keep in mind that there is [a great extension for the free *Visual Studio Code* IDE](https://github.com/JacquesLucke/blender_vscode) to debug and auto-live-reload on save, making Blender add-on development much more straightforward. I found about this after the fact.
 
 That should be enough.
