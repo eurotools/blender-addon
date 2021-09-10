@@ -438,6 +438,9 @@ def _write(context, filepath,
                             if EXPORT_MATERIALS:
                                 write_scope('*MATERIAL_REF %u' % indx)
 
+                            #===============================================================================================
+                            #  SHAPE KEYS
+                            #===============================================================================================
                             # swy: here go our blend shape weights with the mixed-in amount for each frame in the timeline
                             if obj.data.shape_keys:
                                 w_new_block('*MORPH_DATA {')
@@ -452,7 +455,11 @@ def _write(context, filepath,
                                         w_end_block('}') # MORPH_FRAMES
                                 w_end_block('}') # MORPH_DATA
 
+                            #===============================================================================================
+                            #  SKELETAL RIGGING / BONE HIERARCHY DEFINITION / ARMATURE
+                            #===============================================================================================
                             for indx, mod in enumerate(obj.modifiers):
+                                # swy: find the armature element between the possible mesh modifiers
                                 if mod.type == 'ARMATURE' and mod.object and mod.object.type == 'ARMATURE':
                                     armat = mod.object
                                     w_new_block("*SKIN_DATA {")
@@ -489,9 +496,11 @@ def _write(context, filepath,
                                             global_bone_index = bone_names.index(cur_vgroup_name)
                                             out.write('  %u %f' % (global_bone_index, group.weight))
                                         out.write("\n")
+
                                     w_end_block("}") # SKIN_VERTEX_DATA
                                     w_end_block("}") # SKIN_DATA
 
+                                    # swy: we only support one armature modifier/binding per mesh for now, stop looking for more
                                     break
 
                             w_end_block('}') # GEOMOBJECT
@@ -510,7 +519,9 @@ def _write(context, filepath,
 
                                         w_end_block('}') # MORPH_TARGET
                                         w_end_block('}') # MORPH_LIST
-                            #Liberate BM Object
+
+                            # swy: free the current mesh's BMesh triangulated helper object, we won't be needing it anymore
+                            #      all the related geometry operations have been done
                             bm.free()
 
             for indx, obj in enumerate(bpy.context.scene.objects):
