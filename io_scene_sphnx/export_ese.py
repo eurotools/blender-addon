@@ -584,6 +584,8 @@ def _write(context, filepath,
                     #===============================================================================================
                     #  USER DATA (ONLY FOR SCRIPTS)
                     #===============================================================================================
+                    # swy: Jmarti856 found that this is needed for the time range of each camera to show up properly in
+                    #      the script timeline, without this all of them cover the entire thing from beginning to end
                     if CameraObj == CamerasList[-1] and len(CamerasList) > 1:
                         w_new_block('*USER_DATA %u {' % 0)
                         write_scope('CameraScript = %u' % 1)
@@ -615,7 +617,6 @@ def _write(context, filepath,
                                         CameraNumber += 1
                                         
                         w_end_block('}') # USER_DATA
-                        
                     w_end_block('}') # CAMERAOBJECT
 
             #===============================================================================================
