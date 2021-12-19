@@ -35,9 +35,13 @@ def _write(context, filepath,
     # swy: convert from the blender to the euroland coordinate system; we can't do that with the
     #      standard matrix transformations
 
-    up_vec    = (1,0,0)
-    right_vec = (0,0,1)
-    front_vec = (0,1,0)
+    uprgt_vec = Vector((1,0,0))
+    right_vec = Vector((0,0,1))
+    front_vec = Vector((0,1,0))
+
+    euroland_mtx = Matrix((uprgt_vec,
+                           right_vec,
+                           front_vec))
 
     InvertAxisRotationMatrix = Matrix(((1, 0, 0),
                                        (0, 0, 1),
@@ -325,7 +329,9 @@ def _write(context, filepath,
                             #Print Vertex List
                             w_new_block('*MESH_VERTEX_LIST {')
                             for idx, ListItem in enumerate(VertexList):
-                                write_scope('*MESH_VERTEX  %5u  %4.4f %4.4f %4.4f' % (idx, ListItem[0], ListItem[1], ListItem[2]))
+
+                                vtx = ListItem @ euroland_mtx
+                                write_scope('*MESH_VERTEX  %5u  %4.4f %4.4f %4.4f' % (idx, vtx.x, vtx.y, vtx.z))
                             w_end_block('}') # MESH_VERTEX_LIST
 
                             # swy: the calc_loop_triangles() doesn't modify the original faces, and instead does temporary ad-hoc triangulation

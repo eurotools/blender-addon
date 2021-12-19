@@ -81,3 +81,14 @@ Other useful tools during development are the _Python Console_ (_Shift + F4_) to
 Keep in mind that there is [a great extension for the free *Visual Studio Code* IDE](https://github.com/JacquesLucke/blender_vscode) to debug and auto-live-reload on save, making Blender add-on development much more straightforward. I found about this after the fact.
 
 That should be enough.
+
+# Transforming coordinates
+
+     Euroland       Blender
+        Y+            Z+
+        |             |
+        |__ __ _ +Z   |__ __ _ +Y
+       /             /
+     +X            +X
+
+    (X is from the camera point of view)
