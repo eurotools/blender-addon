@@ -91,4 +91,5 @@ That should be enough.
        /             /
      +X            +X
 
-    (X is from the camera point of view)
+     Blender: right is +X, into the screen is +Y, up is +Z.
+    Euroland: right is +X, into the screen is +Z, up is +Y.
