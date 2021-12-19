@@ -34,6 +34,11 @@ def _write(context, filepath,
 
     # swy: convert from the blender to the euroland coordinate system; we can't do that with the
     #      standard matrix transformations
+
+    up_vec    = (1,0,0)
+    right_vec = (0,0,1)
+    front_vec = (0,1,0)
+
     InvertAxisRotationMatrix = Matrix(((1, 0, 0),
                                        (0, 0, 1),
                                        (0, 1, 0)))
@@ -243,15 +248,16 @@ def _write(context, filepath,
                                 MatData = bpy.data.materials[0]
                                 DiffuseColor = MatData.diffuse_color
                                 write_scope('*MATERIAL_NAME "%s"' % MatData.name)
-                                write_scope('*MATERIAL_DIFFUSE %.4f %.4f %.4f' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-                                write_scope('*MATERIAL_SPECULAR %u %u %u' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
-                                write_scope('*MATERIAL_SHINE %.1f' % MatData.metallic)
                                 if not MatData.use_backface_culling:
                                     write_scope('*MATERIAL_TWOSIDED')
                                 write_scope('*NUMSUBMTLS %u ' % len(obj.material_slots))
 
                                 #Loop Trought Submaterials
                                 for indx, Material_Data in enumerate(obj.material_slots):
+
+                                    if Material_Data.name is '':
+                                        continue
+                                    
                                     MatData = bpy.data.materials[Material_Data.name]
 
                                     #Material has texture
