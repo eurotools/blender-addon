@@ -259,7 +259,7 @@ def _write(context, filepath,
                                 #Loop Trought Submaterials
                                 for indx, Material_Data in enumerate(obj.material_slots):
 
-                                    if Material_Data.name is '':
+                                    if Material_Data.name == '':
                                         continue
                                     
                                     MatData = bpy.data.materials[Material_Data.name]
