@@ -35,13 +35,13 @@ def _write(context, filepath,
     # swy: convert from the blender to the euroland coordinate system; we can't do that with the
     #      standard matrix transformations
 
-    uprgt_vec = Vector((1,0,0))
-    right_vec = Vector((0,0,1))
-    front_vec = Vector((0,1,0))
+    up_vec      = Vector((1, 0, 0))
+    right_vec   = Vector((0, 1, 0))
+    forward_vec = Vector((0, 0, 1))
 
-    euroland_mtx = Matrix((uprgt_vec,
+    euroland_mtx = Matrix((up_vec,
                            right_vec,
-                           front_vec))
+                           forward_vec))
 
     InvertAxisRotationMatrix = Matrix(((1, 0, 0),
                                        (0, 0, 1),
