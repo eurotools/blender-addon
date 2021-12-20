@@ -340,8 +340,8 @@ def _write(context, filepath,
                             w_new_block('*MESH_FACE_LIST {')
                             for i, tri in enumerate(tris):
                                 write_scope_no_cr('*MESH_FACE %3u:' % i)
-                                out.write('  A: %u B: %u C: %u' % (tri[0].vert.index, tri[1].vert.index, tri[2].vert.index))
-                                out.write('  AB: %u BC: %u CA: %u' % (tri_edge_is_from_ngon(tri, 0), tri_edge_is_from_ngon(tri, 1), tri_edge_is_from_ngon(tri, 2)))
+                                out.write('    A: %3u B: %3u C: %3u' % (tri[0].vert.index, tri[1].vert.index, tri[2].vert.index))
+                                out.write('    AB: %u BC: %u CA: %u' % (tri_edge_is_from_ngon(tri, 0), tri_edge_is_from_ngon(tri, 1), tri_edge_is_from_ngon(tri, 2)))
                                 out.write('  *MESH_MTLID %u\n' % tri[0].face.material_index)
                             w_end_block('}') # MESH_FACE
 
@@ -497,7 +497,7 @@ def _write(context, filepath,
 
                                             # swy: because the bone names are in the same order as in the BONE_LIST above everything works out
                                             global_bone_index = bone_names.index(cur_vgroup_name)
-                                            out.write('  %u %f' % (global_bone_index, group.weight))
+                                            out.write('  %2u %f' % (global_bone_index, group.weight))
                                         out.write("\n")
 
                                     w_end_block("}") # SKIN_VERTEX_DATA
@@ -518,7 +518,7 @@ def _write(context, filepath,
                                         w_new_block('*MORPH_TARGET "%s" %u {' % (key.name.replace(' ', '_'), len(key.data)))
 
                                         for vidx, vert in enumerate(key.data):
-                                            write_scope('%f %f %f' % (vert.co[0], vert.co[1], vert.co[2]))
+                                            write_scope('%f %f %f' % (vert.co.x, vert.co.y, vert.co.z))
 
                                         w_end_block('}') # MORPH_TARGET
                                         w_end_block('}') # MORPH_LIST
