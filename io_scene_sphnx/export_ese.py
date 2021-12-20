@@ -212,11 +212,6 @@ def _write(context, filepath,
                             tris = bm.calc_loop_triangles()
 
                             #===========================================[Get Object Data]====================================================
-                            #Get vertex list without duplicates
-                            VertexList = []
-                            for vert in obj.data.vertices:
-                                VertexList.append(vert.co)
-
                             #Get UV Layer Active
                             UVVertexList = []
                             for name, uvl in bm.loops.layers.uv.items():
@@ -323,14 +318,13 @@ def _write(context, filepath,
 
                             #MESH Section
                             w_new_block('*MESH {')
-                            write_scope('*MESH_NUMVERTEX %u' % len(VertexList))
+                            write_scope('*MESH_NUMVERTEX %u' % len(bm.verts))
                             write_scope('*MESH_NUMFACES %u'  % len(tris))
 
                             #Print Vertex List
                             w_new_block('*MESH_VERTEX_LIST {')
-                            for idx, ListItem in enumerate(VertexList):
-
-                                vtx = ListItem @ euroland_mtx
+                            for idx, vert in enumerate(bm.verts):
+                                vtx = vert.co @ euroland_mtx
                                 write_scope('*MESH_VERTEX  %5u  %4.4f %4.4f %4.4f' % (idx, vtx.x, vtx.y, vtx.z))
                             w_end_block('}') # MESH_VERTEX_LIST
 
