@@ -91,5 +91,5 @@ That should be enough.
        /             /
      +X            +X
 
-     Blender: right is +X, into the screen is +Y, up is +Z.
-    Euroland: right is +X, into the screen is +Z, up is +Y.
+     Blender: right is +X, forward into the screen is +Y, up is +Z.
+    Euroland: right is +X, forward into the screen is +Z, up is +Y.
