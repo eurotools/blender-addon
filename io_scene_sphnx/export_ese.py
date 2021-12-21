@@ -35,9 +35,9 @@ def _write(context, filepath,
     # swy: convert from the blender to the euroland coordinate system; we can't do that with the
     #      standard matrix transformations
 
-    up_vec      = Vector((1, 0, 0))
+    up_vec      = Vector((0, 1, 0))
     right_vec   = Vector((0, 1, 0))
-    forward_vec = Vector((0, 0, 1))
+    forward_vec = Vector((1, 0, 0))
 
     euroland_mtx = Matrix((up_vec,
                            right_vec,
@@ -91,27 +91,28 @@ def _write(context, filepath,
                     w_new_block('*' + tag_name + ' {')
 
                     ConvertedMatrix = object.rotation_euler.to_matrix()
-                    rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
-                    RotationMatrix = rot_mtx.transposed()
+                    rot_mtx = ConvertedMatrix # @ InvertAxisRotationMatrix
+                    RotationMatrix = rot_mtx #.transposed()
 
                     #Write Matrix
                     write_scope('*NODE_NAME "%s"' % object.name)
 
-                    if object.type == 'CAMERA':
-                        #Don't modify this, the cameras rotations works fine with this code.
-                        write_scope('*TM_ROW0 %.4f %.4f %.4f' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
-                        write_scope('*TM_ROW1 %.4f %.4f %.4f' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
-                        write_scope('*TM_ROW2 %.4f %.4f %.4f' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
-                    else:
+                    #if object.type == 'CAMERA':
+                    #    #Don't modify this, the cameras rotations works fine with this code.
+                    #    write_scope('*TM_ROW0 %.4f %.4f %.4f' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
+                    #    write_scope('*TM_ROW1 %.4f %.4f %.4f' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
+                    #    write_scope('*TM_ROW2 %.4f %.4f %.4f' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
+                    #else:
                         #This other code needs revision, the rotations in the entity editor don't work.
-                        write_scope('*TM_ROW0 %.4f %.4f %.4f' % (RotationMatrix[0].x, RotationMatrix[0].y,      RotationMatrix[0].z     ))
-                        write_scope('*TM_ROW1 %.4f %.4f %.4f' % (RotationMatrix[1].x, RotationMatrix[1].y,      RotationMatrix[1].z * -1))
-                        write_scope('*TM_ROW2 %.4f %.4f %.4f' % (RotationMatrix[2].x, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
+
+                    write_scope('*TM_ROW0 %.4f %.4f %.4f' % (obj.matrix_world[0].x, obj.matrix_world[0].y, obj.matrix_world[0].z))
+                    write_scope('*TM_ROW1 %.4f %.4f %.4f' % (obj.matrix_world[1].x, obj.matrix_world[1].y, obj.matrix_world[1].z))
+                    write_scope('*TM_ROW2 %.4f %.4f %.4f' % (obj.matrix_world[2].x, obj.matrix_world[2].y, obj.matrix_world[2].z))
 
                     #Flip location axis
-                    loc_conv = InvertAxisRotationMatrix @ object.location
-                    write_scope('*TM_ROW3 %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
-                    write_scope('*TM_POS  %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
+                    loc_conv = object.location # @ InvertAxisRotationMatrix
+                    write_scope('*TM_ROW3 %.4f %.4f %.4f' % (obj.matrix_world[0].w, obj.matrix_world[1].w, obj.matrix_world[2].w))
+                    #write_scope('*TM_POS  %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
 
                     w_end_block('}')
 
@@ -135,19 +136,19 @@ def _write(context, filepath,
 
                             ConvertedMatrix = object.rotation_euler.to_matrix()
 
-                            rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
-                            RotationMatrix = rot_mtx.transposed()
+                            rot_mtx = ConvertedMatrix # @ InvertAxisRotationMatrix
+                            RotationMatrix = rot_mtx #.transposed()
 
                             #Write Time Value
                             write_scope_no_cr('*TM_FRAME  %5u' % f)
 
                             #Write Matrix
-                            out.write('  %.4f %.4f %.4f' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
-                            out.write('  %.4f %.4f %.4f' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
-                            out.write('  %.4f %.4f %.4f' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
+                            out.write('  %.4f %.4f %.4f' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
+                            out.write('  %.4f %.4f %.4f' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
+                            out.write('  %.4f %.4f %.4f' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
 
                             #Flip location axis
-                            loc_conv = InvertAxisRotationMatrix @ object.location
+                            loc_conv = object.location
                             out.write('  %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
                             out.write('\n')
 
@@ -186,25 +187,44 @@ def _write(context, filepath,
             #  GEOM OBJECT
             #===============================================================================================
             if 'MESH' in EXPORT_OBJECTTYPES:
-                for indx, obj in enumerate(bpy.context.scene.objects):
+                for indx, obj_orig in enumerate(bpy.context.scene.objects):
+
+                    obj      = obj_orig.copy()
+                    obj.data = obj_orig.data.copy()
+
+                    #obj.data.transform(obj.matrix_world.inverted() @ Matrix(([-1,0,0],[0,0,-1],[0,1,0])).to_4x4() @ obj.matrix_world)
+                    #obj.data.transform(Matrix(([1,0,0],[0,0,-1],[0,1,0])).to_4x4())
+
                     if obj.type == 'MESH':
                         if hasattr(obj, 'data'):
                             #===========================================[Clone Object]====================================================
                             depsgraph = bpy.context.evaluated_depsgraph_get()
                             ob_for_convert = obj.evaluated_get(depsgraph)
 
+                            #obj.data.transform(Matrix(([1,0,0],[0,0,1],[0,-1,0])).to_4x4())
+
                             try:
-                                MeshObject = ob_for_convert.to_mesh()
+                                MeshObject = obj.to_mesh()
                             except RuntimeError:
                                 MeshObject = None
                             if MeshObject is None:
                                 continue
 
                             #===========================================[Apply Matrix]====================================================
-                            #MeshObject.transform(EXPORT_GLOBAL_MATRIX @ obj.matrix_world)
+                            #MeshObject.transform(euroland_mtx.transposed().to_4x4())
+                            #MeshObject.transform(Matrix(([1,0,0],[0,0,-1],[0,1,0])).to_4x4())
 
-                            if EXPORT_FLIP_POLYGONS:
-                                MeshObject.flip_normals()
+                            #MeshObject.transform(obj.matrix_world @ Matrix(([-1,0,0],[0,0,-1],[0,1,0])).to_4x4() @ obj.matrix_world.inverted())
+
+                            #obj.matrix_world = Matrix(([1,0,0],[0,0,1],[0,-1,0])).to_4x4() @ obj.matrix_world
+                            #obj.matrix_world = Matrix(([-1,0,0],[0,0,1],[0,-1,0])).to_4x4() @ obj.matrix_world
+
+                            #e=Euler()
+                            #e.rotate_axis('X', radians(90))
+                            #MeshObject.transform(e.to_matrix().to_4x4())
+
+                            #if EXPORT_FLIP_POLYGONS:
+                            #MeshObject.flip_normals()
 
                             #===========================================[Triangulate Object]====================================================
                             bm = bmesh.new()
@@ -314,7 +334,7 @@ def _write(context, filepath,
                             PrintNODE_TM('NODE_TM', obj)
 
                             #Print Matrix Rotation again ¯\_(ツ)_/¯
-                            PrintNODE_TM('PIVOT_TM', obj)
+                            #PrintNODE_TM('PIVOT_TM', obj)
 
                             #MESH Section
                             w_new_block('*MESH {')
@@ -324,7 +344,7 @@ def _write(context, filepath,
                             #Print Vertex List
                             w_new_block('*MESH_VERTEX_LIST {')
                             for idx, vert in enumerate(bm.verts):
-                                vtx = vert.co @ euroland_mtx
+                                vtx = vert.co # @ euroland_mtx
                                 write_scope('*MESH_VERTEX  %5u  %4.4f %4.4f %4.4f' % (idx, vtx.x, vtx.y, vtx.z))
                             w_end_block('}') # MESH_VERTEX_LIST
 
