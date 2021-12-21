@@ -97,14 +97,6 @@ def _write(context, filepath,
                     #Write Matrix
                     write_scope('*NODE_NAME "%s"' % object.name)
 
-                    #if object.type == 'CAMERA':
-                    #    #Don't modify this, the cameras rotations works fine with this code.
-                    #    write_scope('*TM_ROW0 %.4f %.4f %.4f' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
-                    #    write_scope('*TM_ROW1 %.4f %.4f %.4f' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
-                    #    write_scope('*TM_ROW2 %.4f %.4f %.4f' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
-                    #else:
-                        #This other code needs revision, the rotations in the entity editor don't work.
-
                     write_scope('*TM_ROW0 %.4f %.4f %.4f' % (obj.matrix_world[0].x, obj.matrix_world[0].y, obj.matrix_world[0].z))
                     write_scope('*TM_ROW1 %.4f %.4f %.4f' % (obj.matrix_world[1].x, obj.matrix_world[1].y, obj.matrix_world[1].z))
                     write_scope('*TM_ROW2 %.4f %.4f %.4f' % (obj.matrix_world[2].x, obj.matrix_world[2].y, obj.matrix_world[2].z))
@@ -139,13 +131,16 @@ def _write(context, filepath,
                             rot_mtx = ConvertedMatrix # @ InvertAxisRotationMatrix
                             RotationMatrix = rot_mtx #.transposed()
 
+
+                            thing=object.matrix_world.invert()
+
                             #Write Time Value
                             write_scope_no_cr('*TM_FRAME  %5u' % f)
 
                             #Write Matrix
-                            out.write('  %.4f %.4f %.4f' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
-                            out.write('  %.4f %.4f %.4f' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
-                            out.write('  %.4f %.4f %.4f' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
+                            out.write('  %.4f %.4f %.4f' % (thing[0].x, thing[0].y, thing[0].z))
+                            out.write('  %.4f %.4f %.4f' % (thing[1].x, thing[1].y, thing[1].z))
+                            out.write('  %.4f %.4f %.4f' % (thing[2].x, thing[2].y, RotationMatrix[2].z))
 
                             #Flip location axis
                             loc_conv = object.location
@@ -217,6 +212,11 @@ def _write(context, filepath,
                             #MeshObject.transform(obj.matrix_world @ Matrix(([-1,0,0],[0,0,-1],[0,1,0])).to_4x4() @ obj.matrix_world.inverted())
 
                             #obj.matrix_world = Matrix(([1,0,0],[0,0,1],[0,-1,0])).to_4x4() @ obj.matrix_world
+                            #obj.matrix_world = Matrix(([-1,0,0],[0,0,1],[0,-1,0])).to_4x4() @ obj.matrix_world
+
+                            translation, rotation, scale = obj.matrix_world.decompose()
+                            obj.matrix_world = Matrix.Translation(translation) @ rotation.to_matrix().inverted().to_4x4() @ Matrix.Diagonal(scale.to_4d()) 
+
                             #obj.matrix_world = Matrix(([-1,0,0],[0,0,1],[0,-1,0])).to_4x4() @ obj.matrix_world
 
                             #e=Euler()
@@ -454,8 +454,8 @@ def _write(context, filepath,
                             #===============================================================================================
                             #  ANIMATION
                             #===============================================================================================
-                            if frame_count > 1:
-                                PrintTM_ANIMATION(obj, TimeValue)
+                            #if frame_count > 1:
+                            #    PrintTM_ANIMATION(obj, TimeValue)
 
                             #Material Reference
                             if EXPORT_MATERIALS:
