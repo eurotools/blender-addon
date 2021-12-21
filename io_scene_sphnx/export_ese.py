@@ -171,6 +171,16 @@ def _write(context, filepath,
                     #obj.data.transform(obj.matrix_world.inverted() @ Matrix(([-1,0,0],[0,0,-1],[0,1,0])).to_4x4() @ obj.matrix_world)
                     #obj.data.transform(Matrix(([1,0,0],[0,0,-1],[0,1,0])).to_4x4())
 
+                    #===========================================[Apply Matrix]====================================================
+                    # swy: this does the Z-up to Y-up coordinate conversion, so that things don't appear oriented sideways
+                    obj.matrix_world = Matrix(([-1, 0, 0], [0, 0, 1], [0, -1, 0])).to_4x4() @ obj.matrix_world
+
+                    # swy: this fixes only the reversed rotations (they were facing in the wrongest way) without affecting positions or scaling, which look alright
+                    #      decompose the transformation, fix rotations and compose it back as normal; the .inverted() call here is the magic word.
+                    translation_vec, rotation_quat, scale_vec = obj.matrix_world.decompose()
+                    obj.matrix_world = Matrix.Translation(translation_vec) @ rotation_quat.to_matrix().inverted().to_4x4() @ Matrix.Diagonal(scale_vec.to_4d()) 
+
+
                     if obj.type == 'MESH':
                         if hasattr(obj, 'data'):
                             #===========================================[Clone Object]====================================================
@@ -185,16 +195,6 @@ def _write(context, filepath,
                                 MeshObject = None
                             if MeshObject is None:
                                 continue
-
-                            #===========================================[Apply Matrix]====================================================
-                            # swy: this does the Z-up to Y-up coordinate conversion, so that things don't appear oriented sideways
-                            obj.matrix_world = Matrix(([-1,0,0],[0,0,1],[0,-1,0])).to_4x4() @ obj.matrix_world
-
-                            # swy: this fixes only the reversed rotations (they were facing in the wrongest way) without affecting positions or scaling, which look alright
-                            #      decompose the transformation, fix rotations and compose it back as normal; the .inverted() call here is the magic word.
-                            translation_vec, rotation_quat, scale_vec = obj.matrix_world.decompose()
-                            obj.matrix_world = Matrix.Translation(translation_vec) @ rotation_quat.to_matrix().inverted().to_4x4() @ Matrix.Diagonal(scale_vec.to_4d()) 
-
                             #===========================================[Triangulate Object]====================================================
                             bm = bmesh.new()
                             bm.from_mesh(MeshObject)
@@ -423,8 +423,8 @@ def _write(context, filepath,
                             #===============================================================================================
                             #  ANIMATION
                             #===============================================================================================
-                            #if frame_count > 1:
-                            #    PrintTM_ANIMATION(obj, TimeValue)
+                            if frame_count > 1:
+                                PrintTM_ANIMATION(obj, TimeValue)
 
                             #Material Reference
                             if EXPORT_MATERIALS:
