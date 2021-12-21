@@ -184,25 +184,21 @@ def _write(context, filepath,
                 #collection.objects.link(obj_copy)
                 return obj_copy
 
+            for obj_indx, obj_orig in enumerate(bpy.context.scene.objects):
+                obj = (obj_orig)
 
-            if 'MESH' in EXPORT_OBJECTTYPES:
-                for indx, obj_orig in enumerate(bpy.context.scene.objects):
+                # swy: convert from the blender to the euroland coordinate system; we can't do that with the
+                #      standard matrix transformations
 
-                    obj = (obj_orig)
+                # swy: this does the Z-up to Y-up coordinate conversion, so that things don't appear oriented sideways
+                obj.matrix_world = Matrix(([-1, 0, 0], [0, 0, 1], [0, -1, 0])).to_4x4() @ obj.matrix_world
 
-                    # swy: convert from the blender to the euroland coordinate system; we can't do that with the
-                    #      standard matrix transformations
+                # swy: this fixes only the reversed rotations (they were facing in the wrongest way) without affecting positions or scaling, which look alright
+                #      decompose the transformation, fix rotations and compose it back as normal; the .inverted() call here is the magic word.
+                translation_vec, rotation_quat, scale_vec = obj.matrix_world.decompose()
+                obj.matrix_world = Matrix.Translation(translation_vec) @ rotation_quat.to_matrix().inverted().to_4x4() @ Matrix.Diagonal(scale_vec.to_4d()) 
 
-                    # swy: this does the Z-up to Y-up coordinate conversion, so that things don't appear oriented sideways
-                    obj.matrix_world = Matrix(([-1, 0, 0], [0, 0, 1], [0, -1, 0])).to_4x4() @ obj.matrix_world
-
-                    # swy: this fixes only the reversed rotations (they were facing in the wrongest way) without affecting positions or scaling, which look alright
-                    #      decompose the transformation, fix rotations and compose it back as normal; the .inverted() call here is the magic word.
-                    translation_vec, rotation_quat, scale_vec = obj.matrix_world.decompose()
-                    obj.matrix_world = Matrix.Translation(translation_vec) @ rotation_quat.to_matrix().inverted().to_4x4() @ Matrix.Diagonal(scale_vec.to_4d()) 
-
-
-                    if obj.type == 'MESH':
+                if obj.type == 'MESH' and 'MESH' in EXPORT_OBJECTTYPES:
                         if hasattr(obj, 'data'):
                             #===========================================[Clone Object]====================================================
                             depsgraph = bpy.context.evaluated_depsgraph_get()
@@ -245,7 +241,7 @@ def _write(context, filepath,
                             #===============================================================================================
                             w_new_block('*MATERIAL_LIST {')
                             write_scope('*MATERIAL_COUNT %u' % GetMaterialCount())
-                            w_new_block('*MATERIAL %u {' % indx)
+                            w_new_block('*MATERIAL %u {' % obj_indx)
 
                             #Mesh Materials
                             if len(obj.material_slots) > 0:
@@ -535,7 +531,6 @@ def _write(context, filepath,
                             #      all the related geometry operations have been done
                             bm.free()
 
-            for indx, obj in enumerate(bpy.context.scene.objects):
                 if obj.type == 'ARMATURE':
                     for bidx, bone in enumerate(obj.data.bones):
                         w_new_block('*BONEOBJECT {')
@@ -548,15 +543,16 @@ def _write(context, filepath,
             #===============================================================================================
             #  CAMERA OBJECT
             #===============================================================================================
-            if 'CAMERA' in EXPORT_OBJECTTYPES:
-                CamerasList = []
+                if obj.type == 'CAMERA' and 'CAMERA' in EXPORT_OBJECTTYPES:
+                    CamerasList = []
 
-                for obj in bpy.context.scene.objects:
-                    if obj.type == 'CAMERA':
-                        CamerasList.append(obj)
-                CamerasList.sort(key = lambda o: o.name)
+                    for _obj in bpy.context.scene.objects:
+                        if _obj.type == 'CAMERA':
+                            CamerasList.append(_obj)
+                    CamerasList.sort(key = lambda o: o.name)
 
-                for CameraObj in CamerasList:
+                    CameraObj = obj
+
                     w_new_block('*CAMERAOBJECT {')
                     write_scope('*NODE_NAME "%s"' % CameraObj.name)
 
@@ -648,9 +644,7 @@ def _write(context, filepath,
             #===============================================================================================
             #  LIGHT OBJECT
             #===============================================================================================
-            if 'LIGHT' in EXPORT_OBJECTTYPES:
-                for obj in bpy.context.scene.objects:
-                    if obj.type == 'LIGHT':
+                    if obj.type == 'LIGHT' and 'LIGHT' in EXPORT_OBJECTTYPES:
                         w_new_block('*LIGHTOBJECT {')
                         write_scope('*NODE_NAME "%s"' % obj.name)
                         write_scope('*NODE_PARENT "%s"' % obj.name)
