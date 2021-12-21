@@ -32,21 +32,6 @@ def _write(context, filepath,
             EXPORT_GLOBAL_MATRIX,
         ):
 
-    # swy: convert from the blender to the euroland coordinate system; we can't do that with the
-    #      standard matrix transformations
-
-    up_vec      = Vector((0, 1, 0))
-    right_vec   = Vector((0, 1, 0))
-    forward_vec = Vector((1, 0, 0))
-
-    euroland_mtx = Matrix((up_vec,
-                           right_vec,
-                           forward_vec))
-
-    InvertAxisRotationMatrix = Matrix(((1, 0, 0),
-                                       (0, 0, 1),
-                                       (0, 1, 0)))
-
     #===============================================================================================
     #  FUNCTIONS
     #===============================================================================================
@@ -105,19 +90,13 @@ def _write(context, filepath,
                     write_scope('*NODE_NAME "%s"' % object.name)
 
                     w_new_block('*TM_ANIM_FRAMES {')
-                    last_matrix = False
-                    TimeValueCounter = 0
+
+                    last_matrix = False; TimeValueCounter = 0
+
                     for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
-
-                        bpy.context.scene.frame_set(f + 1)
-                        nex_matrix = [object.rotation_euler.copy(), object.location.copy()]
-
                         bpy.context.scene.frame_set(f)
-                        cur_matrix = [object.rotation_euler.copy(), object.location.copy()]
 
-                        if (cur_matrix != last_matrix or cur_matrix != nex_matrix):
-                            last_matrix = cur_matrix
-
+                        if obj.matrix_world != last_matrix:
                             #Write Time Value
                             write_scope_no_cr('*TM_FRAME  %5u' % f)
 
@@ -130,6 +109,7 @@ def _write(context, filepath,
 
                         #Update counter
                         TimeValueCounter += TimeValue
+                        last_matrix = obj.matrix_world.copy()
                     w_end_block('}') # NODE_NAME
                     w_end_block('}') # TM_ANIMATION
 
@@ -162,16 +142,26 @@ def _write(context, filepath,
             #===============================================================================================
             #  GEOM OBJECT
             #===============================================================================================
+
+
+            def duplicate(obj, data=True, actions=True, collection=None):
+                obj_copy = obj.copy()
+                if data:
+                    obj_copy.data = obj_copy.data.copy()
+                if actions and obj_copy.animation_data:
+                    obj_copy.animation_data.action = obj_copy.animation_data.action.copy()
+                #collection.objects.link(obj_copy)
+                return obj_copy
+
+
             if 'MESH' in EXPORT_OBJECTTYPES:
                 for indx, obj_orig in enumerate(bpy.context.scene.objects):
 
-                    obj      = obj_orig.copy()
-                    obj.data = obj_orig.data.copy()
+                    obj = (obj_orig)
 
-                    #obj.data.transform(obj.matrix_world.inverted() @ Matrix(([-1,0,0],[0,0,-1],[0,1,0])).to_4x4() @ obj.matrix_world)
-                    #obj.data.transform(Matrix(([1,0,0],[0,0,-1],[0,1,0])).to_4x4())
+                    # swy: convert from the blender to the euroland coordinate system; we can't do that with the
+                    #      standard matrix transformations
 
-                    #===========================================[Apply Matrix]====================================================
                     # swy: this does the Z-up to Y-up coordinate conversion, so that things don't appear oriented sideways
                     obj.matrix_world = Matrix(([-1, 0, 0], [0, 0, 1], [0, -1, 0])).to_4x4() @ obj.matrix_world
 
@@ -186,8 +176,6 @@ def _write(context, filepath,
                             #===========================================[Clone Object]====================================================
                             depsgraph = bpy.context.evaluated_depsgraph_get()
                             ob_for_convert = obj.evaluated_get(depsgraph)
-
-                            #obj.data.transform(Matrix(([1,0,0],[0,0,1],[0,-1,0])).to_4x4())
 
                             try:
                                 MeshObject = obj.to_mesh()
@@ -556,22 +544,33 @@ def _write(context, filepath,
                     #  CAMERA ANIMATION
                     #===============================================================================================
                     if frame_count > 1:
-                        w_new_block('*CAMERA_ANIMATION {')
+                        cam_angle_varies_in_timeline = False
+                        cam_angle = CameraObj.data.angle
 
-                        TimeValueCounter = 0
                         for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
                             bpy.context.scene.frame_set(f)
+                            if CameraObj.data.angle != cam_angle:
+                                cam_angle_varies_in_timeline = True
+                                break
+                            cam_angle = CameraObj.data.angle
+                    
+                        if True: #cam_angle_varies_in_timeline:
+                            w_new_block('*CAMERA_ANIMATION {')
 
-                            w_new_block('*CAMERA_SETTINGS {')
-                            write_scope('*TIMEVALUE %u' % TimeValueCounter)
-                            write_scope('*CAMERA_FOV %.4f'% CameraObj.data.angle)
-                            w_end_block('}')
+                            TimeValueCounter = 0
+                            for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
+                                bpy.context.scene.frame_set(f)
 
-                            TimeValueCounter += TimeValue
+                                w_new_block('*CAMERA_SETTINGS {')
+                                write_scope('*TIMEVALUE %u' % TimeValueCounter)
+                                write_scope('*CAMERA_FOV %.4f'% CameraObj.data.angle)
+                                w_end_block('}')
 
-                        w_end_block('}') # CAMERA_ANIMATION
+                                TimeValueCounter += TimeValue
 
-                        PrintTM_ANIMATION(CameraObj, TimeValue)
+                            w_end_block('}') # CAMERA_ANIMATION
+
+                            PrintTM_ANIMATION(CameraObj, TimeValue)
                         
                     #===============================================================================================
                     #  USER DATA (ONLY FOR SCRIPTS)
@@ -660,27 +659,37 @@ def _write(context, filepath,
                         #  LIGHT ANIMATION
                         #===============================================================================================
                         if frame_count > 1:
-                            w_new_block('*LIGHT_ANIMATION {')
+                            light_props_vary_in_timeline = False
+                            light_props = obj.data
 
-                            TimeValueCounter = 0
                             for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
-                                bpy.context.scene.frame_set(f)
+                                if obj.data != light_props:
+                                    light_props_vary_in_timeline = True
+                                    break
+                                light_props = obj.data
 
-                                w_new_block('*LIGHT_SETTINGS {')
-                                write_scope('*TIMEVALUE %u' % TimeValueCounter)
-                                write_scope('*COLOR %.4f %.4f %.4f' % (obj.data.color.r, obj.data.color.g, obj.data.color.b))
-                                write_scope('*FAR_ATTEN %.4f %.4f' % (obj.data.distance, obj.data.cutoff_distance))
-                                if (obj.data.type == 'SUN'):
-                                    write_scope('*HOTSPOT %u' % math.degrees(obj.data.angle))
-                                else:
-                                    write_scope('*HOTSPOT %u' % 0)
-                                w_end_block('}') # LIGHT_SETTINGS
+                            if True: #light_props_vary_in_timeline:
+                                w_new_block('*LIGHT_ANIMATION {')
 
-                                TimeValueCounter += TimeValue
+                                TimeValueCounter = 0
+                                for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
+                                    bpy.context.scene.frame_set(f)
 
-                            w_end_block('}') # LIGHT_ANIMATION
+                                    w_new_block('*LIGHT_SETTINGS {')
+                                    write_scope('*TIMEVALUE %u' % TimeValueCounter)
+                                    write_scope('*COLOR %.4f %.4f %.4f' % (obj.data.color.r, obj.data.color.g, obj.data.color.b))
+                                    write_scope('*FAR_ATTEN %.4f %.4f' % (obj.data.distance, obj.data.cutoff_distance))
+                                    if (obj.data.type == 'SUN'):
+                                        write_scope('*HOTSPOT %u' % math.degrees(obj.data.angle))
+                                    else:
+                                        write_scope('*HOTSPOT %u' % 0)
+                                    w_end_block('}') # LIGHT_SETTINGS
 
-                            PrintTM_ANIMATION(obj, TimeValue)
+                                    TimeValueCounter += TimeValue
+
+                                w_end_block('}') # LIGHT_ANIMATION
+
+                                PrintTM_ANIMATION(obj, TimeValue)
 
                         #Close light object
                         w_end_block('}')
