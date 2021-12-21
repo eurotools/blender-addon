@@ -90,21 +90,13 @@ def _write(context, filepath,
                     bpy.context.scene.frame_set(bpy.context.scene.frame_start)
                     w_new_block('*' + tag_name + ' {')
 
-                    ConvertedMatrix = object.rotation_euler.to_matrix()
-                    rot_mtx = ConvertedMatrix # @ InvertAxisRotationMatrix
-                    RotationMatrix = rot_mtx #.transposed()
-
                     #Write Matrix
                     write_scope('*NODE_NAME "%s"' % object.name)
 
                     write_scope('*TM_ROW0 %.4f %.4f %.4f' % (obj.matrix_world[0].x, obj.matrix_world[0].y, obj.matrix_world[0].z))
                     write_scope('*TM_ROW1 %.4f %.4f %.4f' % (obj.matrix_world[1].x, obj.matrix_world[1].y, obj.matrix_world[1].z))
                     write_scope('*TM_ROW2 %.4f %.4f %.4f' % (obj.matrix_world[2].x, obj.matrix_world[2].y, obj.matrix_world[2].z))
-
-                    #Flip location axis
-                    loc_conv = object.location # @ InvertAxisRotationMatrix
                     write_scope('*TM_ROW3 %.4f %.4f %.4f' % (obj.matrix_world[0].w, obj.matrix_world[1].w, obj.matrix_world[2].w))
-                    #write_scope('*TM_POS  %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
 
                     w_end_block('}')
 
@@ -123,28 +115,17 @@ def _write(context, filepath,
                         bpy.context.scene.frame_set(f)
                         cur_matrix = [object.rotation_euler.copy(), object.location.copy()]
 
-                        if True: # (cur_matrix != last_matrix or cur_matrix != nex_matrix):
+                        if (cur_matrix != last_matrix or cur_matrix != nex_matrix):
                             last_matrix = cur_matrix
-
-                            ConvertedMatrix = object.rotation_euler.to_matrix()
-
-                            rot_mtx = ConvertedMatrix # @ InvertAxisRotationMatrix
-                            RotationMatrix = rot_mtx #.transposed()
-
-
-                            thing=object.matrix_world.invert()
 
                             #Write Time Value
                             write_scope_no_cr('*TM_FRAME  %5u' % f)
 
                             #Write Matrix
-                            out.write('  %.4f %.4f %.4f' % (thing[0].x, thing[0].y, thing[0].z))
-                            out.write('  %.4f %.4f %.4f' % (thing[1].x, thing[1].y, thing[1].z))
-                            out.write('  %.4f %.4f %.4f' % (thing[2].x, thing[2].y, RotationMatrix[2].z))
-
-                            #Flip location axis
-                            loc_conv = object.location
-                            out.write('  %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
+                            out.write('  %.4f %.4f %.4f' % (obj.matrix_world[0].x, obj.matrix_world[0].y, obj.matrix_world[0].z))
+                            out.write('  %.4f %.4f %.4f' % (obj.matrix_world[1].x, obj.matrix_world[1].y, obj.matrix_world[1].z))
+                            out.write('  %.4f %.4f %.4f' % (obj.matrix_world[2].x, obj.matrix_world[2].y, obj.matrix_world[2].z))
+                            out.write('  %.4f %.4f %.4f' % (obj.matrix_world[0].w, obj.matrix_world[1].w, obj.matrix_world[2].w))
                             out.write('\n')
 
                         #Update counter
