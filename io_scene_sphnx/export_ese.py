@@ -212,7 +212,7 @@ def _write(context, filepath,
                             #MeshObject.transform(obj.matrix_world @ Matrix(([-1,0,0],[0,0,-1],[0,1,0])).to_4x4() @ obj.matrix_world.inverted())
 
                             #obj.matrix_world = Matrix(([1,0,0],[0,0,1],[0,-1,0])).to_4x4() @ obj.matrix_world
-                            #obj.matrix_world = Matrix(([-1,0,0],[0,0,1],[0,-1,0])).to_4x4() @ obj.matrix_world
+                            obj.matrix_world = Matrix(([-1,0,0],[0,0,1],[0,-1,0])).to_4x4() @ obj.matrix_world
 
                             translation, rotation, scale = obj.matrix_world.decompose()
                             obj.matrix_world = Matrix.Translation(translation) @ rotation.to_matrix().inverted().to_4x4() @ Matrix.Diagonal(scale.to_4d()) 
