@@ -591,22 +591,26 @@ def _write(context, filepath,
                         for ob in CamerasList:
                             if ob.type == 'CAMERA':
                                 #Get Camera Keyframes
-                                if ob.animation_data:
-                                    if ob.animation_data.action is not None:
-                                        Keyframe_Points_list = []
-                                        for curve in ob.animation_data.action.fcurves:
-                                            for key in curve.keyframe_points:
-                                                key_idx = int(key.co[0])
-                                                if key_idx not in Keyframe_Points_list:
-                                                    Keyframe_Points_list.append(key_idx)
-                                                    
-                                        #Calculate EuroLand Start
-                                        CamEnd = CamStart + (Keyframe_Points_list[-1] - Keyframe_Points_list[0])
-                                        write_scope('CameraScript_camera%u = %s %u %u %u %u' % (CameraNumber, ob.name, Keyframe_Points_list[0], Keyframe_Points_list[-1], CamStart, CamEnd))
-                                        
-                                        #Calculate EuroLand End
-                                        CamStart += Keyframe_Points_list[-1] + 1
-                                        CameraNumber += 1
+                                if not ob.animation_data:
+                                    continue
+
+                                if ob.animation_data.action is None:
+                                    continue
+
+                                Keyframe_Points_list = []
+                                for curve in ob.animation_data.action.fcurves:
+                                    for key in curve.keyframe_points:
+                                        key_idx = int(key.co[0])
+                                        if key_idx not in Keyframe_Points_list:
+                                            Keyframe_Points_list.append(key_idx)
+                                            
+                                #Calculate EuroLand Start
+                                CamEnd = CamStart + (Keyframe_Points_list[-1] - Keyframe_Points_list[0])
+                                write_scope('CameraScript_camera%u = %s %u %u %u %u' % (CameraNumber, ob.name, Keyframe_Points_list[0], Keyframe_Points_list[-1], CamStart, CamEnd))
+                                
+                                #Calculate EuroLand End
+                                CamStart += Keyframe_Points_list[-1] + 1
+                                CameraNumber += 1
                                         
                         w_end_block('}') # USER_DATA
                     w_end_block('}') # CAMERAOBJECT
