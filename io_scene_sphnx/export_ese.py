@@ -206,26 +206,11 @@ def _write(context, filepath,
                                 continue
 
                             #===========================================[Apply Matrix]====================================================
-                            #MeshObject.transform(euroland_mtx.transposed().to_4x4())
-                            #MeshObject.transform(Matrix(([1,0,0],[0,0,-1],[0,1,0])).to_4x4())
-
-                            #MeshObject.transform(obj.matrix_world @ Matrix(([-1,0,0],[0,0,-1],[0,1,0])).to_4x4() @ obj.matrix_world.inverted())
-
-                            #obj.matrix_world = Matrix(([1,0,0],[0,0,1],[0,-1,0])).to_4x4() @ obj.matrix_world
                             obj.matrix_world = Matrix(([-1,0,0],[0,0,1],[0,-1,0])).to_4x4() @ obj.matrix_world
 
-                            translation, rotation, scale = obj.matrix_world.decompose()
-                            obj.matrix_world = Matrix.Translation(translation) @ rotation.to_matrix().inverted().to_4x4() @ Matrix.Diagonal(scale.to_4d()) 
-
-                            #obj.matrix_world = Matrix(([-1,0,0],[0,0,1],[0,-1,0])).to_4x4() @ obj.matrix_world
-
-                            #e=Euler()
-                            #e.rotate_axis('X', radians(90))
-                            #MeshObject.transform(e.to_matrix().to_4x4())
-
-                            #if EXPORT_FLIP_POLYGONS:
-                            #MeshObject.flip_normals()
-
+                            translation_vec, rotation_quat, scale_vec = obj.matrix_world.decompose()
+                            obj.matrix_world = Matrix.Translation(translation_vec) @ rotation_quat.to_matrix().inverted().to_4x4() @ Matrix.Diagonal(scale_vec.to_4d()) 
+                            
                             #===========================================[Triangulate Object]====================================================
                             bm = bmesh.new()
                             bm.from_mesh(MeshObject)
