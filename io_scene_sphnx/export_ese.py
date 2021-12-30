@@ -175,17 +175,32 @@ def _write(context, filepath,
             #===============================================================================================
 
 
-            def duplicate(obj, data=True, actions=True, collection=None):
+            def duplicate(obj, data=True, collection=None):
                 obj_copy = obj.copy()
                 if data:
-                    obj_copy.data = obj_copy.data.copy()
-                if actions and obj_copy.animation_data:
-                    obj_copy.animation_data.action = obj_copy.animation_data.action.copy()
-                #collection.objects.link(obj_copy)
+                    obj_copy.data = obj.data.copy()
+
+                #if obj_copy.animation_data == None:
+                #    obj_copy.animation_data_create()
+
+                ad2 = obj_copy.animation_data
+                ad  = obj.animation_data
+
+                properties = [p.identifier for p in ad.bl_rna.properties if not p.is_readonly]
+
+                #for prop in propqerties:
+                #    setattr(ad2, prop, getattr(ad, prop))
+
+                if obj_copy.animation_data:
+                    obj_copy.animation_data.action = obj.animation_data.action.copy()
+
+                collection.objects.link(obj_copy)
                 return obj_copy
 
-            for obj_indx, obj_orig in enumerate(bpy.context.scene.objects):
-                obj = (obj_orig)
+            orig_objs = [a for a in bpy.context.scene.objects]
+
+            for obj_indx, obj_orig in enumerate(orig_objs):
+                obj = duplicate(obj_orig, collection=context.collection)
 
                 # swy: convert from the blender to the euroland coordinate system; we can't do that with the
                 #      standard matrix transformations
@@ -574,12 +589,12 @@ def _write(context, filepath,
                         cam_angle_varies_in_timeline = False
                         cam_angle = CameraObj.data.angle
 
-                        for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
-                            bpy.context.scene.frame_set(f)
-                            if CameraObj.data.angle != cam_angle:
-                                cam_angle_varies_in_timeline = True
-                                break
-                            cam_angle = CameraObj.data.angle
+                        #for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
+                        #    bpy.context.scene.frame_set(f)
+                        #    if CameraObj.data.angle != cam_angle:
+                        #        cam_angle_varies_in_timeline = True
+                        #        break
+                        #    cam_angle = CameraObj.data.angle
                     
                         if True: #cam_angle_varies_in_timeline:
                             w_new_block('*CAMERA_ANIMATION {')
