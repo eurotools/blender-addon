@@ -31,7 +31,13 @@ def _write(context, filepath,
             EXPORT_ANIMATION,
             EXPORT_GLOBAL_MATRIX,
         ):
-
+        
+    # swy: convert from the blender to the euroland coordinate system; we can't do that with the
+    #      standard matrix transformations
+    InvertAxisRotationMatrix = Matrix(((1, 0, 0),
+                                       (0, 0, 1),
+                                       (0, 1, 0)))
+                                       
     #===============================================================================================
     #  FUNCTIONS
     #===============================================================================================
@@ -78,11 +84,25 @@ def _write(context, filepath,
                     #Write Matrix
                     write_scope('*NODE_NAME "%s"' % object.name)
 
-                    write_scope('*TM_ROW0 %.4f %.4f %.4f' % (obj.matrix_world[0].x, obj.matrix_world[0].y, obj.matrix_world[0].z))
-                    write_scope('*TM_ROW1 %.4f %.4f %.4f' % (obj.matrix_world[1].x, obj.matrix_world[1].y, obj.matrix_world[1].z))
-                    write_scope('*TM_ROW2 %.4f %.4f %.4f' % (obj.matrix_world[2].x, obj.matrix_world[2].y, obj.matrix_world[2].z))
-                    write_scope('*TM_ROW3 %.4f %.4f %.4f' % (obj.matrix_world[0].w, obj.matrix_world[1].w, obj.matrix_world[2].w))
-
+                    if object.type == 'CAMERA':
+                        ConvertedMatrix = object.rotation_euler.to_matrix()
+                        rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
+                        RotationMatrix = rot_mtx.transposed()
+                                            
+                        #Don't modify this, the cameras rotations works fine with this code.
+                        write_scope('*TM_ROW0 %.4f %.4f %.4f' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
+                        write_scope('*TM_ROW1 %.4f %.4f %.4f' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
+                        write_scope('*TM_ROW2 %.4f %.4f %.4f' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
+                        
+                        #Flip location axis
+                        loc_conv = InvertAxisRotationMatrix @ object.location
+                        write_scope('*TM_ROW3 %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
+                        write_scope('*TM_POS  %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
+                    else:
+                        write_scope('*TM_ROW0 %.4f %.4f %.4f' % (obj.matrix_world[0].x, obj.matrix_world[0].y, obj.matrix_world[0].z))
+                        write_scope('*TM_ROW1 %.4f %.4f %.4f' % (obj.matrix_world[1].x, obj.matrix_world[1].y, obj.matrix_world[1].z))
+                        write_scope('*TM_ROW2 %.4f %.4f %.4f' % (obj.matrix_world[2].x, obj.matrix_world[2].y, obj.matrix_world[2].z))
+                        write_scope('*TM_ROW3 %.4f %.4f %.4f' % (obj.matrix_world[0].w, obj.matrix_world[1].w, obj.matrix_world[2].w))
                     w_end_block('}')
 
             def PrintTM_ANIMATION(object, TimeValue):
@@ -100,12 +120,27 @@ def _write(context, filepath,
                             #Write Time Value
                             write_scope_no_cr('*TM_FRAME  %5u' % f)
 
-                            #Write Matrix
-                            out.write('  %.4f %.4f %.4f' % (obj.matrix_world[0].x, obj.matrix_world[0].y, obj.matrix_world[0].z))
-                            out.write('  %.4f %.4f %.4f' % (obj.matrix_world[1].x, obj.matrix_world[1].y, obj.matrix_world[1].z))
-                            out.write('  %.4f %.4f %.4f' % (obj.matrix_world[2].x, obj.matrix_world[2].y, obj.matrix_world[2].z))
-                            out.write('  %.4f %.4f %.4f' % (obj.matrix_world[0].w, obj.matrix_world[1].w, obj.matrix_world[2].w))
-                            out.write('\n')
+                            if object.type == 'CAMERA':
+                                ConvertedMatrix = object.rotation_euler.to_matrix()
+                                rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
+                                RotationMatrix = rot_mtx.transposed()
+                            
+                                #Write Matrix
+                                out.write('  %.4f %.4f %.4f' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
+                                out.write('  %.4f %.4f %.4f' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
+                                out.write('  %.4f %.4f %.4f' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
+
+                                #Flip location axis
+                                loc_conv = InvertAxisRotationMatrix @ object.location
+                                out.write('  %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
+                                out.write('\n')
+                            else:
+                                #Write Matrix
+                                out.write('  %.4f %.4f %.4f' % (obj.matrix_world[0].x, obj.matrix_world[0].y, obj.matrix_world[0].z))
+                                out.write('  %.4f %.4f %.4f' % (obj.matrix_world[1].x, obj.matrix_world[1].y, obj.matrix_world[1].z))
+                                out.write('  %.4f %.4f %.4f' % (obj.matrix_world[2].x, obj.matrix_world[2].y, obj.matrix_world[2].z))
+                                out.write('  %.4f %.4f %.4f' % (obj.matrix_world[0].w, obj.matrix_world[1].w, obj.matrix_world[2].w))
+                                out.write('\n')
 
                         #Update counter
                         TimeValueCounter += TimeValue
