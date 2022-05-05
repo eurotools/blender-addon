@@ -67,50 +67,33 @@ def _write(context, filepath,
             for obj in bpy.context.scene.objects:
                 if obj.material_slots:
                     for mat in obj.material_slots:
-                        if mat.name not in SceneMaterials:
-                            #Add Material to the list
-                            SceneMaterials.append(mat.name)
+                        if mat.material:
+                            if mat.material.node_tree:
+                                if mat.name not in SceneMaterials:
+                                    #Add Material to the list
+                                    SceneMaterials.append(mat.name)
 
-                            #Print Basic Info
-                            out.write('\t*MATERIAL %d {\n' % (len(SceneMaterials) - 1))
-                            out.write('\t\t*NAME "%s"\n' % (mat.name))
+                                    #Print Basic Info
+                                    out.write('\t*MATERIAL %d {\n' % (len(SceneMaterials) - 1))
+                                    out.write('\t\t*NAME "%s"\n' % (mat.name))
 
-                            ImageNode = mat.material.node_tree.nodes.get('Image Texture', None)
-                            #Material has texture
-                            if (ImageNode is not None):
-                                DiffuseColor = mat.material.diffuse_color
-                                ImageName = ImageNode.image.name
+                                    #Get the color of this material
+                                    diffuseColor = mat.material.diffuse_color
+                                    out.write('\t\t*COL_DIFFUSE %.6f %.6f %.6f\n' % (diffuseColor[0], diffuseColor[1], diffuseColor[2]))
+                                        
+                                    #Material has texture
+                                    for x in mat.material.node_tree.nodes:
+                                        if x.type=='TEX_IMAGE':
+                                             #Check if the texture exists
+                                            if (os.path.exists(bpy.path.abspath(x.image.filepath))):
+                                                out.write('\t\t*TWOSIDED\n')
+                                                out.write('\t\t*MAP_DIFFUSE "%s"\n' % (bpy.path.abspath(x.image.filepath)))
+                                                out.write('\t\t*MAP_DIFFUSE_AMOUNT 1.0\n')
 
-                                out.write('\t\t*COL_DIFFUSE %.6f %.6f %.6f\n' % (DiffuseColor[0], DiffuseColor[1], DiffuseColor[2]))
-
-                                #Check if the texture exists
-                                if (os.path.exists(bpy.path.abspath(ImageNode.image.filepath))):
-                                    out.write('\t\t*TWOSIDED\n')
-                                    out.write('\t\t*MAP_DIFFUSE "%s"\n' % (bpy.path.abspath(ImageNode.image.filepath)))
-                                out.write('\t\t*MAP_DIFFUSE_AMOUNT 1.0\n')
-
-                                #Check if use Alpha
-                                if mat.material.blend_method.startswith('ALPHA'):
-                                    out.write('\t\t*MAP_HASALPHA\n')
-
-                                out.write('\t}\n')
-
-                            #Material has no texture
-                            else:
-                                #Get base color
-                                color = mat.material.node_tree.nodes[1].inputs['Color'].default_value
-                                for n in mat.material.node_tree.nodes:
-                                    SurfType = str(n.type)
-                                    if SurfType.startswith('BSDF'):
-                                        GetBaseColor = n.inputs.get('Base Color', None)
-                                        if GetBaseColor is not None:
-                                            base_color = n.inputs['Base Color']
-                                            color = base_color.default_value
-                                            break
-                                    
-                                #Write value
-                                out.write('\t\t*COL_DIFFUSE %.6f %.6f %.6f\n' % (color[0], color[1], color[2]))
-                                out.write('\t}\n')
+                                    #Check if use Alpha
+                                    if mat.material.blend_method.startswith('ALPHA'):
+                                        out.write('\t\t*MAP_HASALPHA\n')
+                                    out.write('\t}\n')
             out.write('}\n')
             out.write('\n')
 
