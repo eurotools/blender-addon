@@ -97,20 +97,18 @@ def _write(context, filepath,
 
                             #Material has no texture
                             else:
+                                #Get base color
+                                color = mat.material.node_tree.nodes[1].inputs['Color'].default_value
                                 for n in mat.material.node_tree.nodes:
                                     SurfType = str(n.type)
                                     if SurfType.startswith('BSDF'):
                                         GetBaseColor = n.inputs.get('Base Color', None)
                                         if GetBaseColor is not None:
                                             base_color = n.inputs['Base Color']
+                                            color = base_color.default_value
                                             break
-                                        else:
-                                            MatColor = n.inputs.get('Color', None)
-                                            if MatColor is not None:
-                                                base_color = n.inputs['Color']
-                                                break
-                                color = base_color.default_value
-
+                                    
+                                #Write value
                                 out.write('\t\t*COL_DIFFUSE %.6f %.6f %.6f\n' % (color[0], color[1], color[2]))
                                 out.write('\t}\n')
             out.write('}\n')
