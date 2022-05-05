@@ -139,9 +139,13 @@ def _write(context, filepath,
                             continue
 
                         #===========================================[Apply Matrix]====================================================
+                        '''
                         MeshObject.transform(EXPORT_GLOBAL_MATRIX @ ob_for_convert.matrix_world)
                         if (EXPORT_GLOBAL_MATRIX @ ob_for_convert.matrix_world).determinant() < 0.0:
                             MeshObject.flip_normals()
+                        '''
+                        MeshObject.transform(EXPORT_GLOBAL_MATRIX)
+                        MeshObject.update()
 
                         #===========================================[Get Object Data]====================================================
                         #Get vertex list without duplicates

@@ -31,13 +31,7 @@ def _write(context, filepath,
             EXPORT_ANIMATION,
             EXPORT_GLOBAL_MATRIX,
         ):
-        
-    # swy: convert from the blender to the euroland coordinate system; we can't do that with the
-    #      standard matrix transformations
-    InvertAxisRotationMatrix = Matrix(((1, 0, 0),
-                                       (0, 0, 1),
-                                       (0, 1, 0)))
-                                       
+
     #===============================================================================================
     #  FUNCTIONS
     #===============================================================================================
@@ -86,7 +80,7 @@ def _write(context, filepath,
 
                     if object.type == 'CAMERA':
                         ConvertedMatrix = object.rotation_euler.to_matrix()
-                        rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
+                        rot_mtx = EXPORT_GLOBAL_MATRIX @ ConvertedMatrix
                         RotationMatrix = rot_mtx.transposed()
                                             
                         #Don't modify this, the cameras rotations works fine with this code.
@@ -95,7 +89,7 @@ def _write(context, filepath,
                         write_scope('*TM_ROW2 %.4f %.4f %.4f' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
                         
                         #Flip location axis
-                        loc_conv = InvertAxisRotationMatrix @ object.location
+                        loc_conv = EXPORT_GLOBAL_MATRIX @ object.location
                         write_scope('*TM_ROW3 %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
                         write_scope('*TM_POS  %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
                     else:
@@ -122,7 +116,7 @@ def _write(context, filepath,
 
                             if object.type == 'CAMERA':
                                 ConvertedMatrix = object.rotation_euler.to_matrix()
-                                rot_mtx = InvertAxisRotationMatrix @ ConvertedMatrix
+                                rot_mtx = EXPORT_GLOBAL_MATRIX @ ConvertedMatrix
                                 RotationMatrix = rot_mtx.transposed()
                             
                                 #Write Matrix
@@ -131,7 +125,7 @@ def _write(context, filepath,
                                 out.write('  %.4f %.4f %.4f' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
 
                                 #Flip location axis
-                                loc_conv = InvertAxisRotationMatrix @ object.location
+                                loc_conv = EXPORT_GLOBAL_MATRIX @ object.location
                                 out.write('  %.4f %.4f %.4f' % (loc_conv.x, loc_conv.y, loc_conv.z))
                                 out.write('\n')
                             else:
