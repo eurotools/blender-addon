@@ -158,6 +158,7 @@ def _write(context, filepath,
             #  SCENE INFO
             #===============================================================================================
             TimeValue = 1 # 4800 / bpy.context.scene.render.fps
+            AmbientValue = bpy.context.scene.world.light_settings.ao_factor
             frame_count = bpy.context.scene.frame_end - bpy.context.scene.frame_start + 1
 
             w_new_block('*SCENE {')
@@ -166,6 +167,7 @@ def _write(context, filepath,
             write_scope('*SCENE_LASTFRAME %u '     % bpy.context.scene.frame_end)
             write_scope('*SCENE_FRAMESPEED %u '    % bpy.context.scene.render.fps)
             write_scope('*SCENE_TICKSPERFRAME %u ' % TimeValue)
+            write_scope('*SCENE_AMBIENT_STATIC %d %d	%d' %(AmbientValue, AmbientValue, AmbientValue))
             w_end_block('}') # SCENE
 
             #===============================================================================================

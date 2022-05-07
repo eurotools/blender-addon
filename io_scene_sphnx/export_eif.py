@@ -119,13 +119,8 @@ def _write(context, filepath,
                     if MeshObject is None:
                         continue
 
-                    #===========================================[Apply Matrix]====================================================
-                    '''
+                    #===========================================[Apply Matrix]====================================================                   
                     MeshObject.transform(EXPORT_GLOBAL_MATRIX @ ob_for_convert.matrix_world)
-                    if (EXPORT_GLOBAL_MATRIX @ ob_for_convert.matrix_world).determinant() < 0.0:
-                        MeshObject.flip_normals()
-                    '''
-                    MeshObject.transform(EXPORT_GLOBAL_MATRIX)
                     MeshObject.update()
 
                     #===========================================[Get Object Data]====================================================
@@ -260,12 +255,12 @@ def _write(context, filepath,
                                 flags |= 1 << 16
                         out.write('%d\n' % flags)
                     out.write('\t}\n')
+                    
+                    #===========================================[Restore Previous Location]====================================================
+                    if EXPORT_TRANSFORM_POS_ROT:
+                        obj.location = PrevLoc
                 out.write('}\n')
                 out.write('\n')
-
-                #===========================================[Restore Previous Location]====================================================
-                if EXPORT_TRANSFORM_POS_ROT:
-                    obj.location = PrevLoc
 
             #===============================================================================================
             #  GEOM NODE (POSITION IN THE ENTITIES EDITOR)
