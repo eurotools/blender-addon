@@ -73,7 +73,7 @@ def _write(context, filepath,
 
             def PrintNODE_TM(tag_name, object):
                     bpy.context.scene.frame_set(bpy.context.scene.frame_start)
-                    w_new_block('*' + tag_name + ' {')
+                    w_new_block(f'*{tag_name} {{')
 
                     #Write Matrix
                     write_scope('*NODE_NAME "%s"' % object.name)
@@ -101,7 +101,7 @@ def _write(context, filepath,
 
             def PrintTM_ANIMATION(object, TimeValue):
                     w_new_block('*TM_ANIMATION {')
-                    write_scope('*NODE_NAME "%s"' % object.name)
+                    write_scope(f'*NODE_NAME "{object.name}"')
 
                     w_new_block('*TM_ANIM_FRAMES {')
 
@@ -256,8 +256,8 @@ def _write(context, filepath,
                             #  MATERIAL LIST
                             #===============================================================================================
                             w_new_block('*MATERIAL_LIST {')
-                            write_scope('*MATERIAL_COUNT %u' % GetMaterialCount())
-                            w_new_block('*MATERIAL %u {' % obj_indx)
+                            write_scope(f'*MATERIAL_COUNT {GetMaterialCount()}')
+                            w_new_block(f'*MATERIAL {obj_indx} {{')
 
                             #Mesh Materials
                             if len(obj.material_slots) > 0:
@@ -312,8 +312,8 @@ def _write(context, filepath,
                                             base_color = principled.inputs['Base Color']
                                             color = base_color.default_value
 
-                                            w_new_block('*SUBMATERIAL %u {' % currentSubMat)
-                                            write_scope('*MATERIAL_NAME "%s"' % MatData.name)
+                                            w_new_block(f'*SUBMATERIAL {currentSubMat}')
+                                            write_scope(f'*MATERIAL_NAME "{MatData.name}"')
                                             write_scope('*MATERIAL_DIFFUSE %.4f %.4f %.4f' % ((color[0] * .5), (color[1] * .5), (color[2] * .5)))
                                             write_scope('*MATERIAL_SPECULAR %u %u %u' % (MatData.specular_color[0], MatData.specular_color[1], MatData.specular_color[2]))
                                             write_scope('*MATERIAL_SHINE %.1f' % MatData.metallic)
@@ -662,8 +662,8 @@ def _write(context, filepath,
             #===============================================================================================
                     if obj.type == 'LIGHT' and 'LIGHT' in EXPORT_OBJECTTYPES:
                         w_new_block('*LIGHTOBJECT {')
-                        write_scope('*NODE_NAME "%s"' % obj.name)
-                        write_scope('*NODE_PARENT "%s"' % obj.name)
+                        write_scope(f'*NODE_NAME "{obj.name}"')
+                        write_scope(f'*NODE_PARENT "{obj.name}"')
 
                         type_lut = {}
                         type_lut['POINT'] = 'Omni'
