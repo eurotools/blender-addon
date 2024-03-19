@@ -175,7 +175,7 @@ def _write(context, filepath,
             #===============================================================================================
 
 
-            def duplicate(obj, data=True, collection=None):
+            def duplicate(obj, data=True):
                 obj_copy = obj.copy()
                 if data:
                     obj_copy.data = obj.data.copy()
@@ -186,21 +186,22 @@ def _write(context, filepath,
                 ad2 = obj_copy.animation_data
                 ad  = obj.animation_data
 
-                properties = [p.identifier for p in ad.bl_rna.properties if not p.is_readonly]
+                #properties = [p.identifier for p in ad.bl_rna.properties if not p.is_readonly]
 
-                #for prop in propqerties:
+                #for prop in properties:
                 #    setattr(ad2, prop, getattr(ad, prop))
 
                 if obj_copy.animation_data:
                     obj_copy.animation_data.action = obj.animation_data.action.copy()
 
-                collection.objects.link(obj_copy)
                 return obj_copy
 
             orig_objs = [a for a in bpy.context.scene.objects]
 
             for obj_indx, obj_orig in enumerate(orig_objs):
-                obj = duplicate(obj_orig, collection=context.collection)
+                obj = duplicate(obj_orig)
+
+                context.collection.objects.link(obj)
 
                 # swy: convert from the blender to the euroland coordinate system; we can't do that with the
                 #      standard matrix transformations
@@ -327,7 +328,7 @@ def _write(context, filepath,
 
                             #===========================================[Print Object Data]====================================================
                             w_new_block('*GEOMOBJECT {')
-                            write_scope('*NODE_NAME "%s"' % obj.name)
+                            write_scope('*NODE_NAME "%s"' % obj_orig.name)
 
                             #Print Matrix Rotation
                             PrintNODE_TM('NODE_TM', obj)
@@ -733,6 +734,7 @@ def _write(context, filepath,
 
                         #Close light object
                         w_end_block('}')
+                context.collection.objects.unlink(obj)
             #Close File
             out.flush()
             out.close()
