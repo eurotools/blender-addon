@@ -13,8 +13,9 @@ EXPORT_VERTEX_COLORS = True
 EXPORT_APPLY_MODIFIERS=True,
 
 #------EIF SETTINGS
-EXPORT_GEOMNODES = False
-EXPORT_PLACENODE = False
+EIF_VERSION = '1.00'
+EXPORT_GEOMNODE = True
+EXPORT_PLACENODE = True
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def mesh_triangulate(me):
@@ -86,6 +87,7 @@ def write_materials(out):
                     out.write('\t\t*COL_DIFFUSE %.6f %.6f %.6f\n' % mat_wrap.base_color[:3]) # Diffuse
                     print('Kd %.6f %.6f %.6f' % mat_wrap.base_color[:3]) # Diffuse
                     # XXX TODO Find a way to handle tint and diffuse color, in a consistent way with import...
+                    out.write('\t\t*COL_SPECULAR %.6f %.6f %.6f\n' % (mat_wrap.specular, mat_wrap.specular, mat_wrap.specular))  # Specular
                     print('Ks %.6f %.6f %.6f' % (mat_wrap.specular, mat_wrap.specular, mat_wrap.specular))  # Specular
                                             
                     #==============================Swyter, maybe we could use this for the *FACESHADERS block??? 
@@ -147,8 +149,6 @@ def write_materials(out):
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def write_mesh_data(out, scene, depsgraph, materials_list):
-    # Initialize totals, these are updated each object
-
     for ob_main in scene.objects:
         # ignore dupli children
         if ob_main.parent and ob_main.parent.instance_type in {'VERTS', 'FACES'}:
@@ -366,6 +366,116 @@ def write_mesh_data(out, scene, depsgraph, materials_list):
     out.write("}\n")
 
 #-------------------------------------------------------------------------------------------------------------------------------
+def write_geom_node(out, scene, depsgraph):
+    for ob_main in scene.objects:
+        # ignore dupli children
+        if ob_main.parent and ob_main.parent.instance_type in {'VERTS', 'FACES'}:
+            continue
+
+        obs = [(ob_main, ob_main.matrix_world)]
+        if ob_main.is_instancer:
+            obs += [(dup.instance_object.original, dup.matrix_world.copy())
+                    for dup in depsgraph.object_instances
+                    if dup.parent and dup.parent.original == ob_main]
+            # ~ print(ob_main.name, 'has', len(obs) - 1, 'dupli children')
+            
+        for ob, ob_mat in obs:
+            ob_for_convert = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
+
+            try:
+                me = ob_for_convert.to_mesh()
+            except RuntimeError:
+                me = None
+
+            if me is None:
+                continue
+
+            out.write('*GEOMNODE {\n')
+            out.write('\t*NAME "%s"\n' % (me.name))
+            out.write('\t*MESH "%s"\n' % (me.name))
+            out.write('\t*WORLD_TM {\n')
+            
+            # Transformar la malla según la matriz global y local
+            transformed_matrix = EXPORT_GLOBAL_MATRIX @ ob_mat
+            transformed_matrix_transposed = transformed_matrix.transposed()
+            matrix_3x3 = transformed_matrix_transposed.to_3x3()                
+            out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (matrix_3x3[0].x, matrix_3x3[0].y, matrix_3x3[0].z, 0))
+            out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (matrix_3x3[1].x, matrix_3x3[1].y, matrix_3x3[1].z, 0))
+            out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (matrix_3x3[2].x, matrix_3x3[2].y, matrix_3x3[2].z, 0))
+            
+            #Transform position
+            transformed_position = EXPORT_GLOBAL_MATRIX @ ob.location
+            out.write('\t\t*TMROW3 %.6f %.6f %.6f %.6f\n' % (transformed_position.x,transformed_position.y,transformed_position.z, 1))
+            out.write('\t\t*POS %.6f %.6f %.6f\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
+            
+            #Transform rotation
+            transformed_rotation = transformed_matrix_transposed.to_euler('XYZ')
+            out.write('\t\t*ROT %.6f %.6f %.6f\n' % (transformed_rotation.x, transformed_rotation.y, transformed_rotation.z))
+            out.write('\t\t*SCL %.6f %.6f %.6f\n' % (ob.scale.x, ob.scale.y, ob.scale.z))
+            out.write('\t}\n')
+            out.write('\t*USER_FLAGS_COUNT %u\n' % 1)
+            out.write('\t*USER_FLAGS {\n')
+            out.write('\t\t*SET 0 0x00000000\n')
+            out.write('\t}\n')
+            out.write("}\n")
+            
+            # clean up
+            ob_for_convert.to_mesh_clear()
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def write_place_node(out, scene, depsgraph):
+    for ob_main in scene.objects:
+        # ignore dupli children
+        if ob_main.parent and ob_main.parent.instance_type in {'VERTS', 'FACES'}:
+            continue
+
+        obs = [(ob_main, ob_main.matrix_world)]
+        if ob_main.is_instancer:
+            obs += [(dup.instance_object.original, dup.matrix_world.copy())
+                    for dup in depsgraph.object_instances
+                    if dup.parent and dup.parent.original == ob_main]
+            # ~ print(ob_main.name, 'has', len(obs) - 1, 'dupli children')
+            
+        for ob, ob_mat in obs:
+            ob_for_convert = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
+
+            try:
+                me = ob_for_convert.to_mesh()
+            except RuntimeError:
+                me = None
+
+            if me is None:
+                continue
+
+            out.write('*PLACENODE {\n')
+            out.write('\t*NAME "%s"\n' % (me.name))
+            out.write('\t*MESH "%s"\n' % (me.name))
+            out.write('\t*WORLD_TM {\n')
+            
+            # Transformar la malla según la matriz global y local
+            transformed_matrix = EXPORT_GLOBAL_MATRIX @ ob_mat
+            transformed_matrix_transposed = transformed_matrix.transposed()
+            matrix_3x3 = transformed_matrix_transposed.to_3x3()                
+            out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (matrix_3x3[0].x, matrix_3x3[0].y, matrix_3x3[0].z, 0))
+            out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (matrix_3x3[1].x, matrix_3x3[1].y, matrix_3x3[1].z, 0))
+            out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (matrix_3x3[2].x, matrix_3x3[2].y, matrix_3x3[2].z, 0))
+            
+            #Transform position
+            transformed_position = EXPORT_GLOBAL_MATRIX @ ob.location
+            out.write('\t\t*TMROW3 %.6f %.6f %.6f %.6f\n' % (transformed_position.x,transformed_position.y,transformed_position.z, 1))
+            out.write('\t\t*POS %.6f %.6f %.6f\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
+            
+            #Transform rotation
+            transformed_rotation = transformed_matrix_transposed.to_euler('XYZ')
+            out.write('\t\t*ROT %.6f %.6f %.6f\n' % (transformed_rotation.x, transformed_rotation.y, transformed_rotation.z))
+            out.write('\t\t*SCL %.6f %.6f %.6f\n' % (ob.scale.x, ob.scale.y, ob.scale.z))
+            out.write('\t}\n')
+            out.write('}\n')
+            
+            # clean up
+            ob_for_convert.to_mesh_clear()
+
+#-------------------------------------------------------------------------------------------------------------------------------
 def export_file(filepath):
     depsgraph = bpy.context.evaluated_depsgraph_get()
     scene = bpy.context.scene
@@ -376,11 +486,11 @@ def export_file(filepath):
 
     # Create text file
     with open(filepath, 'w', encoding="utf8",) as out:
-        current_date = datetime.now().strftime("%A %B %d %Y %H:%M")
-
         # Header data
         out.write("*EUROCOM_INTERCHANGE_FILE 100\n")
-        out.write(f"*COMMENT Eurocom Interchange File Version 1.00 {current_date}\n\n")
+        out.write('*COMMENT Eurocom Interchange File Version 1.00 %s\n' % datetime.now().strftime("%A %B %d %Y %H:%M"))
+        out.write('*COMMENT Version of eif-plugin that wrote this file %s\n' % EIF_VERSION)
+        out.write('*COMMENT Version of blender that wrote this file %s\n\n' % bpy.app.version_string)
         out.write("*OPTIONS {\n")
         out.write("\t*COORD_SYSTEM LH\n")
         out.write("}\n\n")
@@ -388,6 +498,12 @@ def export_file(filepath):
         write_scene_data(out, scene)
         processed_materials = write_materials(out)
         write_mesh_data(out, scene, depsgraph, processed_materials)
+
+        if EXPORT_GEOMNODE:
+            write_geom_node(out, scene, depsgraph)
+
+        if EXPORT_PLACENODE:
+            write_place_node(out, scene, depsgraph)
                 
     print(f"Archivo exportado con éxito: {filepath}")
 
