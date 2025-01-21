@@ -118,15 +118,15 @@ def write_materials(out):
                     #### And now, the image textures...
                     image_map = {
                             "map_Kd": "base_color_texture",
-                            "map_Ka": None,  # ambient...
-                            "map_Ks": "specular_texture",
-                            "map_Ns": "roughness_texture",
-                            "map_d": "alpha_texture",
-                            "map_Tr": None,  # transmission roughness?
-                            "map_Bump": "normalmap_texture",
-                            "disp": None,  # displacement...
-                            "refl": "metallic_texture",
-                            "map_Ke": None  # emission...
+                            #"map_Ka": None,  # ambient...
+                            #"map_Ks": "specular_texture",
+                            #"map_Ns": "roughness_texture",
+                            #"map_d": "alpha_texture",
+                            #"map_Tr": None,  # transmission roughness?
+                            #"map_Bump": "normalmap_texture",
+                            #"disp": None,  # displacement...
+                            #"refl": "metallic_texture",
+                            #"map_Ke": None  # emission...
                             }
 
                     for key, mat_wrap_key in sorted(image_map.items()):
