@@ -187,7 +187,7 @@ def write_scene_materials(out):
     return mesh_materials
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def write_node_pivot_node(out, isPivot, obj_data, ob_mat):
+def write_node_pivot_node(out, isPivot, obj_data, ob_mat, transform_matrix = False):
     if isPivot:
         out.write('\t*NODE_PIVOT_TM {\n')
     else:
@@ -198,16 +198,20 @@ def write_node_pivot_node(out, isPivot, obj_data, ob_mat):
     out.write('\t\t*INHERIT_SCL %d %d %d\n' % (0, 0, 0))
     
     # Transformar la malla según la matriz global y local
-    transformed_matrix = EXPORT_GLOBAL_MATRIX @ ob_mat
+    if transform_matrix:
+        transformed_matrix = EXPORT_GLOBAL_MATRIX @ ob_mat
+    else:
+        transformed_matrix = ob_mat
     transformed_matrix_transposed = transformed_matrix.transposed()
-    matrix_3x3 = transformed_matrix_transposed.to_3x3()                
+    matrix_3x3 = transformed_matrix_transposed.to_3x3()             
+
     out.write('\t\t*TM_ROW0 %.6f %.6f %.6f\n' % (matrix_3x3[0].x, matrix_3x3[0].y, matrix_3x3[0].z))
     out.write('\t\t*TM_ROW1 %.6f %.6f %.6f\n' % (matrix_3x3[1].x, matrix_3x3[1].y, matrix_3x3[1].z))
     out.write('\t\t*TM_ROW2 %.6f %.6f %.6f\n' % (matrix_3x3[2].x, matrix_3x3[2].y, matrix_3x3[2].z))
     
     #Transform position
     transformed_position = EXPORT_GLOBAL_MATRIX @ obj_data.location
-    out.write('\t\t*TM_ROW3 %.6f %.6f %.6f %.6f\n' % (transformed_position.x,transformed_position.y,transformed_position.z, 1))
+    out.write('\t\t*TM_ROW3 %.6f %.6f %.6f\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
     out.write('\t\t*TM_POS %.6f %.6f %.6f\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
     
     #Transform rotation
@@ -424,27 +428,30 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
                 out.write('\t\t}\n')
 
             # Vertex Colors
-            if facecolors:
-                out.write('\t\t*MESH_NUMCVERTEX %d\n' % vcolor_unique_count)
-                out.write('\t\t*MESH_CVERTLIST {\n')
-                for idx, col in enumerate(vcolor_list):
-                    out.write('\t\t\t*MESH_VERTCOL {:<3d}  {:>6f}   {:>6f}   {:>6f}   {:>6f}\n'.format(idx, col[0], col[1], col[2], col[3]))
-                out.write('\t\t}\n') 
+            out.write('\t\t*MESH_NUMCVERTEX %d\n' % vcolor_unique_count)
+            out.write('\t\t*MESH_CVERTLIST {\n')
+            for idx, col in enumerate(vcolor_list):
+                out.write('\t\t\t*MESH_VERTCOL {:<3d}  {:>6f}   {:>6f}   {:>6f}   {:>6f}\n'.format(idx, col[0], col[1], col[2], col[3]))
+            out.write('\t\t}\n') 
+            
+            # Vertex Colors mapping
+            out.write('\t\t*MESH_NUMCVFACES %d\n' % len(me.polygons))
+            out.write('\t\t*MESH_CFACELIST {\n')
+            for f, f_index in face_index_pairs:               
                 
-                # Vertex Colors mapping
-                out.write('\t\t*MESH_NUMCVFACES %d\n' % len(me.polygons))
-                out.write('\t\t*MESH_CFACELIST {\n')
-                for f, f_index in face_index_pairs:               
-                    
-                    f_v = [(vi, me_verts[v_idx], l_idx)
-                            for vi, (v_idx, l_idx) in enumerate(zip(f.vertices, f.loop_indices))]
+                f_v = [(vi, me_verts[v_idx], l_idx)
+                        for vi, (v_idx, l_idx) in enumerate(zip(f.vertices, f.loop_indices))]
 
-                    out.write('\t\t\t*MESH_CFACE {:<3d}  '.format(f_index))
+                out.write('\t\t\t*MESH_CFACE {:<3d}  '.format(f_index))
+                if vcolor_list and facecolors:
                     for vi, v_idx, l_idx in reversed(f_v):
                         color_idx = vcolor_face_mapping[f_index][vi] if vcolor_face_mapping[f_index] else 0
                         out.write("%d   " % (color_idx))
-                    out.write("\n")
-                out.write('\t\t}\n')
+                else:
+                    for _ in range(3):
+                        out.write("%d   " % (0))
+                out.write("\n")
+            out.write('\t\t}\n')
             out.write('\t}\n')
             out.write('\t*MATERIAL_REF 0\n')
             out.write("}")
