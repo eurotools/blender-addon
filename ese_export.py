@@ -356,8 +356,8 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
             # Start printing
             out.write("*GEOMOBJECT {\n")
             out.write('\t*NODE_NAME "%s"\n' % me.name)
-            write_node_pivot_node(out, False, ob, ob_mat)
-            write_node_pivot_node(out, True, ob, ob_mat)
+            write_node_pivot_node(out, False, ob, ob_mat, False)
+            write_node_pivot_node(out, True, ob, ob_mat, False)
 
             #Mesh data
             out.write('\t*MESH {\n')
