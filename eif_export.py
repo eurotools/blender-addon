@@ -63,7 +63,7 @@ def write_scene_data(out, scene):
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def write_materials(out):
-    unique_materials = set()
+    unique_materials = []
         
     # Iterar sobre los objetos en la escena
     out.write('*MATERIALS {\n')
@@ -72,7 +72,7 @@ def write_materials(out):
             for mat in obj.data.materials:
                 if mat.name in unique_materials:
                     continue  # Saltar si el material ya fue procesado.
-                unique_materials.add(mat.name)  # Añadir el material al conjunto.
+                unique_materials.append(mat.name)  # Añadir el material al conjunto.
                 
                 out.write('\t*MATERIAL %d {\n' % (len(unique_materials) - 1))
                 out.write('\t\t*NAME "%s"\n' % (mat.name))
@@ -155,8 +155,7 @@ def write_materials(out):
                 out.write('\t}\n')
     out.write('}\n\n')
 
-    processed_materials = list(unique_materials)
-    return processed_materials
+    return unique_materials
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def write_mesh_data(out, scene, depsgraph, materials_list):
@@ -218,6 +217,8 @@ def write_mesh_data(out, scene, depsgraph, materials_list):
                 continue  # dont bother with this mesh.
 
             loops = me.loops
+            materials = me.materials[:]
+            material_names = [m.name if m else None for m in materials]
 
             # UV
             uv_unique_count = 0
@@ -353,13 +354,13 @@ def write_mesh_data(out, scene, depsgraph, materials_list):
                 # swy: we're missing exporting (optional) face normals here
 
                 # Material --- M
-                mat_index = f.material_index
-                if mat_index < len(me.materials):
-                    material = me.materials[mat_index].name
-                    material_index = materials_list.index(material)
-                    out.write("%d " % (material_index))
+                if len(material_names) > 0  and len(materials_list) > 0:
+                    f_mat = min(f.material_index, len(materials) - 1)
+                    material_name = material_names[f_mat] 
+                    mesh_material_index = materials_list.index(material_name)
+                    out.write("%d " % mesh_material_index)
                 else:
-                    out.write(" 0")  # Si no hay material, usamos 0 (o cualquier valor predeterminado)
+                    out.write("%d " % -1)
 
                 #Shaders ---S
                 # swy: we're missing exporting an optional shader index here
