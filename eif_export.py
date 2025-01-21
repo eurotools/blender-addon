@@ -1,3 +1,14 @@
+#  Copyright (c) 2020-2021 Swyter <swyterzone+sphinx@gmail.com>
+#  SPDX-License-Identifier: Zlib
+
+"""
+Name: 'Eurocom Interchange File'
+Blender: 4.3.2
+Group: 'Export'
+Tooltip: 'Blender EIF Exporter for EuroLand'
+Authors: Swyter and Jmarti856
+"""
+
 import os
 import bpy
 from mathutils import Matrix, Vector, Color
@@ -6,16 +17,15 @@ from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 
 #-------------------------------------------------------------------------------------------------------------------------------
 EXPORT_GLOBAL_MATRIX = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4()
-
 EXPORT_TRI=False
 EXPORT_UV=True
 EXPORT_VERTEX_COLORS = True
 EXPORT_APPLY_MODIFIERS=True,
 
-#------EIF SETTINGS
 EIF_VERSION = '1.00'
 EXPORT_GEOMNODE = True
 EXPORT_PLACENODE = True
+TRANSFORM_TOCENTER = True
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def mesh_triangulate(me):
@@ -134,7 +144,8 @@ def write_materials(out):
                         if not (os.path.exists(texture_path)):
                             out.write('\t\t*TWOSIDED\n')
                         out.write('\t\t*MAP_DIFFUSE "%s"\n' % (texture_path))
-
+                        out.write('\t\t*COMMENT diffuse texture class "Bitmap"\n')
+                        
                         if use_mirror:
                             out.write('\t\t*MAP_DIFFUSE_AMOUNT %.1f\n' % (mat_wrap.metallic))
                         else:
@@ -423,7 +434,7 @@ def write_geom_node(out, scene, depsgraph):
             ob_for_convert.to_mesh_clear()
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def write_place_node(out, scene, depsgraph):
+def write_place_node(out, scene, depsgraph, data_dict):
     for ob_main in scene.objects:
         # ignore dupli children
         if ob_main.parent and ob_main.parent.instance_type in {'VERTS', 'FACES'}:
@@ -461,7 +472,7 @@ def write_place_node(out, scene, depsgraph):
             out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (matrix_3x3[2].x, matrix_3x3[2].y, matrix_3x3[2].z, 0))
             
             #Transform position
-            transformed_position = EXPORT_GLOBAL_MATRIX @ ob.location
+            transformed_position = EXPORT_GLOBAL_MATRIX @ data_dict[me.name]
             out.write('\t\t*TMROW3 %.6f %.6f %.6f %.6f\n' % (transformed_position.x,transformed_position.y,transformed_position.z, 1))
             out.write('\t\t*POS %.6f %.6f %.6f\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
             
@@ -472,13 +483,32 @@ def write_place_node(out, scene, depsgraph):
             out.write('\t}\n')
             out.write('}\n')
             
+            #Restore original position
+            ob_main.location = data_dict[me.name]
+
             # clean up
             ob_for_convert.to_mesh_clear()
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def save_object_positions():
+    object_positions = {}
+
+    for obj in bpy.context.scene.objects:
+        if obj.type == 'MESH':
+            global_position = obj.location.copy()
+            object_positions[obj.data.name] = global_position
+            obj.location = [0,0,0]
+    
+    return object_positions
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def export_file(filepath):
     depsgraph = bpy.context.evaluated_depsgraph_get()
     scene = bpy.context.scene
+
+    # Transform to 0,0,0 if required
+    if TRANSFORM_TOCENTER:
+        object_positions_dict = save_object_positions()
 
     # Exit edit mode before exporting, so current object states are exported properly.
     if bpy.ops.object.mode_set.poll():
@@ -502,8 +532,8 @@ def export_file(filepath):
         if EXPORT_GEOMNODE:
             write_geom_node(out, scene, depsgraph)
 
-        if EXPORT_PLACENODE:
-            write_place_node(out, scene, depsgraph)
+        if EXPORT_PLACENODE and TRANSFORM_TOCENTER:
+            write_place_node(out, scene, depsgraph, object_positions_dict)
                 
     print(f"Archivo exportado con éxito: {filepath}")
 
