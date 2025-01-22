@@ -195,14 +195,17 @@ def write_node_pivot_node(out, isPivot, scene_object, scene_object_name):
     out.write('\t\t*INHERIT_ROT %d %d %d\n' % (0, 0, 0))
     out.write('\t\t*INHERIT_SCL %d %d %d\n' % (0, 0, 0))
     
-    matrix_data = Matrix(([-1, 0, 0], [0, 0, 1], [0, -1, 0])).to_4x4() @ scene_object
-    RotationMatrix = matrix_data.transposed()
+    if isPivot:
+        matrix_data = EXPORT_GLOBAL_MATRIX @ scene_object
+        RotationMatrix = matrix_data.transposed()
+    else:
+        RotationMatrix = Matrix.Identity(4)
     out.write('\t\t*TM_ROW0 %.6f %.6f %.6f\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
     out.write('\t\t*TM_ROW1 %.6f %.6f %.6f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
-    out.write('\t\t*TM_ROW2 %.6f %.6f %.6f\n' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z * -1))
-    out.write('\t\t*TM_ROW3 %.6f %.6f %.6f\n' % (RotationMatrix[0].w, RotationMatrix[1].w, RotationMatrix[2].w))
+    out.write('\t\t*TM_ROW2 %.6f %.6f %.6f\n' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
     
     #Transform position
+    out.write('\t\t*TM_ROW3 %.6f %.6f %.6f\n' % (RotationMatrix[0].w, RotationMatrix[1].w, RotationMatrix[2].w))
     out.write('\t\t*TM_POS %.6f %.6f %.6f\n' % (RotationMatrix[0].w, RotationMatrix[1].w, RotationMatrix[2].w))
     
     #Transform rotation
@@ -242,7 +245,8 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
                 # _must_ do this first since it re-allocs arrays
                 mesh_triangulate(me)
 
-            me.transform(EXPORT_GLOBAL_MATRIX @ ob_mat)
+            matrix_transformed = EXPORT_GLOBAL_MATRIX @ ob_mat
+            me.transform(matrix_transformed)
             # If negative scaling, we have to invert the normals...
             if ob_mat.determinant() < 0.0:
                 me.flip_normals()
