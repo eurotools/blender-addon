@@ -139,8 +139,6 @@ def write_material_data(out, mat, tab_level, base_material):
                 image = tex_wrap.image
                 if image is None:
                     continue
-
-
                 out.write(f'{tab}*MAP_DIFFUSE {{\n')
                 out.write(f'{tab}\t*MATERIAL_NAME "%s"\n' % image.name)
                 out.write(f'{tab}\t*MAP_CLASS "Bitmap"\n')
@@ -187,37 +185,30 @@ def write_scene_materials(out):
     return mesh_materials
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def write_node_pivot_node(out, isPivot, obj_data, ob_mat, transform_matrix = False):
+def write_node_pivot_node(out, isPivot, scene_object, scene_object_name):
     if isPivot:
         out.write('\t*NODE_PIVOT_TM {\n')
     else:
         out.write('\t*NODE_TM {\n')
-    out.write('\t\t*NODE_NAME "%s"\n' % (obj_data.data.name))
+    out.write('\t\t*NODE_NAME "%s"\n' % (scene_object_name))
     out.write('\t\t*INHERIT_POS %d %d %d\n' % (0, 0, 0))
     out.write('\t\t*INHERIT_ROT %d %d %d\n' % (0, 0, 0))
     out.write('\t\t*INHERIT_SCL %d %d %d\n' % (0, 0, 0))
     
-    # Transformar la malla según la matriz global y local
-    if transform_matrix:
-        transformed_matrix = EXPORT_GLOBAL_MATRIX @ ob_mat
-    else:
-        transformed_matrix = ob_mat
-    transformed_matrix_transposed = transformed_matrix.transposed()
-    matrix_3x3 = transformed_matrix_transposed.to_3x3()             
-
-    out.write('\t\t*TM_ROW0 %.6f %.6f %.6f\n' % (matrix_3x3[0].x, matrix_3x3[0].y, matrix_3x3[0].z))
-    out.write('\t\t*TM_ROW1 %.6f %.6f %.6f\n' % (matrix_3x3[1].x, matrix_3x3[1].y, matrix_3x3[1].z))
-    out.write('\t\t*TM_ROW2 %.6f %.6f %.6f\n' % (matrix_3x3[2].x, matrix_3x3[2].y, matrix_3x3[2].z))
+    matrix_data = Matrix(([-1, 0, 0], [0, 0, 1], [0, -1, 0])).to_4x4() @ scene_object
+    RotationMatrix = matrix_data.transposed()
+    out.write('\t\t*TM_ROW0 %.6f %.6f %.6f\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
+    out.write('\t\t*TM_ROW1 %.6f %.6f %.6f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
+    out.write('\t\t*TM_ROW2 %.6f %.6f %.6f\n' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z * -1))
+    out.write('\t\t*TM_ROW3 %.6f %.6f %.6f\n' % (RotationMatrix[0].w, RotationMatrix[1].w, RotationMatrix[2].w))
     
     #Transform position
-    transformed_position = EXPORT_GLOBAL_MATRIX @ obj_data.location
-    out.write('\t\t*TM_ROW3 %.6f %.6f %.6f\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
-    out.write('\t\t*TM_POS %.6f %.6f %.6f\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
+    out.write('\t\t*TM_POS %.6f %.6f %.6f\n' % (RotationMatrix[0].w, RotationMatrix[1].w, RotationMatrix[2].w))
     
     #Transform rotation
-    transformed_rotation = transformed_matrix_transposed.to_euler('XYZ')
+    transformed_rotation = RotationMatrix.to_euler('XYZ')
     out.write('\t\t*TM_ROTANGLE %.6f %.6f %.6f\n' % (transformed_rotation.x, transformed_rotation.y, transformed_rotation.z))
-    out.write('\t\t*TM_SCALE %.6f %.6f %.6f\n' % (obj_data.scale.x, obj_data.scale.y, obj_data.scale.z))
+    out.write('\t\t*TM_SCALE %.6f %.6f %.6f\n' % (1, 1, 1))
     out.write('\t\t*TM_SCALEANGLE %.6f %.6f %.6f\n' % (0, 0, 0))
     out.write('\t}\n')
 
@@ -356,8 +347,8 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
             # Start printing
             out.write("*GEOMOBJECT {\n")
             out.write('\t*NODE_NAME "%s"\n' % me.name)
-            write_node_pivot_node(out, False, ob, ob_mat, False)
-            #write_node_pivot_node(out, True, ob, ob_mat, False)
+            write_node_pivot_node(out, False, ob_mat.copy(), me.name)
+            write_node_pivot_node(out, True, ob_mat.copy(), me.name)
 
             #Mesh data
             out.write('\t*MESH {\n')
@@ -378,7 +369,7 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
                 f_v = [(vi, me_verts[v_idx], l_idx)
                         for vi, (v_idx, l_idx) in enumerate(zip(f.vertices, f.loop_indices))]
                 
-                vertex_indices = [v.index for vi, v, li in reversed(f_v)]
+                vertex_indices = [v.index for vi, v, li in (f_v)]
 
                 #Get material name from mesh materials list
                 f_mat = min(f.material_index, len(materials) - 1)
@@ -421,7 +412,7 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
                             for vi, (v_idx, l_idx) in enumerate(zip(f.vertices, f.loop_indices))]
 
                     out.write('\t\t\t*MESH_TFACE {:<3d}  '.format(f_index))
-                    for vi, v_idx, l_idx in reversed(f_v):
+                    for vi, v_idx, l_idx in (f_v):
                         uv_idx = uv_face_mapping[f_index][vi] if uv_face_mapping[f_index] else 0
                         out.write("%d   " % (uv_idx))
                     out.write("\n")
@@ -444,7 +435,7 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
 
                 out.write('\t\t\t*MESH_CFACE {:<3d}  '.format(f_index))
                 if vcolor_list and facecolors:
-                    for vi, v_idx, l_idx in reversed(f_v):
+                    for vi, v_idx, l_idx in f_v:
                         color_idx = vcolor_face_mapping[f_index][vi] if vcolor_face_mapping[f_index] else 0
                         out.write("%d   " % (color_idx))
                 else:
