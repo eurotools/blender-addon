@@ -357,7 +357,7 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
             out.write("*GEOMOBJECT {\n")
             out.write('\t*NODE_NAME "%s"\n' % me.name)
             write_node_pivot_node(out, False, ob, ob_mat, False)
-            write_node_pivot_node(out, True, ob, ob_mat, False)
+            #write_node_pivot_node(out, True, ob, ob_mat, False)
 
             #Mesh data
             out.write('\t*MESH {\n')
@@ -368,7 +368,7 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
             #Vertex
             out.write('\t\t*MESH_VERTEX_LIST {\n')
             for vindex, v in enumerate(me_verts):
-                out.write('\t\t\t*MESH_VERTEX    {:>2d}\t{:.6f}\t{:.6f}\t{:.6f}\n'.format(vindex, v.co[0], v.co[1], v.co[2]))
+                out.write('\t\t\t*MESH_VERTEX  {:>5d}   {:>6f}    {:>6f}    {:>6f}\n'.format(vindex, v.co.x, v.co.y, v.co.z))
             out.write('\t\t}\n')
             
             #Faces
@@ -401,7 +401,7 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
 
                 #Face Vertex Index
                 out.write('\t\t\t*MESH_FACE    {:>3d}:    A: {:>6d} B: {:>6d} C: {:>6d}'.format(f_index, vertex_indices[0], vertex_indices[1], vertex_indices[2]))
-                out.write('    AB: {:<6d} BC: {:<6d} CA: {:<6d}  *MESH_MTLID {:<3d}\n'.format(edges_from_ngon[0], edges_from_ngon[1], edges_from_ngon[2], mesh_material_index))
+                out.write('    AB: {:<6d} BC: {:<6d} CA: {:<6d}  *MESH_SMOOTHING   *MESH_MTLID {:<3d}\n'.format(edges_from_ngon[0], edges_from_ngon[1], edges_from_ngon[2], mesh_material_index))
             out.write('\t\t}\n')
 
             #UVs
@@ -471,8 +471,8 @@ def export_file(filepath):
     # Create text file
     with open(filepath, 'w', encoding="utf8",) as out:
         # Header data
-        out.write("*3DSMAX_EUROEXPORT	203\n")
-        out.write('*COMMENT "Eurocom Export Version  2.03 - %s\n' % datetime.now().strftime("%A %B %d %Y %H:%M"))
+        out.write("*3DSMAX_EUROEXPORT	300\n")
+        out.write('*COMMENT "Eurocom Export Version  3.00 - %s\n' % datetime.now().strftime("%A %B %d %Y %H:%M"))
         out.write('*COMMENT "Version of Blender that output this file: %s"\n' % bpy.app.version_string)
         out.write('*COMMENT "Version of ESE Plug-in: %s"\n\n' % ESE_VERSION)
 
