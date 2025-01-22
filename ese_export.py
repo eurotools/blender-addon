@@ -17,6 +17,7 @@ from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 EXPORT_GLOBAL_MATRIX = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4()
 ESE_VERSION = '1.00'
 EXPORT_TRI = True
+EXPORT_NORMALS = True
 EXPORT_UV=True
 EXPORT_VERTEX_COLORS = True
 EXPORT_APPLY_MODIFIERS=True
@@ -61,6 +62,10 @@ def adjust_rgb(r, g, b, a):
 #-------------------------------------------------------------------------------------------------------------------------------
 def veckey2d(v):
     return round(v[0], 4), round(v[1], 4)
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def veckey3d(v):
+    return round(v.x, 4), round(v.y, 4), round(v.z, 4)
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def write_scene_data(out, scene):
@@ -353,6 +358,24 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
                 vcolor_list.append(adjust_rgb(ambient_color[0], ambient_color[1], ambient_color[2], ambient_color[3]))
                 vcolor_unique_count +=1
 
+            # NORMAL, Smooth/Non smoothed.
+            if EXPORT_NORMALS:
+                normal_list = []
+                no_unique_count = 0
+                no_key = no_val = None
+                normals_to_idx = {}
+                no_get = normals_to_idx.get
+                loops_to_normals = [0] * len(loops)
+                for f, f_index in face_index_pairs:
+                    for l_idx in f.loop_indices:
+                        no_key = veckey3d(loops[l_idx].normal)
+                        no_val = no_get(no_key)
+                        if no_val is None:
+                            no_val = normals_to_idx[no_key] = no_unique_count
+                            normal_list.append(no_key)
+                            no_unique_count += 1
+                        loops_to_normals[l_idx] = no_val
+                del normals_to_idx, no_get, no_key, no_val
 
             # Start printing
             out.write("*GEOMOBJECT {\n")
@@ -463,8 +486,27 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
                         out.write("%d   " % (0))
                 out.write("\n")
             out.write('\t\t}\n')
+
+            #Normals
+            if EXPORT_NORMALS:
+                out.write('\t\t*MESH_NORMALS {\n')
+                for f, f_index in face_index_pairs:  
+                    # Imprimir la normal de la cara
+                    face_normal = loops_to_normals[f_index]
+                    out.write(f'\t\t\t*MESH_FACENORMAL {{:<3d}}  {dcf}   {dcf}   {dcf}\n'.format(f_index, normal_list[face_normal][0], normal_list[face_normal][1], normal_list[face_normal][2]))
+
+                    # Imprimir las normales de los vértices correspondientes
+                    f_v = [(vi, me_verts[v_idx], l_idx)
+                            for vi, (v_idx, l_idx) in enumerate(zip(f.vertices, f.loop_indices))]
+                    
+                    vertex_indices = [v.index for vi, v, li in (f_v)]
+                    for tri_idx in range(len(vertex_indices)):
+                        out.write(f'\t\t\t\t*MESH_VERTEXNORMAL {{:<3d}}  {dcf}   {dcf}   {dcf}\n'.format(vertex_indices[tri_idx], normal_list[face_normal][0], normal_list[face_normal][1], normal_list[face_normal][2]))
+                out.write('\t\t}\n')
+
+            #Close Mesh block
             out.write('\t}\n')
-            out.write('\t*MATERIAL_REF 0\n')
+            out.write('\t*MATERIAL_REF %d\n' % list(scene_materials.keys()).index(ob.name))
             out.write("}")
 
             # clean up
