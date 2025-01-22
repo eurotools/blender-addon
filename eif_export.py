@@ -11,7 +11,8 @@ Authors: Swyter and Jmarti856
 
 import os
 import bpy
-from mathutils import Matrix, Vector, Color
+from math import *
+from mathutils import *
 from datetime import datetime
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 
@@ -25,7 +26,7 @@ EXPORT_APPLY_MODIFIERS=True
 EIF_VERSION = '1.00'
 EXPORT_GEOMNODE = True
 EXPORT_PLACENODE = True
-TRANSFORM_TOCENTER = True
+TRANSFORM_TO_CENTER = True
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def mesh_triangulate(me):
@@ -187,7 +188,8 @@ def write_mesh_data(out, scene, depsgraph, materials_list):
                 # _must_ do this first since it re-allocs arrays
                 mesh_triangulate(me)
 
-            me.transform(EXPORT_GLOBAL_MATRIX @ ob_mat)
+            matrix_transformed = EXPORT_GLOBAL_MATRIX @ ob_mat
+            me.transform(matrix_transformed)
             # If negative scaling, we have to invert the normals...
             if ob_mat.determinant() < 0.0:
                 me.flip_normals()
@@ -300,8 +302,18 @@ def write_mesh_data(out, scene, depsgraph, materials_list):
 
             # Vert
             out.write('\t*VERTEX_LIST {\n')
-            for v in me_verts:
-                out.write('\t\t%.6f %.6f %.6f\n' % v.co[:])
+            if TRANSFORM_TO_CENTER:
+                # Calcular el desplazamiento necesario para mover el objeto al origen (0,0,0)
+                object_location = matrix_transformed.to_translation()
+                inverse_translation_matrix = Matrix.Translation(-object_location)
+
+                for v in me_verts:
+                    # Desplazar los vértices para que el objeto esté en el origen (0, 0, 0), pero con la rotación intacta
+                    new_co = inverse_translation_matrix @ v.co
+                    out.write('\t\t%.6f %.6f %.6f\n' % (new_co.x, new_co.y, new_co.z))
+            else:
+                for v in me_verts:
+                    out.write('\t\t%.6f %.6f %.6f\n' % (v.co.x, v.co.y, v.co.z))
             out.write('\t}\n')
 
             # UVs
@@ -408,12 +420,11 @@ def write_geom_node(out, scene, depsgraph):
             out.write('\t*WORLD_TM {\n')
             
             # Transformar la malla según la matriz global y local
-            transformed_matrix = EXPORT_GLOBAL_MATRIX @ ob_mat
-            transformed_matrix_transposed = transformed_matrix.transposed()
-            matrix_3x3 = transformed_matrix_transposed.to_3x3()                
-            out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (matrix_3x3[0].x, matrix_3x3[0].y, matrix_3x3[0].z, 0))
-            out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (matrix_3x3[1].x, matrix_3x3[1].y, matrix_3x3[1].z, 0))
-            out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (matrix_3x3[2].x, matrix_3x3[2].y, matrix_3x3[2].z, 0))
+            transformed_matrix = Matrix.Identity(4)
+            transformed_matrix_transposed = transformed_matrix.transposed()         
+            out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (transformed_matrix_transposed[0].x, transformed_matrix_transposed[0].y, transformed_matrix_transposed[0].z, 0))
+            out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (transformed_matrix_transposed[1].x, transformed_matrix_transposed[1].y, transformed_matrix_transposed[1].z, 0))
+            out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (transformed_matrix_transposed[2].x, transformed_matrix_transposed[2].y, transformed_matrix_transposed[2].z, 0))
             
             #Transform position
             transformed_position = EXPORT_GLOBAL_MATRIX @ ob.location
@@ -422,7 +433,7 @@ def write_geom_node(out, scene, depsgraph):
             
             #Transform rotation
             transformed_rotation = transformed_matrix_transposed.to_euler('XYZ')
-            out.write('\t\t*ROT %.6f %.6f %.6f\n' % (transformed_rotation.x, transformed_rotation.y, transformed_rotation.z))
+            out.write('\t\t*ROT %.6f %.6f %.6f\n' % (degrees(transformed_rotation.x), degrees(transformed_rotation.y), degrees(transformed_rotation.z)))
             out.write('\t\t*SCL %.6f %.6f %.6f\n' % (ob.scale.x, ob.scale.y, ob.scale.z))
             out.write('\t}\n')
             out.write('\t*USER_FLAGS_COUNT %u\n' % 1)
@@ -435,7 +446,7 @@ def write_geom_node(out, scene, depsgraph):
             ob_for_convert.to_mesh_clear()
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def write_place_node(out, scene, depsgraph, data_dict):
+def write_place_node(out, scene, depsgraph):
     for ob_main in scene.objects:
         # ignore dupli children
         if ob_main.parent and ob_main.parent.instance_type in {'VERTS', 'FACES'}:
@@ -467,49 +478,34 @@ def write_place_node(out, scene, depsgraph, data_dict):
             # Transformar la malla según la matriz global y local
             transformed_matrix = EXPORT_GLOBAL_MATRIX @ ob_mat
             transformed_matrix_transposed = transformed_matrix.transposed()
-            matrix_3x3 = transformed_matrix_transposed.to_3x3()                
-            out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (matrix_3x3[0].x, matrix_3x3[0].y, matrix_3x3[0].z, 0))
-            out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (matrix_3x3[1].x, matrix_3x3[1].y, matrix_3x3[1].z, 0))
-            out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (matrix_3x3[2].x, matrix_3x3[2].y, matrix_3x3[2].z, 0))
-            
+            if 0:
+                out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (transformed_matrix_transposed[0].x, transformed_matrix_transposed[0].y, transformed_matrix_transposed[0].z, 0))
+                out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (transformed_matrix_transposed[1].x, transformed_matrix_transposed[1].y, transformed_matrix_transposed[1].z, 0))
+                out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (transformed_matrix_transposed[2].x, transformed_matrix_transposed[2].y, transformed_matrix_transposed[2].z, 0))
+            else:
+                out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (1, 0, 0, 0))
+                out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (0, 1, 0, 0))
+                out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (0, 0, 1, 0))
+                
             #Transform position
-            transformed_position = EXPORT_GLOBAL_MATRIX @ data_dict[me.name]
+            transformed_position = EXPORT_GLOBAL_MATRIX @ ob.location
             out.write('\t\t*TMROW3 %.6f %.6f %.6f %.6f\n' % (transformed_position.x,transformed_position.y,transformed_position.z, 1))
             out.write('\t\t*POS %.6f %.6f %.6f\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
             
             #Transform rotation
             transformed_rotation = transformed_matrix_transposed.to_euler('XYZ')
-            out.write('\t\t*ROT %.6f %.6f %.6f\n' % (transformed_rotation.x, transformed_rotation.y, transformed_rotation.z))
+            out.write('\t\t*ROT %.6f %.6f %.6f\n' % (degrees(transformed_rotation.x), degrees(transformed_rotation.y), degrees(transformed_rotation.z)))
             out.write('\t\t*SCL %.6f %.6f %.6f\n' % (ob.scale.x, ob.scale.y, ob.scale.z))
             out.write('\t}\n')
             out.write('}\n')
             
-            #Restore original position
-            ob_main.location = data_dict[me.name]
-
             # clean up
             ob_for_convert.to_mesh_clear()
-
-#-------------------------------------------------------------------------------------------------------------------------------
-def save_object_positions():
-    object_positions = {}
-
-    for obj in bpy.context.scene.objects:
-        if obj.type == 'MESH':
-            global_position = obj.location.copy()
-            object_positions[obj.data.name] = global_position
-            obj.location = [0,0,0]
-    
-    return object_positions
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def export_file(filepath):
     depsgraph = bpy.context.evaluated_depsgraph_get()
     scene = bpy.context.scene
-
-    # Transform to 0,0,0 if required
-    if TRANSFORM_TOCENTER:
-        object_positions_dict = save_object_positions()
 
     # Exit edit mode before exporting, so current object states are exported properly.
     if bpy.ops.object.mode_set.poll():
@@ -533,8 +529,8 @@ def export_file(filepath):
         if EXPORT_GEOMNODE:
             write_geom_node(out, scene, depsgraph)
 
-        if EXPORT_PLACENODE and TRANSFORM_TOCENTER:
-            write_place_node(out, scene, depsgraph, object_positions_dict)
+        if EXPORT_PLACENODE and TRANSFORM_TO_CENTER:
+            write_place_node(out, scene, depsgraph)
                 
     print(f"Archivo exportado con éxito: {filepath}")
 
