@@ -22,11 +22,14 @@ EXPORT_TRI=False
 EXPORT_UV=True
 EXPORT_VERTEX_COLORS = True
 EXPORT_APPLY_MODIFIERS=True
-
 EIF_VERSION = '1.00'
+
+#SET BY USER
 EXPORT_GEOMNODE = True
 EXPORT_PLACENODE = True
 TRANSFORM_TO_CENTER = True
+DECIMAL_PRECISION = 6
+df = f'%.{DECIMAL_PRECISION}f'
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def mesh_triangulate(me):
@@ -59,7 +62,7 @@ def write_scene_data(out, scene):
     out.write('\t*LASTFRAME %s\n' % (scene.frame_end))
     out.write('\t*FRAMESPEED %s\n' % (scene.render.fps))
     out.write('\t*STATICFRAME %s\n' % (scene.frame_current))
-    out.write('\t*AMBIENTSTATIC %.6f %.6f %.6f\n' % (world_amb[0], world_amb[1], world_amb[2]))
+    out.write(f'\t*AMBIENTSTATIC {df} {df} {df}\n' % (world_amb[0], world_amb[1], world_amb[2]))
     out.write("}\n\n")
 
 #-------------------------------------------------------------------------------------------------------------------------------
@@ -90,16 +93,16 @@ def write_materials(out):
                 
                     # The Ka statement specifies the ambient reflectivity using RGB values.
                     if use_mirror:
-                        print('Ka %.6f %.6f %.6f' % (mat_wrap.metallic, mat_wrap.metallic, mat_wrap.metallic))
+                        print(f'Ka {df} {df} {df}' % (mat_wrap.metallic, mat_wrap.metallic, mat_wrap.metallic))
                     else:
-                        print('Ka %.6f %.6f %.6f' % (1.0, 1.0, 1.0))
+                        print(f'Ka {df} {df} {df}' % (1.0, 1.0, 1.0))
                         
                     # The Kd statement specifies the diffuse reflectivity using RGB values.
-                    out.write('\t\t*COL_DIFFUSE %.6f %.6f %.6f\n' % mat_wrap.base_color[:3]) # Diffuse
-                    print('Kd %.6f %.6f %.6f' % mat_wrap.base_color[:3]) # Diffuse
+                    out.write(f'\t\t*COL_DIFFUSE {df} {df} {df}\n' % mat_wrap.base_color[:3]) # Diffuse
+                    print(f'Kd {df} {df} {df}' % mat_wrap.base_color[:3]) # Diffuse
                     # XXX TODO Find a way to handle tint and diffuse color, in a consistent way with import...
-                    out.write('\t\t*COL_SPECULAR %.6f %.6f %.6f\n' % (mat_wrap.specular, mat_wrap.specular, mat_wrap.specular))  # Specular
-                    print('Ks %.6f %.6f %.6f' % (mat_wrap.specular, mat_wrap.specular, mat_wrap.specular))  # Specular
+                    out.write(f'\t\t*COL_SPECULAR {df} {df} {df}\n' % (mat_wrap.specular, mat_wrap.specular, mat_wrap.specular))  # Specular
+                    print(f'Ks {df} {df} {df}' % (mat_wrap.specular, mat_wrap.specular, mat_wrap.specular))  # Specular
                                             
                     #==============================Swyter, maybe we could use this for the *FACESHADERS block??? 
                     # See http://en.wikipedia.org/wiki/Wavefront_.obj_file for whole list of values...
@@ -310,22 +313,22 @@ def write_mesh_data(out, scene, depsgraph, materials_list):
                 for v in me_verts:
                     # Desplazar los vértices para que el objeto esté en el origen (0, 0, 0), pero con la rotación intacta
                     new_co = inverse_translation_matrix @ v.co
-                    out.write('\t\t%.6f %.6f %.6f\n' % (new_co.x, new_co.y, new_co.z))
+                    out.write(f'\t\t{df} {df} {df}\n' % (new_co.x, new_co.y, new_co.z))
             else:
                 for v in me_verts:
-                    out.write('\t\t%.6f %.6f %.6f\n' % (v.co.x, v.co.y, v.co.z))
+                    out.write(f'\t\t{df} {df} {df}\n' % (v.co.x, v.co.y, v.co.z))
             out.write('\t}\n')
 
             # UVs
             out.write('\t*UV_LIST {\n')
             for uv in uv_list:
-                out.write('\t\t%.6f %.6f\n' % uv[:])
+                out.write(f'\t\t{df} {df}\n' % uv[:])
             out.write('\t}\n')
 
             # Vertex Colors
             out.write('\t*VERTCOL_LIST {\n')
             for col in vcolor_list:
-                out.write('\t\t%.6f %.6f %.6f %.6f\n' % col[:])
+                out.write(f'\t\t{df} {df} {df} {df}\n' % col[:])
             out.write('\t}\n')
 
             # Face Format
@@ -422,19 +425,19 @@ def write_geom_node(out, scene, depsgraph):
             # Transformar la malla según la matriz global y local
             transformed_matrix = Matrix.Identity(4)
             transformed_matrix_transposed = transformed_matrix.transposed()         
-            out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (transformed_matrix_transposed[0].x, transformed_matrix_transposed[0].y, transformed_matrix_transposed[0].z, 0))
-            out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (transformed_matrix_transposed[1].x, transformed_matrix_transposed[1].y, transformed_matrix_transposed[1].z, 0))
-            out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (transformed_matrix_transposed[2].x, transformed_matrix_transposed[2].y, transformed_matrix_transposed[2].z, 0))
+            out.write(f'\t\t*TMROW0 {df} {df} {df} {df}\n' % (transformed_matrix_transposed[0].x, transformed_matrix_transposed[0].y, transformed_matrix_transposed[0].z, 0))
+            out.write(f'\t\t*TMROW1 {df} {df} {df} {df}\n' % (transformed_matrix_transposed[1].x, transformed_matrix_transposed[1].y, transformed_matrix_transposed[1].z, 0))
+            out.write(f'\t\t*TMROW2 {df} {df} {df} {df}\n' % (transformed_matrix_transposed[2].x, transformed_matrix_transposed[2].y, transformed_matrix_transposed[2].z, 0))
             
             #Transform position
             transformed_position = EXPORT_GLOBAL_MATRIX @ ob.location
-            out.write('\t\t*TMROW3 %.6f %.6f %.6f %.6f\n' % (transformed_position.x,transformed_position.y,transformed_position.z, 1))
-            out.write('\t\t*POS %.6f %.6f %.6f\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
+            out.write(f'\t\t*TMROW3 {df} {df} {df} {df}\n' % (transformed_position.x,transformed_position.y,transformed_position.z, 1))
+            out.write(f'\t\t*POS {df} {df} {df}\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
             
             #Transform rotation
             transformed_rotation = transformed_matrix_transposed.to_euler('XYZ')
-            out.write('\t\t*ROT %.6f %.6f %.6f\n' % (degrees(transformed_rotation.x), degrees(transformed_rotation.y), degrees(transformed_rotation.z)))
-            out.write('\t\t*SCL %.6f %.6f %.6f\n' % (ob.scale.x, ob.scale.y, ob.scale.z))
+            out.write(f'\t\t*ROT {df} {df} {df}\n' % (degrees(transformed_rotation.x), degrees(transformed_rotation.y), degrees(transformed_rotation.z)))
+            out.write(f'\t\t*SCL {df} {df} {df}\n' % (ob.scale.x, ob.scale.y, ob.scale.z))
             out.write('\t}\n')
             out.write('\t*USER_FLAGS_COUNT %u\n' % 1)
             out.write('\t*USER_FLAGS {\n')
@@ -479,23 +482,23 @@ def write_place_node(out, scene, depsgraph):
             transformed_matrix = EXPORT_GLOBAL_MATRIX @ ob_mat
             transformed_matrix_transposed = transformed_matrix.transposed()
             if 0:
-                out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (transformed_matrix_transposed[0].x, transformed_matrix_transposed[0].y, transformed_matrix_transposed[0].z, 0))
-                out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (transformed_matrix_transposed[1].x, transformed_matrix_transposed[1].y, transformed_matrix_transposed[1].z, 0))
-                out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (transformed_matrix_transposed[2].x, transformed_matrix_transposed[2].y, transformed_matrix_transposed[2].z, 0))
+                out.write(f'\t\t*TMROW0 {df} {df} {df} {df}\n' % (transformed_matrix_transposed[0].x, transformed_matrix_transposed[0].y, transformed_matrix_transposed[0].z, 0))
+                out.write(f'\t\t*TMROW1 {df} {df} {df} {df}\n' % (transformed_matrix_transposed[1].x, transformed_matrix_transposed[1].y, transformed_matrix_transposed[1].z, 0))
+                out.write(f'\t\t*TMROW2 {df} {df} {df} {df}\n' % (transformed_matrix_transposed[2].x, transformed_matrix_transposed[2].y, transformed_matrix_transposed[2].z, 0))
             else:
-                out.write('\t\t*TMROW0 %.6f %.6f %.6f %.6f\n' % (1, 0, 0, 0))
-                out.write('\t\t*TMROW1 %.6f %.6f %.6f %.6f\n' % (0, 1, 0, 0))
-                out.write('\t\t*TMROW2 %.6f %.6f %.6f %.6f\n' % (0, 0, 1, 0))
-                
+                out.write(f'\t\t*TMROW0 {df} {df} {df} {df}\n' % (1, 0, 0, 0))
+                out.write(f'\t\t*TMROW1 {df} {df} {df} {df}\n' % (0, 1, 0, 0))
+                out.write(f'\t\t*TMROW2 {df} {df} {df} {df}\n' % (0, 0, 1, 0))
+
             #Transform position
             transformed_position = EXPORT_GLOBAL_MATRIX @ ob.location
-            out.write('\t\t*TMROW3 %.6f %.6f %.6f %.6f\n' % (transformed_position.x,transformed_position.y,transformed_position.z, 1))
-            out.write('\t\t*POS %.6f %.6f %.6f\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
+            out.write(f'\t\t*TMROW3 {df} {df} {df} {df}\n' % (transformed_position.x,transformed_position.y,transformed_position.z, 1))
+            out.write(f'\t\t*POS {df} {df} {df}\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
             
             #Transform rotation
             transformed_rotation = transformed_matrix_transposed.to_euler('XYZ')
-            out.write('\t\t*ROT %.6f %.6f %.6f\n' % (degrees(transformed_rotation.x), degrees(transformed_rotation.y), degrees(transformed_rotation.z)))
-            out.write('\t\t*SCL %.6f %.6f %.6f\n' % (ob.scale.x, ob.scale.y, ob.scale.z))
+            out.write(f'\t\t*ROT {df} {df} {df}\n' % (degrees(transformed_rotation.x), degrees(transformed_rotation.y), degrees(transformed_rotation.z)))
+            out.write(f'\t\t*SCL {df} {df} {df}\n' % (ob.scale.x, ob.scale.y, ob.scale.z))
             out.write('\t}\n')
             out.write('}\n')
             
