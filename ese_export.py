@@ -190,7 +190,7 @@ def write_scene_materials(out):
     return mesh_materials
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def write_node_pivot_node(out, isPivot, scene_object, scene_object_name):
+def write_node_pivot_node(out, isPivot, scene_object, scene_object_name, data_object):
     if isPivot:
         out.write('\t*NODE_PIVOT_TM {\n')
     else:
@@ -200,18 +200,19 @@ def write_node_pivot_node(out, isPivot, scene_object, scene_object_name):
     out.write('\t\t*INHERIT_ROT %d %d %d\n' % (0, 0, 0))
     out.write('\t\t*INHERIT_SCL %d %d %d\n' % (0, 0, 0))
     
-    if isPivot:
-        matrix_data = EXPORT_GLOBAL_MATRIX @ scene_object
-        RotationMatrix = matrix_data.transposed()
-    else:
+    matrix_data = EXPORT_GLOBAL_MATRIX @ scene_object
+    RotationMatrix = matrix_data.transposed()
+    if not isPivot:
         RotationMatrix = Matrix.Identity(4)
+        
     out.write(f'\t\t*TM_ROW0 {df} {df} {df}\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
     out.write(f'\t\t*TM_ROW1 {df} {df} {df}\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
     out.write(f'\t\t*TM_ROW2 {df} {df} {df}\n' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
     
     #Transform position
-    out.write(f'\t\t*TM_ROW3 {df} {df} {df}\n' % (RotationMatrix[0].w, RotationMatrix[1].w, RotationMatrix[2].w))
-    out.write(f'\t\t*TM_POS {df} {df} {df}\n' % (RotationMatrix[0].w, RotationMatrix[1].w, RotationMatrix[2].w))
+    transformed_position = EXPORT_GLOBAL_MATRIX @ data_object.location
+    out.write(f'\t\t*TM_ROW3 {df} {df} {df}\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
+    out.write(f'\t\t*TM_POS {df} {df} {df}\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
     
     #Transform rotation
     transformed_rotation = RotationMatrix.to_euler('XYZ')
@@ -356,8 +357,8 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
             # Start printing
             out.write("*GEOMOBJECT {\n")
             out.write('\t*NODE_NAME "%s"\n' % me.name)
-            write_node_pivot_node(out, False, ob_mat.copy(), me.name)
-            write_node_pivot_node(out, True, ob_mat.copy(), me.name)
+            write_node_pivot_node(out, False, ob_mat.copy(), me.name, ob)
+            write_node_pivot_node(out, True, ob_mat.copy(), me.name, ob)
 
             #Mesh data
             out.write('\t*MESH {\n')
