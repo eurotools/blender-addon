@@ -21,6 +21,7 @@ EXPORT_TRI = True
 EXPORT_UV=True
 EXPORT_VERTEX_COLORS = True
 EXPORT_APPLY_MODIFIERS=True
+TRANSFORM_TO_CENTER = True
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def tri_edge_is_from_ngon(polygon, tri_loop_indices, tri_idx, mesh_loops):
@@ -362,9 +363,19 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
 
             #Vertex
             out.write('\t\t*MESH_VERTEX_LIST {\n')
-            for vindex, v in enumerate(me_verts):
-                out.write('\t\t\t*MESH_VERTEX  {:>5d}   {:>6f}    {:>6f}    {:>6f}\n'.format(vindex, v.co.x, v.co.y, v.co.z))
-            out.write('\t\t}\n')
+            if TRANSFORM_TO_CENTER:
+                # Calcular el desplazamiento necesario para mover el objeto al origen (0,0,0)
+                object_location = matrix_transformed.to_translation()
+                inverse_translation_matrix = Matrix.Translation(-object_location)
+
+                for vindex, v in enumerate(me_verts):
+                    # Desplazar los vértices para que el objeto esté en el origen (0, 0, 0), pero con la rotación intacta
+                    new_co = inverse_translation_matrix @ v.co
+                    out.write('\t\t\t*MESH_VERTEX  {:>5d}   {:>6f}    {:>6f}    {:>6f}\n'.format(vindex, new_co.x, new_co.y, new_co.z))
+            else:
+                for vindex, v in enumerate(me_verts):
+                    out.write('\t\t\t*MESH_VERTEX  {:>5d}   {:>6f}    {:>6f}    {:>6f}\n'.format(vindex, v.co.x, v.co.y, v.co.z))
+            out.write('\t\t}\n')    
             
             #Faces
             out.write('\t\t*MESH_FACE_LIST {\n')
