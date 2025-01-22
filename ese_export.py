@@ -16,12 +16,16 @@ from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 #-------------------------------------------------------------------------------------------------------------------------------
 EXPORT_GLOBAL_MATRIX = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4()
 ESE_VERSION = '1.00'
-
 EXPORT_TRI = True
 EXPORT_UV=True
 EXPORT_VERTEX_COLORS = True
 EXPORT_APPLY_MODIFIERS=True
+
+#SET BY USER
 TRANSFORM_TO_CENTER = True
+DECIMAL_PRECISION = 6
+df = f'%.{DECIMAL_PRECISION}f'
+dcf = f'{{:>{DECIMAL_PRECISION}f}}'
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def tri_edge_is_from_ngon(polygon, tri_loop_indices, tri_idx, mesh_loops):
@@ -77,8 +81,8 @@ def write_scene_data(out, scene):
     out.write('\t*SCENE_LASTFRAME %s\n' % last_frame)
     out.write('\t*SCENE_FRAMESPEED %s\n' % frame_rate)
     out.write('\t*SCENE_TICKSPERFRAME %s\n' % ticks_per_frame)
-    out.write('\t*SCENE_BACKGROUND_STATIC %.6f %.6f %.6f\n' % (world_amb[0], world_amb[1], world_amb[2]))
-    out.write('\t*SCENE_AMBIENT_STATIC %.6f %.6f %.6f\n' % (world_amb[0], world_amb[1], world_amb[2]))
+    out.write(f'\t*SCENE_BACKGROUND_STATIC {df} {df} {df}\n' % (world_amb[0], world_amb[1], world_amb[2]))
+    out.write(f'\t*SCENE_AMBIENT_STATIC {df} {df} {df}\n' % (world_amb[0], world_amb[1], world_amb[2]))
     out.write("}\n\n")
     
 #-------------------------------------------------------------------------------------------------------------------------------
@@ -97,15 +101,15 @@ def write_material_data(out, mat, tab_level, base_material):
 
         # The Ka statement specifies the ambient reflectivity using RGB values.
         if use_mirror:
-            out.write(f'{tab}*MATERIAL_AMBIENT %.6f %.6f %.6f\n' % (mat_wrap.metallic, mat_wrap.metallic, mat_wrap.metallic))
+            out.write(f'{tab}*MATERIAL_AMBIENT {df} {df} {df}\n' % (mat_wrap.metallic, mat_wrap.metallic, mat_wrap.metallic))
         else:
-            out.write(f'{tab}*MATERIAL_AMBIENT %.6f %.6f %.6f\n' % (1.0, 1.0, 1.0))
+            out.write(f'{tab}*MATERIAL_AMBIENT {df} {df} {df}\n' % (1.0, 1.0, 1.0))
             
         # The Kd statement specifies the diffuse reflectivity using RGB values.
-        out.write(f'{tab}*MATERIAL_DIFFUSE %.6f %.6f %.6f\n' % mat_wrap.base_color[:3]) # Diffuse
+        out.write(f'{tab}*MATERIAL_DIFFUSE {df} {df} {df}\n' % mat_wrap.base_color[:3]) # Diffuse
         
         # XXX TODO Find a way to handle tint and diffuse color, in a consistent way with import...
-        out.write(f'{tab}*MATERIAL_SPECULAR %.6f %.6f %.6f\n' % (mat_wrap.specular, mat_wrap.specular, mat_wrap.specular))  # Specular
+        out.write(f'{tab}*MATERIAL_SPECULAR {df} {df} {df}\n' % (mat_wrap.specular, mat_wrap.specular, mat_wrap.specular))  # Specular
 
         shine = 1.0 - mat_wrap.roughness
         out.write(f'{tab}*MATERIAL_SHINE %.1f\n' % shine)
@@ -201,19 +205,19 @@ def write_node_pivot_node(out, isPivot, scene_object, scene_object_name):
         RotationMatrix = matrix_data.transposed()
     else:
         RotationMatrix = Matrix.Identity(4)
-    out.write('\t\t*TM_ROW0 %.6f %.6f %.6f\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
-    out.write('\t\t*TM_ROW1 %.6f %.6f %.6f\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
-    out.write('\t\t*TM_ROW2 %.6f %.6f %.6f\n' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
+    out.write(f'\t\t*TM_ROW0 {df} {df} {df}\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
+    out.write(f'\t\t*TM_ROW1 {df} {df} {df}\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
+    out.write(f'\t\t*TM_ROW2 {df} {df} {df}\n' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
     
     #Transform position
-    out.write('\t\t*TM_ROW3 %.6f %.6f %.6f\n' % (RotationMatrix[0].w, RotationMatrix[1].w, RotationMatrix[2].w))
-    out.write('\t\t*TM_POS %.6f %.6f %.6f\n' % (RotationMatrix[0].w, RotationMatrix[1].w, RotationMatrix[2].w))
+    out.write(f'\t\t*TM_ROW3 {df} {df} {df}\n' % (RotationMatrix[0].w, RotationMatrix[1].w, RotationMatrix[2].w))
+    out.write(f'\t\t*TM_POS {df} {df} {df}\n' % (RotationMatrix[0].w, RotationMatrix[1].w, RotationMatrix[2].w))
     
     #Transform rotation
     transformed_rotation = RotationMatrix.to_euler('XYZ')
-    out.write('\t\t*TM_ROTANGLE %.6f %.6f %.6f\n' % (transformed_rotation.x, transformed_rotation.y, transformed_rotation.z))
-    out.write('\t\t*TM_SCALE %.6f %.6f %.6f\n' % (1, 1, 1))
-    out.write('\t\t*TM_SCALEANGLE %.6f %.6f %.6f\n' % (0, 0, 0))
+    out.write(f'\t\t*TM_ROTANGLE {df} {df} {df}\n' % (transformed_rotation.x, transformed_rotation.y, transformed_rotation.z))
+    out.write(f'\t\t*TM_SCALE {df} {df} {df}\n' % (1, 1, 1))
+    out.write(f'\t\t*TM_SCALEANGLE {df} {df} {df}\n' % (0, 0, 0))
     out.write('\t}\n')
 
 #-------------------------------------------------------------------------------------------------------------------------------
@@ -371,10 +375,10 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
                 for vindex, v in enumerate(me_verts):
                     # Desplazar los vértices para que el objeto esté en el origen (0, 0, 0), pero con la rotación intacta
                     new_co = inverse_translation_matrix @ v.co
-                    out.write('\t\t\t*MESH_VERTEX  {:>5d}   {:>6f}    {:>6f}    {:>6f}\n'.format(vindex, new_co.x, new_co.y, new_co.z))
+                    out.write(f'\t\t\t*MESH_VERTEX  {{:>5d}}   {dcf}    {dcf}    {dcf}\n'.format(vindex, new_co.x, new_co.y, new_co.z))
             else:
                 for vindex, v in enumerate(me_verts):
-                    out.write('\t\t\t*MESH_VERTEX  {:>5d}   {:>6f}    {:>6f}    {:>6f}\n'.format(vindex, v.co.x, v.co.y, v.co.z))
+                    out.write(f'\t\t\t*MESH_VERTEX  {{:>5d}}   {dcf}    {dcf}    {dcf}\n'.format(vindex, v.co.x, v.co.y, v.co.z))
             out.write('\t\t}\n')    
             
             #Faces
@@ -415,7 +419,7 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
                 out.write('\t\t*MESH_NUMTVERTEX %d\n' % uv_unique_count)
                 out.write('\t\t*MESH_TVERTLIST {\n')
                 for idx, TextUV in enumerate(uv_list):
-                    out.write('\t\t\t*MESH_TVERT {:<3d}  {:>6f}   {:>6f}   {:>6f}\n'.format(idx, TextUV[0], TextUV[1], 0))
+                    out.write(f'\t\t\t*MESH_TVERT {{:<3d}}  {dcf}   {dcf}   {dcf}\n'.format(idx, TextUV[0], TextUV[1], 0))
                 out.write('\t\t}\n') 
                 
                 #UVs mapping
@@ -437,7 +441,7 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
             out.write('\t\t*MESH_NUMCVERTEX %d\n' % vcolor_unique_count)
             out.write('\t\t*MESH_CVERTLIST {\n')
             for idx, col in enumerate(vcolor_list):
-                out.write('\t\t\t*MESH_VERTCOL {:<3d}  {:>6f}   {:>6f}   {:>6f}   {:>6f}\n'.format(idx, col[0], col[1], col[2], col[3]))
+                out.write(f'\t\t\t*MESH_VERTCOL {{:<3d}}  {dcf}   {dcf}   {dcf}   {dcf}\n'.format(idx, col[0], col[1], col[2], col[3]))
             out.write('\t\t}\n') 
             
             # Vertex Colors mapping
