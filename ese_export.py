@@ -24,7 +24,7 @@ EXPORT_VERTEX_COLORS = True
 EXPORT_APPLY_MODIFIERS=True
 
 #SET BY USER
-EXPORT_MESH = True
+EXPORT_MESH = False
 EXPORT_CAMERAS = True
 EXPORT_LIGHTS = True
 EXPORT_ANIMATIONS = True
@@ -35,6 +35,7 @@ dcf = f'{{:>{DECIMAL_PRECISION}f}}'
 
 #Global variables
 FRAMES_COUNT = 0
+TICKS_PER_FRAME = 0
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def tri_edge_is_from_ngon(polygon, tri_loop_indices, tri_idx, mesh_loops):
@@ -77,7 +78,7 @@ def veckey3d(v):
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def write_scene_data(out, scene):
-    global FRAMES_COUNT
+    global FRAMES_COUNT, TICKS_PER_FRAME
 
     #Get scene data
     first_frame = scene.frame_start
@@ -85,9 +86,8 @@ def write_scene_data(out, scene):
     frame_rate = scene.render.fps
     FRAMES_COUNT = last_frame - first_frame + 1
 
-    #tick_frequency = 4800 #Matches original examples
-    #ticks_per_frame = tick_frequency // frame_rate
-    ticks_per_frame = 1
+    tick_frequency = 4800 #Matches original examples
+    TICKS_PER_FRAME = tick_frequency // frame_rate
 
     world_amb = scene.world.color if scene.world else (0.8, 0.8, 0.8)
 
@@ -97,7 +97,7 @@ def write_scene_data(out, scene):
     out.write('\t*SCENE_FIRSTFRAME %s\n' % first_frame)
     out.write('\t*SCENE_LASTFRAME %s\n' % last_frame)
     out.write('\t*SCENE_FRAMESPEED %s\n' % frame_rate)
-    out.write('\t*SCENE_TICKSPERFRAME %s\n' % ticks_per_frame)
+    out.write('\t*SCENE_TICKSPERFRAME %s\n' % TICKS_PER_FRAME)
     out.write(f'\t*SCENE_BACKGROUND_STATIC {df} {df} {df}\n' % (world_amb[0], world_amb[1], world_amb[2]))
     out.write(f'\t*SCENE_AMBIENT_STATIC {df} {df} {df}\n' % (world_amb[0], world_amb[1], world_amb[2]))
     out.write("}\n\n")
@@ -243,10 +243,13 @@ def write_node_pivot_node(out, isPivot, obj_matrix_data):
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def write_animation_node(out, ob, ob_mat, ob_for_convert):
+    global TICKS_PER_FRAME
+
     out.write('\t*TM_ANIMATION {\n')
     out.write('\t\t*TM_ANIMATION "%s"\n' % ob_for_convert.name)
     previous_matrix_data = None
-    
+
+    frameIndex = 0 
     out.write('\t\t*TM_ANIM_FRAMES {\n')
     for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
         bpy.context.scene.frame_set(f)
@@ -275,7 +278,9 @@ def write_animation_node(out, ob, ob_mat, ob_for_convert):
             RotationMatrix = matrix_data.transposed()          
 
             #Print rotation
-            out.write('\t\t\t*TM_FRAME  {:<5d}'.format(f))
+            if f > 0:
+                frameIndex += TICKS_PER_FRAME
+            out.write('\t\t\t*TM_FRAME  {:<5d}'.format(frameIndex))
             if ob.type == 'CAMERA':
                 out.write(f' {df} {df} {df}' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
                 out.write(f' {df} {df} {df}' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
@@ -732,6 +737,8 @@ def write_camera_settings(out, camera_object, camera_data, current_frame, tab_le
 def write_camera_data(out, scene, depsgraph):
     global FRAMES_COUNT
 
+    CamerasList = sorted([obj for obj in bpy.context.scene.objects if obj.type == 'CAMERA'], key=lambda obj: obj.name)
+
     for ob_main in scene.objects:
         # Check if the object is a camera source
         if ob_main.type != 'CAMERA':
@@ -767,7 +774,7 @@ def write_camera_data(out, scene, depsgraph):
         # Imprime el bloque con las propiedades de la cámara
         camera_type = camera_data.type
         out.write("*CAMERAOBJECT {\n")
-        out.write('\t*NODE_NAME %s\n' % ob.name)
+        out.write('\t*NODE_NAME "%s"\n' % ob.name)
         out.write('\t*CAMERA_TYPE %s\n' % camera_type)
         write_node_pivot_node(out, False, obj_matrix_data)
         write_camera_settings(out, camera_data, ob, scene.frame_current)
@@ -777,7 +784,8 @@ def write_camera_data(out, scene, depsgraph):
         if FRAMES_COUNT > 1 and EXPORT_ANIMATIONS:
             out.write('\t*CAMERA_ANIMATION {\n')
             previous_camera_data = None
-
+            frameIndex = 0
+            
             for frame in range(scene.frame_start, scene.frame_end + 1):
                 scene.frame_set(frame)
 
@@ -796,13 +804,53 @@ def write_camera_data(out, scene, depsgraph):
                     camera_data.clip_end != previous_camera_data.clip_end or
                     camera_data.angle != previous_camera_data.angle):
 
-                    # Si hay alguna propiedad diferente, escribimos la configuración de la luz
-                    write_camera_settings(out, camera_data, ob, scene.frame_current, 2)
+                    # Si hay alguna propiedad diferente, escribimos la configuración de la cámara
+                    write_camera_settings(out, camera_data, ob, frameIndex, 2)
 
                     # Actualizamos los datos anteriores con los datos actuales
                     previous_camera_data = camera_data
+                    frameIndex += TICKS_PER_FRAME
             out.write('\t}\n')
             write_animation_node(out, ob, ob_mat, ob_for_convert)
+            
+            
+        #===============================================================================================
+        #  USER DATA (ONLY FOR SCRIPTS)
+        #===============================================================================================
+        # swy: Jmarti856 found that this is needed for the time range of each camera to show up properly in
+        #      the script timeline, without this all of them cover the entire thing from beginning to end
+        if ob_main == CamerasList[-1] and len(CamerasList) > 1:
+            out.write('\t*USER_DATA %u {\n' % 0)
+            out.write('\t\tCameraScript = %u\n' % 1)
+            out.write('\t\tCameraScript_numCameras = %u\n' % len(CamerasList))
+            out.write('\t\tCameraScript_globalOffset = %u\n' % 0)
+
+            # Print Cameras Info
+            CameraNumber = 1
+            CamStart = 0
+
+            for ob in CamerasList:
+                if ob.type == 'CAMERA':
+                    # Get Camera Keyframes
+                    if not ob.animation_data or ob.animation_data.action is None:
+                        continue
+
+                    Keyframe_Points_list = sorted({int(key.co[0]) for curve in ob.animation_data.action.fcurves for key in curve.keyframe_points})
+
+                    if not Keyframe_Points_list:
+                        continue
+
+                    # Calculate keyframe range and cumulative script offsets
+                    FirstKeyframe = Keyframe_Points_list[0]
+                    LastKeyframe = Keyframe_Points_list[-1]
+                    CamEnd = CamStart + (LastKeyframe - FirstKeyframe)
+                    out.write('\t\tCameraScript_camera%u = %s %u %u %u %u\n' % (CameraNumber, ob.name, FirstKeyframe, LastKeyframe, CamStart, CamEnd))
+
+                    # Update CamStart for the next camera
+                    CamStart = CamEnd + 1
+                    CameraNumber += 1
+
+            out.write('\t}\n')  # USER_DATA
         out.write("}\n")
 
 #-------------------------------------------------------------------------------------------------------------------------------
@@ -827,11 +875,9 @@ def export_file(filepath):
 
         write_scene_data(out, scene)
         
-        #Mesh
-        scene_materials = write_scene_materials(out)
-
         #scene objects data
         if EXPORT_MESH:
+            scene_materials = write_scene_materials(out)
             write_mesh_data(out, scene, depsgraph, scene_materials)    
         if EXPORT_CAMERAS:
             write_camera_data(out, scene, depsgraph)
