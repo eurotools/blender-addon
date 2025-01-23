@@ -24,7 +24,7 @@ EXPORT_VERTEX_COLORS = True
 EXPORT_APPLY_MODIFIERS=True
 
 #SET BY USER
-EXPORT_MESH = False
+EXPORT_MESH = True
 EXPORT_CAMERAS = True
 EXPORT_LIGHTS = True
 EXPORT_ANIMATIONS = True
@@ -254,12 +254,7 @@ def write_animation_node(out, ob, ob_mat, ob_for_convert):
     for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
         bpy.context.scene.frame_set(f)
       
-        # Apply transformation matrix to light object
-        if ob.type == 'CAMERA':
-            matrix_transformed = EXPORT_GLOBAL_MATRIX @ ob_mat
-        else:
-            matrix_transformed = EXPORT_GLOBAL_MATRIX @ ob_mat
-            matrix_transformed.transposed()
+        matrix_transformed = EXPORT_GLOBAL_MATRIX @ ob_mat
 
         obj_matrix_data = {
             "name" : ob.name,
@@ -277,21 +272,20 @@ def write_animation_node(out, ob, ob_mat, ob_for_convert):
             matrix_data = obj_matrix_data["matrix_transformed"]
             RotationMatrix = matrix_data.transposed()          
 
-            #Print rotation
+            # Calculate frame index
             if f > 0:
                 frameIndex += TICKS_PER_FRAME
+
+            #Print rotation
             out.write('\t\t\t*TM_FRAME  {:<5d}'.format(frameIndex))
             if ob.type == 'CAMERA':
                 out.write(f' {df} {df} {df}' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
                 out.write(f' {df} {df} {df}' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
                 out.write(f' {df} {df} {df}' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
-            
             else:
-                RotationMatrix = EXPORT_GLOBAL_MATRIX @ obj_matrix_data["rotation"]
-                RotationMatrix = RotationMatrix.transposed()
-                out.write(f' {df} {df} {df}' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
-                out.write(f' {df} {df} {df}' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
-                out.write(f' {df} {df} {df}' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
+                out.write(f' {df} {df} {df}' % (RotationMatrix[0].x * -1, RotationMatrix[0].y * -1, RotationMatrix[0].z * -1))
+                out.write(f' {df} {df} {df}' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
+                out.write(f' {df} {df} {df}' % (RotationMatrix[2].x,      RotationMatrix[2].y,      RotationMatrix[2].z     ))
 
             #Transform position
             transformed_position = EXPORT_GLOBAL_MATRIX @ obj_matrix_data["location"]
