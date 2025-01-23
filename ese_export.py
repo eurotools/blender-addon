@@ -9,6 +9,7 @@ Tooltip: 'Blender ESE Exporter for EuroLand'
 Authors: Swyter and Jmarti856
 """
 import bpy
+from math import degrees
 from mathutils import Matrix
 from datetime import datetime
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
@@ -27,6 +28,10 @@ TRANSFORM_TO_CENTER = True
 DECIMAL_PRECISION = 6
 df = f'%.{DECIMAL_PRECISION}f'
 dcf = f'{{:>{DECIMAL_PRECISION}f}}'
+
+#Global variables
+FRAMES_COUNT = 0
+TICKS_PER_FRAME = 1
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def tri_edge_is_from_ngon(polygon, tri_loop_indices, tri_idx, mesh_loops):
@@ -69,13 +74,16 @@ def veckey3d(v):
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def write_scene_data(out, scene):
+    global FRAMES_COUNT, TICKS_PER_FRAME
+
     #Get scene data
     first_frame = scene.frame_start
     last_frame = scene.frame_end
     frame_rate = scene.render.fps
-    
+    FRAMES_COUNT = last_frame - first_frame + 1
+
     tick_frequency = 4800 #Matches original examples
-    ticks_per_frame = tick_frequency // frame_rate
+    TICKS_PER_FRAME = tick_frequency // frame_rate
     
     world_amb = scene.world.color if scene.world else (0.8, 0.8, 0.8)
 
@@ -85,7 +93,7 @@ def write_scene_data(out, scene):
     out.write('\t*SCENE_FIRSTFRAME %s\n' % first_frame)
     out.write('\t*SCENE_LASTFRAME %s\n' % last_frame)
     out.write('\t*SCENE_FRAMESPEED %s\n' % frame_rate)
-    out.write('\t*SCENE_TICKSPERFRAME %s\n' % ticks_per_frame)
+    out.write('\t*SCENE_TICKSPERFRAME %s\n' % TICKS_PER_FRAME)
     out.write(f'\t*SCENE_BACKGROUND_STATIC {df} {df} {df}\n' % (world_amb[0], world_amb[1], world_amb[2]))
     out.write(f'\t*SCENE_AMBIENT_STATIC {df} {df} {df}\n' % (world_amb[0], world_amb[1], world_amb[2]))
     out.write("}\n\n")
@@ -227,6 +235,48 @@ def write_node_pivot_node(out, isPivot, obj_matrix_data):
     scale = EXPORT_GLOBAL_MATRIX @ obj_matrix_data["scale"]
     out.write(f'\t\t*TM_SCALE {df} {df} {df}\n' % (scale.x, scale.y, scale.z))
     out.write(f'\t\t*TM_SCALEANGLE {df} {df} {df}\n' % (0, 0, 0))
+    out.write('\t}\n')
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def write_animation_node(out, ob, ob_mat, ob_for_convert):
+    out.write('\t*TM_ANIMATION {\n')
+    out.write('\t\t*TM_ANIMATION "%s"\n' % ob_for_convert.name)
+    previous_matrix_data = None
+    
+    out.write('\t\t*TM_ANIM_FRAMES {\n')
+    for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
+        bpy.context.scene.frame_set(f)
+      
+        # Apply transformation matrix to light object
+        matrix_transformed = EXPORT_GLOBAL_MATRIX @ ob_mat
+        obj_matrix_data = {
+            "name" : ob.name,
+            "matrix_transformed": matrix_transformed.copy(),
+            "location": ob.location.copy(),
+        }
+
+        #Print only the unique keyframes
+        if previous_matrix_data is None or \
+        (obj_matrix_data["matrix_transformed"] != previous_matrix_data["matrix_transformed"] or
+            obj_matrix_data["location"] != previous_matrix_data["location"]):
+            
+            # Get data
+            matrix_data = obj_matrix_data["matrix_transformed"]
+            RotationMatrix = matrix_data.transposed()          
+
+            #Print rotation
+            out.write('\t\t\t*TM_FRAME  {:<5d}'.format(f))
+            out.write(f' {df} {df} {df}' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
+            out.write(f' {df} {df} {df}' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
+            out.write(f' {df} {df} {df}' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
+            
+            #Transform position
+            transformed_position = EXPORT_GLOBAL_MATRIX @ obj_matrix_data["location"]
+            out.write(f' {df} {df} {df}\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
+
+            # Actualizamos los datos anteriores con los datos actuales
+            previous_matrix_data = obj_matrix_data
+    out.write('\t\t}\n')
     out.write('\t}\n')
 
 #-------------------------------------------------------------------------------------------------------------------------------
@@ -395,7 +445,7 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
 
             #Mesh data
             out.write('\t*MESH {\n')
-            out.write('\t\t*TIMEVALUE %d\n' % 0)
+            out.write('\t\t*TIMEVALUE %d\n' % scene.frame_current)
             out.write('\t\t*MESH_NUMVERTEX %u\n' % len(me_verts))
             out.write('\t\t*MESH_NUMFACES %u\n' % len(me.polygons))
 
@@ -517,10 +567,129 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
             #Close Mesh block
             out.write('\t}\n')
             out.write('\t*MATERIAL_REF %d\n' % list(scene_materials.keys()).index(ob.name))
-            out.write("}")
+            out.write("}\n")
 
             # clean up
             ob_for_convert.to_mesh_clear()
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def write_light_settings(out, light_object, current_frame, tab_level = 1):
+    tab = get_tabs(tab_level)
+
+    out.write(f'{tab}*LIGHT_SETTINGS {{\n')
+    out.write(f'{tab}\t*TIMEVALUE %u\n' % current_frame)
+    out.write(f'{tab}\t*COLOR {df} {df} {df}\n' % (light_object.color.r, light_object.color.g, light_object.color.b))
+    out.write(f'{tab}\t*FAR_ATTEN {df} {df}\n' % (light_object.shadow_soft_size, light_object.cutoff_distance))
+    if (light_object.type == 'SUN'):
+        out.write(f'{tab}\t*HOTSPOT %u\n' % degrees(light_object.angle))
+    else:
+        out.write(f'{tab}\t*HOTSPOT %u\n' % 0)
+    out.write(f'{tab}}}\n')
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def write_light_data(out, scene, depsgraph):
+    global FRAMES_COUNT
+
+    for ob_main in scene.objects:
+        # Check if the object is a light source
+        if ob_main.type != 'LIGHT':
+            continue
+
+        # Handle object instances (duplicated lights)
+        obs = [(ob_main, ob_main.matrix_world)]
+        if ob_main.is_instancer:
+            obs += [(dup.instance_object.original, dup.matrix_world.copy())
+                    for dup in depsgraph.object_instances
+                    if dup.parent and dup.parent.original == ob_main]
+
+        for ob, ob_mat in obs:
+            ob_for_convert = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
+
+            try:
+                # Extract the light data
+                light_data = ob_for_convert.data
+            except AttributeError:
+                light_data = None
+
+            if light_data is None:
+                continue
+            
+            # Apply transformation matrix to light object
+            matrix_transformed = EXPORT_GLOBAL_MATRIX @ ob_mat
+            obj_matrix_data = {
+                "name" : ob.name,
+                "matrix_transformed": matrix_transformed.copy(),
+                "location": ob.location.copy(),
+                "scale": ob.scale.copy()
+            }
+
+            # If negative scaling, we need to invert the direction of light if it's directional
+            if ob_mat.determinant() < 0.0 and light_data.type == 'SUN':
+                # Invert the direction of a sun light (directional light)
+                obj_matrix_data["direction"] = (-ob_for_convert.matrix_world.to_3x3() @ light_data.direction).normalized()
+
+            # Print ligth data                
+            out.write("*LIGHTOBJECT {\n")
+            out.write('\t*NODE_NAME "%s"\n' % ob.name)
+            out.write('\t*NODE_PARENT "%s"\n' % ob.name)
+            
+            type_lut = {}
+            type_lut['POINT'] = 'Omni'
+            type_lut['SPOT' ] = 'TargetSpot'
+            type_lut['SUN'  ] = 'TargetDirect'
+            type_lut['AREA' ] = 'TargetDirect' # swy: this is sort of wrong ¯\_(ツ)_/¯
+
+            out.write('\t*LIGHT_TYPE %s\n' % type_lut[light_data.type]) #Seems that always used "Omni" lights in 3dsMax, in blender is called "Point"
+            write_node_pivot_node(out, False, obj_matrix_data)
+
+            #---------------------------------------------[Light Props]---------------------------------------------
+            if (light_data.use_shadow):
+                out.write('\t*LIGHT_SHADOWS %s\n' % "On") #for now
+            else:
+                out.write('\t*LIGHT_SHADOWS %s\n' % "Off") #for now
+            out.write('\t*LIGHT_DECAY %s\n' % "InvSquare") # swy: this is the only supported mode
+            out.write('\t*LIGHT_AFFECT_DIFFUSE %s\n' % "Off") #for now
+            if (light_data.specular_factor > 0.001):
+                out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "On") #for now
+            else:
+                out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "Off") #for now
+            out.write('\t*LIGHT_AMBIENT_ONLY %s\n' % "Off") #for now
+
+            write_light_settings(out, light_data, scene.frame_current)
+
+            #---------------------------------------------[Light Animation]---------------------------------------------
+            print(FRAMES_COUNT)
+            if FRAMES_COUNT > 1:
+                out.write('\t*LIGHT_ANIMATION {\n')
+                previous_light_data = None
+
+                for frame in range(scene.frame_start, scene.frame_end + 1):
+                    scene.frame_set(frame)
+
+                    # current frame data
+                    try:
+                        # Extract the light data
+                        light_data = ob_for_convert.data
+                    except AttributeError:
+                        light_data = None
+
+                    if light_data is None:
+                        continue
+
+                    if previous_light_data is None or \
+                    (light_data.color != previous_light_data.color or
+                        light_data.shadow_soft_size != previous_light_data.shadow_soft_size or
+                        light_data.cutoff_distance != previous_light_data.cutoff_distance or
+                        (light_data.type == 'SUN' and light_data.angle != previous_light_data.angle)):
+
+                        # Si hay alguna propiedad diferente, escribimos la configuración de la luz
+                        write_light_settings(out, light_data, scene.frame_current, 2)
+
+                        # Actualizamos los datos anteriores con los datos actuales
+                        previous_light_data = light_data
+                out.write('\t}\n')
+                write_animation_node(out, ob, ob_mat, ob_for_convert)
+            out.write("}\n")
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def export_file(filepath):
@@ -540,8 +709,13 @@ def export_file(filepath):
         out.write('*COMMENT "Version of ESE Plug-in: %s"\n\n' % ESE_VERSION)
 
         write_scene_data(out, scene)
+        
+        #Mesh
         scene_materials = write_scene_materials(out)
         write_mesh_data(out, scene, depsgraph, scene_materials)
+
+        #Lights
+        write_light_data(out, scene, depsgraph)
                 
     print(f"Archivo exportado con éxito: {filepath}")
 
