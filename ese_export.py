@@ -24,14 +24,17 @@ EXPORT_VERTEX_COLORS = True
 EXPORT_APPLY_MODIFIERS=True
 
 #SET BY USER
-TRANSFORM_TO_CENTER = True
+EXPORT_MESH = True
+EXPORT_CAMERAS = True
+EXPORT_LIGHTS = True
+EXPORT_ANIMATIONS = True
 DECIMAL_PRECISION = 6
+TRANSFORM_TO_CENTER = True
 df = f'%.{DECIMAL_PRECISION}f'
 dcf = f'{{:>{DECIMAL_PRECISION}f}}'
 
 #Global variables
 FRAMES_COUNT = 0
-TICKS_PER_FRAME = 1
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def tri_edge_is_from_ngon(polygon, tri_loop_indices, tri_idx, mesh_loops):
@@ -74,7 +77,7 @@ def veckey3d(v):
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def write_scene_data(out, scene):
-    global FRAMES_COUNT, TICKS_PER_FRAME
+    global FRAMES_COUNT
 
     #Get scene data
     first_frame = scene.frame_start
@@ -82,9 +85,10 @@ def write_scene_data(out, scene):
     frame_rate = scene.render.fps
     FRAMES_COUNT = last_frame - first_frame + 1
 
-    tick_frequency = 4800 #Matches original examples
-    TICKS_PER_FRAME = tick_frequency // frame_rate
-    
+    #tick_frequency = 4800 #Matches original examples
+    #ticks_per_frame = tick_frequency // frame_rate
+    ticks_per_frame = 1
+
     world_amb = scene.world.color if scene.world else (0.8, 0.8, 0.8)
 
     #Print scene data
@@ -93,7 +97,7 @@ def write_scene_data(out, scene):
     out.write('\t*SCENE_FIRSTFRAME %s\n' % first_frame)
     out.write('\t*SCENE_LASTFRAME %s\n' % last_frame)
     out.write('\t*SCENE_FRAMESPEED %s\n' % frame_rate)
-    out.write('\t*SCENE_TICKSPERFRAME %s\n' % TICKS_PER_FRAME)
+    out.write('\t*SCENE_TICKSPERFRAME %s\n' % ticks_per_frame)
     out.write(f'\t*SCENE_BACKGROUND_STATIC {df} {df} {df}\n' % (world_amb[0], world_amb[1], world_amb[2]))
     out.write(f'\t*SCENE_AMBIENT_STATIC {df} {df} {df}\n' % (world_amb[0], world_amb[1], world_amb[2]))
     out.write("}\n\n")
@@ -248,11 +252,17 @@ def write_animation_node(out, ob, ob_mat, ob_for_convert):
         bpy.context.scene.frame_set(f)
       
         # Apply transformation matrix to light object
-        matrix_transformed = EXPORT_GLOBAL_MATRIX @ ob_mat
+        if ob.type == 'CAMERA':
+            matrix_transformed = EXPORT_GLOBAL_MATRIX @ ob_mat
+        else:
+            matrix_transformed = EXPORT_GLOBAL_MATRIX @ ob_mat
+            matrix_transformed.transposed()
+
         obj_matrix_data = {
             "name" : ob.name,
             "matrix_transformed": matrix_transformed.copy(),
             "location": ob.location.copy(),
+            "rotation": ob.matrix_world.copy()
         }
 
         #Print only the unique keyframes
@@ -266,13 +276,21 @@ def write_animation_node(out, ob, ob_mat, ob_for_convert):
 
             #Print rotation
             out.write('\t\t\t*TM_FRAME  {:<5d}'.format(f))
-            out.write(f' {df} {df} {df}' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
-            out.write(f' {df} {df} {df}' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
-            out.write(f' {df} {df} {df}' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
+            if ob.type == 'CAMERA':
+                out.write(f' {df} {df} {df}' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
+                out.write(f' {df} {df} {df}' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
+                out.write(f' {df} {df} {df}' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
             
+            else:
+                RotationMatrix = EXPORT_GLOBAL_MATRIX @ obj_matrix_data["rotation"]
+                RotationMatrix = RotationMatrix.transposed()
+                out.write(f' {df} {df} {df}' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
+                out.write(f' {df} {df} {df}' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
+                out.write(f' {df} {df} {df}' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
+
             #Transform position
             transformed_position = EXPORT_GLOBAL_MATRIX @ obj_matrix_data["location"]
-            out.write(f' {df} {df} {df}\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
+            out.write(f' {df} {df} {df}\n' % (transformed_position.x, transformed_position.y, transformed_position.z))
 
             # Actualizamos los datos anteriores con los datos actuales
             previous_matrix_data = obj_matrix_data
@@ -566,6 +584,12 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
 
             #Close Mesh block
             out.write('\t}\n')
+
+            #Print animations
+            if FRAMES_COUNT > 0 and EXPORT_ANIMATIONS:
+                write_animation_node(out, ob, ob_mat, ob_for_convert)
+
+            out.write(f'\t*WIREFRAME_COLOR {df} {df} {df}\n' % (ob.color[0], ob.color[1], ob.color[2]))
             out.write('\t*MATERIAL_REF %d\n' % list(scene_materials.keys()).index(ob.name))
             out.write("}\n")
 
@@ -601,6 +625,7 @@ def write_light_data(out, scene, depsgraph):
             obs += [(dup.instance_object.original, dup.matrix_world.copy())
                     for dup in depsgraph.object_instances
                     if dup.parent and dup.parent.original == ob_main]
+            # ~ print(ob_main.name, 'has', len(obs) - 1, 'dupli children')
 
         for ob, ob_mat in obs:
             ob_for_convert = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
@@ -659,7 +684,7 @@ def write_light_data(out, scene, depsgraph):
 
             #---------------------------------------------[Light Animation]---------------------------------------------
             print(FRAMES_COUNT)
-            if FRAMES_COUNT > 1:
+            if FRAMES_COUNT > 1 and EXPORT_ANIMATIONS:
                 out.write('\t*LIGHT_ANIMATION {\n')
                 previous_light_data = None
 
@@ -692,6 +717,95 @@ def write_light_data(out, scene, depsgraph):
             out.write("}\n")
 
 #-------------------------------------------------------------------------------------------------------------------------------
+def write_camera_settings(out, camera_object, camera_data, current_frame, tab_level = 1):
+    tab = get_tabs(tab_level)
+
+    out.write(f'{tab}*CAMERA_SETTINGS {{\n')
+    out.write(f'{tab}\t*TIMEVALUE %u\n' % current_frame)
+    #out.write(f'{tab}\t*CAMERA_NEAR %d\n' % (camera_object.clip_start))
+    #out.write(f'{tab}\t*CAMERA_FAR %d\n' % (camera_object.clip_end))
+    out.write(f'{tab}\t*CAMERA_FOV {df}\n' % (camera_object.angle))
+    #out.write(f'{tab}\t*CAMERA_TDIST {df}\n' % (camera_data.location.length))
+    out.write(f'{tab}}}\n')
+    
+#-------------------------------------------------------------------------------------------------------------------------------
+def write_camera_data(out, scene, depsgraph):
+    global FRAMES_COUNT
+
+    for ob_main in scene.objects:
+        # Check if the object is a camera source
+        if ob_main.type != 'CAMERA':
+            continue
+
+        obs = [(ob_main, ob_main.matrix_world)]
+        if ob_main.is_instancer:
+            obs += [(dup.instance_object.original, dup.matrix_world.copy())
+                    for dup in depsgraph.object_instances
+                    if dup.parent and dup.parent.original == ob_main]
+            # ~ print(ob_main.name, 'has', len(obs) - 1, 'dupli children')
+            
+        for ob, ob_mat in obs:
+            ob_for_convert = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
+
+            try:
+                camera_data = ob_for_convert.data
+            except RuntimeError:
+                camera_data = None
+
+            if camera_data is None:
+                continue
+            
+            # Apply transformation matrix to light object
+            matrix_transformed = EXPORT_GLOBAL_MATRIX @ ob_mat
+            obj_matrix_data = {
+                "name" : ob.name,
+                "matrix_transformed": matrix_transformed.copy(),
+                "location": ob.location.copy(),
+                "scale": ob.scale.copy()
+            }
+      
+        # Imprime el bloque con las propiedades de la cámara
+        camera_type = camera_data.type
+        out.write("*CAMERAOBJECT {\n")
+        out.write('\t*NODE_NAME %s\n' % ob.name)
+        out.write('\t*CAMERA_TYPE %s\n' % camera_type)
+        write_node_pivot_node(out, False, obj_matrix_data)
+        write_camera_settings(out, camera_data, ob, scene.frame_current)
+
+        #---------------------------------------------[Camera Animation]---------------------------------------------
+        print(FRAMES_COUNT)
+        if FRAMES_COUNT > 1 and EXPORT_ANIMATIONS:
+            out.write('\t*CAMERA_ANIMATION {\n')
+            previous_camera_data = None
+
+            for frame in range(scene.frame_start, scene.frame_end + 1):
+                scene.frame_set(frame)
+
+                # current frame data
+                try:
+                    # Extract the light data
+                    camera_data = ob_for_convert.data
+                except AttributeError:
+                    camera_data = None
+
+                if camera_data is None:
+                    continue
+
+                if previous_camera_data is None or \
+                (camera_data.clip_start != previous_camera_data.clip_start or
+                    camera_data.clip_end != previous_camera_data.clip_end or
+                    camera_data.angle != previous_camera_data.angle):
+
+                    # Si hay alguna propiedad diferente, escribimos la configuración de la luz
+                    write_camera_settings(out, camera_data, ob, scene.frame_current, 2)
+
+                    # Actualizamos los datos anteriores con los datos actuales
+                    previous_camera_data = camera_data
+            out.write('\t}\n')
+            write_animation_node(out, ob, ob_mat, ob_for_convert)
+        out.write("}\n")
+
+#-------------------------------------------------------------------------------------------------------------------------------
 def export_file(filepath):
     depsgraph = bpy.context.evaluated_depsgraph_get()
     scene = bpy.context.scene
@@ -699,6 +813,9 @@ def export_file(filepath):
     # Exit edit mode before exporting, so current object states are exported properly.
     if bpy.ops.object.mode_set.poll():
         bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Set the first frame
+    bpy.context.scene.frame_set(0)
 
     # Create text file
     with open(filepath, 'w', encoding="utf8",) as out:
@@ -712,10 +829,14 @@ def export_file(filepath):
         
         #Mesh
         scene_materials = write_scene_materials(out)
-        write_mesh_data(out, scene, depsgraph, scene_materials)
 
-        #Lights
-        write_light_data(out, scene, depsgraph)
+        #scene objects data
+        if EXPORT_MESH:
+            write_mesh_data(out, scene, depsgraph, scene_materials)    
+        if EXPORT_CAMERAS:
+            write_camera_data(out, scene, depsgraph)
+        if EXPORT_LIGHTS:
+            write_light_data(out, scene, depsgraph)
                 
     print(f"Archivo exportado con éxito: {filepath}")
 
