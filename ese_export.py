@@ -9,7 +9,7 @@ Tooltip: 'Blender ESE Exporter for EuroLand'
 Authors: Swyter and Jmarti856
 """
 import bpy
-from mathutils import Matrix, Vector, Color
+from mathutils import Matrix
 from datetime import datetime
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 
@@ -195,17 +195,17 @@ def write_scene_materials(out):
     return mesh_materials
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def write_node_pivot_node(out, isPivot, scene_object, scene_object_name, data_object):
+def write_node_pivot_node(out, isPivot, obj_matrix_data):
     if isPivot:
         out.write('\t*NODE_PIVOT_TM {\n')
     else:
         out.write('\t*NODE_TM {\n')
-    out.write('\t\t*NODE_NAME "%s"\n' % (scene_object_name))
+    out.write('\t\t*NODE_NAME "%s"\n' % (obj_matrix_data["name"]))
     out.write('\t\t*INHERIT_POS %d %d %d\n' % (0, 0, 0))
     out.write('\t\t*INHERIT_ROT %d %d %d\n' % (0, 0, 0))
     out.write('\t\t*INHERIT_SCL %d %d %d\n' % (0, 0, 0))
     
-    matrix_data = EXPORT_GLOBAL_MATRIX @ scene_object
+    matrix_data = obj_matrix_data["matrix_transformed"]
     RotationMatrix = matrix_data.transposed()
     if not isPivot:
         RotationMatrix = Matrix.Identity(4)
@@ -215,14 +215,17 @@ def write_node_pivot_node(out, isPivot, scene_object, scene_object_name, data_ob
     out.write(f'\t\t*TM_ROW2 {df} {df} {df}\n' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
     
     #Transform position
-    transformed_position = EXPORT_GLOBAL_MATRIX @ data_object.location
+    transformed_position = EXPORT_GLOBAL_MATRIX @ obj_matrix_data["location"]
     out.write(f'\t\t*TM_ROW3 {df} {df} {df}\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
     out.write(f'\t\t*TM_POS {df} {df} {df}\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
     
     #Transform rotation
     transformed_rotation = RotationMatrix.to_euler('XYZ')
     out.write(f'\t\t*TM_ROTANGLE {df} {df} {df}\n' % (transformed_rotation.x, transformed_rotation.y, transformed_rotation.z))
-    out.write(f'\t\t*TM_SCALE {df} {df} {df}\n' % (1, 1, 1))
+
+    #Print scale
+    scale = EXPORT_GLOBAL_MATRIX @ obj_matrix_data["scale"]
+    out.write(f'\t\t*TM_SCALE {df} {df} {df}\n' % (scale.x, scale.y, scale.z))
     out.write(f'\t\t*TM_SCALEANGLE {df} {df} {df}\n' % (0, 0, 0))
     out.write('\t}\n')
 
@@ -258,6 +261,13 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
 
             matrix_transformed = EXPORT_GLOBAL_MATRIX @ ob_mat
             me.transform(matrix_transformed)
+            obj_matrix_data = {
+                "name" : me.name,
+                "matrix_transformed": matrix_transformed.copy(),
+                "location": ob.location.copy(),
+                "scale": ob.scale.copy()
+            }
+
             # If negative scaling, we have to invert the normals...
             if ob_mat.determinant() < 0.0:
                 me.flip_normals()
@@ -380,8 +390,8 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
             # Start printing
             out.write("*GEOMOBJECT {\n")
             out.write('\t*NODE_NAME "%s"\n' % me.name)
-            write_node_pivot_node(out, False, ob_mat.copy(), me.name, ob)
-            write_node_pivot_node(out, True, ob_mat.copy(), me.name, ob)
+            write_node_pivot_node(out, False, obj_matrix_data)
+            write_node_pivot_node(out, True, obj_matrix_data)
 
             #Mesh data
             out.write('\t*MESH {\n')
