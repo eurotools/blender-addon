@@ -12,7 +12,7 @@ Authors: Swyter and Jmarti856
 import os
 import bpy
 from math import radians, degrees
-from mathutils import Matrix, Euler, Vector
+from mathutils import Matrix
 from datetime import datetime
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 
@@ -193,28 +193,24 @@ def write_mesh_data(out, scene, depsgraph, materials_list):
                 # _must_ do this first since it re-allocs arrays
                 mesh_triangulate(me)
 
-            # Create transform matrix
+            # Apply transform matrix
             if TRANSFORM_TO_CENTER:
+                # Create an empty matrix and get the original scale
                 to_origin = Matrix.Identity(4)
                 scale_matrix = Matrix.Diagonal(ob.scale).to_4x4()
 
-                matrix_transformed = to_origin @ scale_matrix
+                # Construir la matriz transformada respetando la escala
+                matrix_transformed = EXPORT_GLOBAL_MATRIX @ (to_origin @ scale_matrix)
+                me.transform(matrix_transformed)
             else:
-                matrix_transformed = ob_mat
-            
-            # Apply transform matrix
-            me.transform(EXPORT_GLOBAL_MATRIX @ matrix_transformed)
+                matrix_transformed = EXPORT_GLOBAL_MATRIX @ ob_mat
+                me.transform(matrix_transformed)
 
             #Append data to dictionary, will be used for place and geom node.
             if me.name not in matrix_data:
                 matrix_data[ob_main.name] = {
-                    "main_location" : ob_main.location.copy(),
-                    "main_rotation": ob_main.rotation_euler.copy(),
-                    "main_scale": ob_main.scale.copy(),
-
-                    "transformed_location" : matrix_transformed.translation.copy(),
-                    "transformed_rotation": matrix_transformed.to_euler().copy(),
-                    "transformed_scale": matrix_transformed.to_scale().copy()
+                    "matrix_original" : ob_mat.copy(),
+                    "matrix_transformed": matrix_transformed.copy()
                 }
 
             # If negative scaling, we have to invert the normals...
@@ -409,47 +405,36 @@ def write_mesh_data(out, scene, depsgraph, materials_list):
     return matrix_data
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def create_euroland_matrix(location, rotation, scale):
-    #Create a new rotation vector the order is X Z Y <- we need to flip these axis
-    rotation_radians = Euler((rotation.x, rotation.z, rotation.y))
-    rotation_matrix = rotation_radians.to_matrix().to_4x4()
-    
-    #Create a new location vector the order is X Z Y <- we need to flip these axis
-    translation_vector = Vector((location.x, location.z, location.y))
-    translation_matrix = Matrix.Translation(translation_vector)
-       
-    #Build new vector
-    transformation_matrix = (translation_matrix @ rotation_matrix)
-    
-    return transformation_matrix
-
-#-------------------------------------------------------------------------------------------------------------------------------
 def write_geom_node(out, object_matrix_data):
     for mesh_name, data in object_matrix_data.items():
+        matrix_transformed = data["matrix_transformed"]
+
+        # Apply transform matrix
+        if not TRANSFORM_TO_CENTER:
+            matrix_transformed = Matrix.Identity(4) 
+
         out.write('*GEOMNODE {\n')
         out.write('\t*NAME "%s"\n' % (mesh_name))
         out.write('\t*MESH "%s"\n' % (mesh_name))
         out.write('\t*WORLD_TM {\n')
-
-        transformed_matrix_transposed = Matrix.Identity(4)
+        
+        # Transformar la malla según la matriz global y local
         if TRANSFORM_TO_CENTER:
-            transformed_matrix_transposed = create_euroland_matrix(data["transformed_location"], data["transformed_rotation"], data["transformed_scale"])
-
-        out.write(f'\t\t*TMROW0 {df} {df} {df} {df}\n' % (transformed_matrix_transposed[0].x, transformed_matrix_transposed[0].y, transformed_matrix_transposed[0].z, 0))
-        out.write(f'\t\t*TMROW1 {df} {df} {df} {df}\n' % (transformed_matrix_transposed[1].x, transformed_matrix_transposed[1].y, transformed_matrix_transposed[1].z, 0))
-        out.write(f'\t\t*TMROW2 {df} {df} {df} {df}\n' % (transformed_matrix_transposed[2].x, transformed_matrix_transposed[2].y, transformed_matrix_transposed[2].z, 0))
-
+            matrix_transformed = (matrix_transformed.inverted() @ matrix_transformed).normalized()
+        out.write(f'\t\t*TMROW0 {df} {df} {df} {df}\n' % (matrix_transformed[0].x, matrix_transformed[0].y, matrix_transformed[0].z, 0))
+        out.write(f'\t\t*TMROW1 {df} {df} {df} {df}\n' % (matrix_transformed[1].x, matrix_transformed[1].y, matrix_transformed[1].z, 0))
+        out.write(f'\t\t*TMROW2 {df} {df} {df} {df}\n' % (matrix_transformed[2].x, matrix_transformed[2].y, matrix_transformed[2].z, 0))
+        
         #Transform position
-        pos = transformed_matrix_transposed.translation
-        out.write(f'\t\t*TMROW3 {df} {df} {df} {df}\n' % (pos.x, pos.y, pos.z, 1))
-        out.write(f'\t\t*POS {df} {df} {df}\n' % (pos.x, pos.y, pos.z))
+        out.write(f'\t\t*TMROW3 {df} {df} {df} {df}\n' % (matrix_transformed[0].w, matrix_transformed[1].w, matrix_transformed[2].w, 1))
+        out.write(f'\t\t*POS {df} {df} {df}\n' % (matrix_transformed[0].w, matrix_transformed[1].w, matrix_transformed[2].w))
         
         #Transform rotation
-        transformed_rotation = transformed_matrix_transposed.to_euler()
+        transformed_rotation = matrix_transformed.to_euler()
         out.write(f'\t\t*ROT {df} {df} {df}\n' % (degrees(transformed_rotation.x), degrees(transformed_rotation.y), degrees(transformed_rotation.z)))
 
         #Transform scale
-        transformed_scale = transformed_matrix_transposed.to_scale()
+        transformed_scale = matrix_transformed.to_scale()
         out.write(f'\t\t*SCL {df} {df} {df}\n' % (transformed_scale.x, transformed_scale.y, transformed_scale.z))
         out.write('\t}\n')
 
@@ -463,21 +448,34 @@ def write_geom_node(out, object_matrix_data):
 #-------------------------------------------------------------------------------------------------------------------------------
 def write_place_node(out, object_matrix_data):
     for mesh_name, data in object_matrix_data.items():
+        matrix_original = data["matrix_original"]
+
+        # Apply transform matrix
+        if not TRANSFORM_TO_CENTER:
+            matrix_original = Matrix.Identity(4) 
+
         out.write('*PLACENODE {\n')
         out.write('\t*NAME "%s"\n' % (mesh_name))
         out.write('\t*MESH "%s"\n' % (mesh_name))
         out.write('\t*WORLD_TM {\n')
 
-        transformed_matrix_transposed = Matrix.Identity(4)
-        if TRANSFORM_TO_CENTER:
-            transformed_matrix_transposed = create_euroland_matrix(data["main_location"], data["main_rotation"], data["main_scale"])
-        
+        # Transformar la malla según la matriz global y local
+        transformed_matrix = EXPORT_GLOBAL_MATRIX @ matrix_original
+        transformed_matrix_transposed = transformed_matrix.normalized()
+        pos = transformed_matrix_transposed.translation.copy()
+
+        # Do weird EuroLand things....
+        transformed_matrix_transposed = transformed_matrix_transposed.transposed()
+        row1 = transformed_matrix_transposed[1][:] 
+        transformed_matrix_transposed[1][:] = transformed_matrix_transposed[2][:] 
+        transformed_matrix_transposed[2][:] = row1 
+        transformed_matrix_transposed = transformed_matrix_transposed.to_3x3()
+
         out.write(f'\t\t*TMROW0 {df} {df} {df} {df}\n' % (transformed_matrix_transposed[0].x, transformed_matrix_transposed[0].y, transformed_matrix_transposed[0].z, 0))
         out.write(f'\t\t*TMROW1 {df} {df} {df} {df}\n' % (transformed_matrix_transposed[1].x, transformed_matrix_transposed[1].y, transformed_matrix_transposed[1].z, 0))
         out.write(f'\t\t*TMROW2 {df} {df} {df} {df}\n' % (transformed_matrix_transposed[2].x, transformed_matrix_transposed[2].y, transformed_matrix_transposed[2].z, 0))
 
         #Transform position
-        pos = transformed_matrix_transposed.translation
         out.write(f'\t\t*TMROW3 {df} {df} {df} {df}\n' % (pos.x, pos.y, pos.z, 1))
         out.write(f'\t\t*POS {df} {df} {df}\n' % (pos.x, pos.y, pos.z))
         
