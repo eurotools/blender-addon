@@ -10,7 +10,7 @@ Authors: Swyter and Jmarti856
 """
 import bpy
 from math import degrees
-from mathutils import Matrix
+from mathutils import Matrix, Euler, Vector
 from datetime import datetime
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 
@@ -26,10 +26,10 @@ EXPORT_APPLY_MODIFIERS=True
 #SET BY USER
 EXPORT_MESH = True
 EXPORT_CAMERAS = True
-EXPORT_LIGHTS = True
+EXPORT_LIGHTS = False
 EXPORT_ANIMATIONS = True
 DECIMAL_PRECISION = 6
-TRANSFORM_TO_CENTER = True
+TRANSFORM_TO_CENTER = False
 df = f'%.{DECIMAL_PRECISION}f'
 dcf = f'{{:>{DECIMAL_PRECISION}f}}'
 
@@ -75,6 +75,31 @@ def veckey2d(v):
 #-------------------------------------------------------------------------------------------------------------------------------
 def veckey3d(v):
     return round(v.x, 4), round(v.y, 4), round(v.z, 4)
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def create_euroland_matrix(location, rotation, flip_z = True):
+    #Create a new rotation vector
+    rotation_radians = Euler((rotation.x, rotation.y, rotation.z))
+    rotation_matrix = rotation_radians.to_matrix().to_4x4()
+    
+    #Create a new location vector
+    translation_vector = Vector((location.x, location.y, location.z))
+    translation_matrix = Matrix.Translation(translation_vector)
+       
+    #Build new matrix
+    transformation_matrix = (EXPORT_GLOBAL_MATRIX @ (translation_matrix @ rotation_matrix)).normalized()
+
+    # Invert Z axis
+    if flip_z:
+        transformation_matrix[0].z = -transformation_matrix[0].z
+        transformation_matrix[1].z = -transformation_matrix[1].z
+        transformation_matrix[2].z = -transformation_matrix[2].z
+    else:
+        transformation_matrix[0].x = -transformation_matrix[0].x
+        transformation_matrix[1].x = -transformation_matrix[1].x
+        transformation_matrix[2].x = -transformation_matrix[2].x
+
+    return transformation_matrix
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def write_scene_data(out, scene):
@@ -193,7 +218,7 @@ def write_scene_materials(out):
         materials_count = len(materials)
         if materials_count == 1:
             write_material_data(out, materials[0], 2, False)
-        else:
+        elif materials_count > 1:
             write_material_data(out, materials[0], 2, True)
             out.write("\t\t*MATERIAL_MULTIMAT\n")
             out.write("\t\t*NUMSUBMTLS %d\n" % materials_count)
@@ -207,92 +232,105 @@ def write_scene_materials(out):
     return mesh_materials
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def write_node_pivot_node(out, isPivot, obj_matrix_data):
-    if isPivot:
-        out.write('\t*NODE_PIVOT_TM {\n')
-    else:
-        out.write('\t*NODE_TM {\n')
+def write_tm_node(out, obj_matrix_data, obj_type):
+    out.write('\t*NODE_TM {\n')
     out.write('\t\t*NODE_NAME "%s"\n' % (obj_matrix_data["name"]))
     out.write('\t\t*INHERIT_POS %d %d %d\n' % (0, 0, 0))
     out.write('\t\t*INHERIT_ROT %d %d %d\n' % (0, 0, 0))
     out.write('\t\t*INHERIT_SCL %d %d %d\n' % (0, 0, 0))
     
-    matrix_data = obj_matrix_data["matrix_transformed"]
-    RotationMatrix = matrix_data.transposed()
-    if not isPivot:
-        RotationMatrix = Matrix.Identity(4)
-        
-    out.write(f'\t\t*TM_ROW0 {df} {df} {df}\n' % (RotationMatrix[0].x, RotationMatrix[0].y, RotationMatrix[0].z))
-    out.write(f'\t\t*TM_ROW1 {df} {df} {df}\n' % (RotationMatrix[1].x, RotationMatrix[1].y, RotationMatrix[1].z))
-    out.write(f'\t\t*TM_ROW2 {df} {df} {df}\n' % (RotationMatrix[2].x, RotationMatrix[2].y, RotationMatrix[2].z))
+    if TRANSFORM_TO_CENTER:
+        transformed_matrix_transposed = create_euroland_matrix(obj_matrix_data["mesh_location"], obj_matrix_data["mesh_rotation"])
+    else:
+        if obj_type == 'MESH':
+            to_origin = EXPORT_GLOBAL_MATRIX @ Matrix.Identity(4)
+            transformed_matrix_transposed = create_euroland_matrix(to_origin.translation, to_origin.to_euler())
+        else:
+            transformed_matrix_transposed = create_euroland_matrix(obj_matrix_data["object_location"], obj_matrix_data["object_rotation"])
+    
+    out.write(f'\t\t*TM_ROW0 {df} {df} {df}\n' % (transformed_matrix_transposed[0].x, transformed_matrix_transposed[1].x, transformed_matrix_transposed[2].x))
+    out.write(f'\t\t*TM_ROW1 {df} {df} {df}\n' % (transformed_matrix_transposed[0].y, transformed_matrix_transposed[1].y, transformed_matrix_transposed[2].y))
+    out.write(f'\t\t*TM_ROW2 {df} {df} {df}\n' % (transformed_matrix_transposed[0].z, transformed_matrix_transposed[1].z, transformed_matrix_transposed[2].z))
     
     #Transform position
-    transformed_position = EXPORT_GLOBAL_MATRIX @ obj_matrix_data["location"]
-    out.write(f'\t\t*TM_ROW3 {df} {df} {df}\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
-    out.write(f'\t\t*TM_POS {df} {df} {df}\n' % (transformed_position.x,transformed_position.y,transformed_position.z))
+    pos = transformed_matrix_transposed.translation
+    out.write(f'\t\t*TM_ROW3 {df} {df} {df}\n' % (pos.x,pos.y,pos.z))
+    out.write(f'\t\t*TM_POS {df} {df} {df}\n' % (pos.x,pos.y,pos.z))
     
     #Transform rotation
-    transformed_rotation = RotationMatrix.to_euler('XYZ')
+    transformed_rotation = transformed_matrix_transposed.to_euler()
     out.write(f'\t\t*TM_ROTANGLE {df} {df} {df}\n' % (transformed_rotation.x, transformed_rotation.y, transformed_rotation.z))
 
     #Print scale
-    scale = EXPORT_GLOBAL_MATRIX @ obj_matrix_data["scale"]
-    out.write(f'\t\t*TM_SCALE {df} {df} {df}\n' % (scale.x, scale.y, scale.z))
+    transformed_scale = transformed_matrix_transposed.to_scale()
+    out.write(f'\t\t*TM_SCALE {df} {df} {df}\n' % (transformed_scale.x, transformed_scale.y, transformed_scale.z))
     out.write(f'\t\t*TM_SCALEANGLE {df} {df} {df}\n' % (0, 0, 0))
     out.write('\t}\n')
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def write_animation_node(out, ob, ob_mat, ob_for_convert):
+def write_pivot_node(out, obj_matrix_data):
+    out.write('\t*NODE_PIVOT_TM {\n')
+    out.write('\t\t*NODE_NAME "%s"\n' % (obj_matrix_data["name"]))
+    out.write('\t\t*INHERIT_POS %d %d %d\n' % (0, 0, 0))
+    out.write('\t\t*INHERIT_ROT %d %d %d\n' % (0, 0, 0))
+    out.write('\t\t*INHERIT_SCL %d %d %d\n' % (0, 0, 0))
+    
+    if TRANSFORM_TO_CENTER:
+        transformed_matrix_transposed = create_euroland_matrix(obj_matrix_data["mesh_location"], obj_matrix_data["mesh_rotation"])
+    else:
+        transformed_matrix_transposed = create_euroland_matrix(obj_matrix_data["object_location"], obj_matrix_data["object_rotation"])
+    
+    out.write(f'\t\t*TM_ROW0 {df} {df} {df}\n' % (transformed_matrix_transposed[0].x, transformed_matrix_transposed[1].x, transformed_matrix_transposed[2].x))
+    out.write(f'\t\t*TM_ROW1 {df} {df} {df}\n' % (transformed_matrix_transposed[0].y, transformed_matrix_transposed[1].y, transformed_matrix_transposed[2].y))
+    out.write(f'\t\t*TM_ROW2 {df} {df} {df}\n' % (transformed_matrix_transposed[0].z, transformed_matrix_transposed[1].z, transformed_matrix_transposed[2].z))
+    
+    #Transform position
+    pos = transformed_matrix_transposed.translation
+    out.write(f'\t\t*TM_ROW3 {df} {df} {df}\n' % (pos.x,pos.y,pos.z))
+    out.write(f'\t\t*TM_POS {df} {df} {df}\n' % (pos.x,pos.y,pos.z))
+    
+    #Transform rotation
+    transformed_rotation = transformed_matrix_transposed.to_euler()
+    out.write(f'\t\t*TM_ROTANGLE {df} {df} {df}\n' % (transformed_rotation.x, transformed_rotation.y, transformed_rotation.z))
+
+    #Print scale
+    transformed_scale = transformed_matrix_transposed.to_scale()
+    out.write(f'\t\t*TM_SCALE {df} {df} {df}\n' % (transformed_scale.x, transformed_scale.y, transformed_scale.z))
+    out.write(f'\t\t*TM_SCALEANGLE {df} {df} {df}\n' % (0, 0, 0))
+    out.write('\t}\n')
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def write_animation_node(out, object_data, object_type):
     global TICKS_PER_FRAME
 
     out.write('\t*TM_ANIMATION {\n')
-    out.write('\t\t*TM_ANIMATION "%s"\n' % ob_for_convert.name)
-    previous_matrix_data = None
+    out.write('\t\t*TM_ANIMATION "%s"\n' % object_data.name)
 
     frameIndex = 0 
     out.write('\t\t*TM_ANIM_FRAMES {\n')
     for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
         bpy.context.scene.frame_set(f)
-      
-        matrix_transformed = EXPORT_GLOBAL_MATRIX @ ob_mat
+               
+        # Aplica la transformación global para cambiar a Y-Up
+        if object_type == 'MESH':
+            transformed_matrix_transposed = create_euroland_matrix(object_data.location.copy(), object_data.rotation_euler.copy(), False)
+        else:
+            transformed_matrix_transposed = create_euroland_matrix(object_data.location.copy(), object_data.rotation_euler.copy())
 
-        obj_matrix_data = {
-            "name" : ob.name,
-            "matrix_transformed": matrix_transformed.copy(),
-            "location": ob.location.copy(),
-            "rotation": ob.matrix_world.copy()
-        }
+        # Calculate frame index
+        if f > 0:
+            frameIndex += TICKS_PER_FRAME
 
-        #Print only the unique keyframes
-        if previous_matrix_data is None or \
-        (obj_matrix_data["matrix_transformed"] != previous_matrix_data["matrix_transformed"] or
-            obj_matrix_data["location"] != previous_matrix_data["location"]):
-            
-            # Get data
-            matrix_data = obj_matrix_data["matrix_transformed"]
-            RotationMatrix = matrix_data.transposed()          
+        #Print rotation
+        out.write('\t\t\t*TM_FRAME  {:<5d}'.format(frameIndex))
+        out.write(f' {df} {df} {df}' % (transformed_matrix_transposed[0].x, transformed_matrix_transposed[1].x, transformed_matrix_transposed[2].x))
+        out.write(f' {df} {df} {df}' % (transformed_matrix_transposed[0].y, transformed_matrix_transposed[1].y, transformed_matrix_transposed[2].y))
+        out.write(f' {df} {df} {df}' % (transformed_matrix_transposed[0].z, transformed_matrix_transposed[1].z, transformed_matrix_transposed[2].z))
 
-            # Calculate frame index
-            if f > 0:
-                frameIndex += TICKS_PER_FRAME
+        #Transform position
+        pos = transformed_matrix_transposed.translation
+        out.write(f' {df} {df} {df}\n' % (pos.x,pos.y,pos.z))
 
-            #Print rotation
-            out.write('\t\t\t*TM_FRAME  {:<5d}'.format(frameIndex))
-            if ob.type == 'CAMERA':
-                out.write(f' {df} {df} {df}' % (RotationMatrix[0].x,      RotationMatrix[0].y * -1, RotationMatrix[0].z     ))
-                out.write(f' {df} {df} {df}' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
-                out.write(f' {df} {df} {df}' % (RotationMatrix[2].x * -1, RotationMatrix[2].y * -1, RotationMatrix[2].z * -1))
-            else:
-                out.write(f' {df} {df} {df}' % (RotationMatrix[0].x * -1, RotationMatrix[0].y * -1, RotationMatrix[0].z * -1))
-                out.write(f' {df} {df} {df}' % (RotationMatrix[1].x,      RotationMatrix[1].y,      RotationMatrix[1].z     ))
-                out.write(f' {df} {df} {df}' % (RotationMatrix[2].x,      RotationMatrix[2].y,      RotationMatrix[2].z     ))
-
-            #Transform position
-            transformed_position = EXPORT_GLOBAL_MATRIX @ obj_matrix_data["location"]
-            out.write(f' {df} {df} {df}\n' % (transformed_position.x, transformed_position.y, transformed_position.z))
-
-            # Actualizamos los datos anteriores con los datos actuales
-            previous_matrix_data = obj_matrix_data
     out.write('\t\t}\n')
     out.write('\t}\n')
 
@@ -326,13 +364,26 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
                 # _must_ do this first since it re-allocs arrays
                 mesh_triangulate(me)
 
-            matrix_transformed = EXPORT_GLOBAL_MATRIX @ ob_mat
-            me.transform(matrix_transformed)
+            # Create transform matrix
+            if TRANSFORM_TO_CENTER:
+                to_origin = Matrix.Identity(4)
+                scale_matrix = Matrix.Diagonal(ob.scale).to_4x4()
+
+                matrix_transformed = to_origin @ scale_matrix
+            else:
+                matrix_transformed = ob_mat
+            
+            # Apply transform matrix
+            me.transform(EXPORT_GLOBAL_MATRIX @ matrix_transformed)
+
             obj_matrix_data = {
-                "name" : me.name,
-                "matrix_transformed": matrix_transformed.copy(),
-                "location": ob.location.copy(),
-                "scale": ob.scale.copy()
+                "name" : ob_main.name,
+                "object_location" : ob_main.location.copy(),
+                "object_rotation": ob_main.rotation_euler.copy(),
+                "object_scale": ob_main.scale.copy(),
+                "mesh_location" : matrix_transformed.translation.copy(),
+                "mesh_rotation": matrix_transformed.to_euler().copy(),
+                "mesh_scale": matrix_transformed.to_scale().copy()
             }
 
             # If negative scaling, we have to invert the normals...
@@ -456,9 +507,9 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
 
             # Start printing
             out.write("*GEOMOBJECT {\n")
-            out.write('\t*NODE_NAME "%s"\n' % me.name)
-            write_node_pivot_node(out, False, obj_matrix_data)
-            write_node_pivot_node(out, True, obj_matrix_data)
+            out.write('\t*NODE_NAME "%s"\n' % ob_main.name)
+            write_tm_node(out, obj_matrix_data, ob_main.type)
+            write_pivot_node(out, obj_matrix_data)
 
             #Mesh data
             out.write('\t*MESH {\n')
@@ -468,18 +519,8 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
 
             #Vertex
             out.write('\t\t*MESH_VERTEX_LIST {\n')
-            if TRANSFORM_TO_CENTER:
-                # Calcular el desplazamiento necesario para mover el objeto al origen (0,0,0)
-                object_location = matrix_transformed.to_translation()
-                inverse_translation_matrix = Matrix.Translation(-object_location)
-
-                for vindex, v in enumerate(me_verts):
-                    # Desplazar los vértices para que el objeto esté en el origen (0, 0, 0), pero con la rotación intacta
-                    new_co = inverse_translation_matrix @ v.co
-                    out.write(f'\t\t\t*MESH_VERTEX  {{:>5d}}   {dcf}    {dcf}    {dcf}\n'.format(vindex, new_co.x, new_co.y, new_co.z))
-            else:
-                for vindex, v in enumerate(me_verts):
-                    out.write(f'\t\t\t*MESH_VERTEX  {{:>5d}}   {dcf}    {dcf}    {dcf}\n'.format(vindex, v.co.x, v.co.y, v.co.z))
+            for vindex, v in enumerate(me_verts):
+                out.write(f'\t\t\t*MESH_VERTEX  {{:>5d}}   {dcf}    {dcf}    {dcf}\n'.format(vindex, v.co.x, v.co.y, v.co.z))
             out.write('\t\t}\n')    
             
             #Faces
@@ -493,12 +534,20 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
 
                 #Get material name from mesh materials list
                 f_mat = min(f.material_index, len(materials) - 1)
-                material_name = material_names[f_mat] 
+
+                if len(material_names) > 0:
+                    material_name = material_names[f_mat] 
+                else:
+                    material_name = ""
 
                 #Find index in the global scene list (*MATERIALS_LIST)
                 mesh_materials = scene_materials[ob_main.name]
                 mesh_materials_names = [m.name if m else None for m in mesh_materials]
-                mesh_material_index = mesh_materials_names.index(material_name)
+
+                if material_name in mesh_materials_names:
+                    mesh_material_index = mesh_materials_names.index(material_name)
+                else:
+                    mesh_material_index = -1
                 
                 # swy: the calc_loop_triangles() doesn't modify the original faces, and instead does temporary ad-hoc triangulation
                 #      returning us a list of three loops per "virtual triangle" that only exists in the returned thingie
@@ -586,7 +635,7 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
 
             #Print animations
             if FRAMES_COUNT > 0 and EXPORT_ANIMATIONS:
-                write_animation_node(out, ob, ob_mat, ob_for_convert)
+                write_animation_node(out, ob_main, ob_main.type)
 
             out.write(f'\t*WIREFRAME_COLOR {df} {df} {df}\n' % (ob.color[0], ob.color[1], ob.color[2]))
             out.write('\t*MATERIAL_REF %d\n' % list(scene_materials.keys()).index(ob.name))
@@ -639,12 +688,14 @@ def write_light_data(out, scene, depsgraph):
                 continue
             
             # Apply transformation matrix to light object
-            matrix_transformed = EXPORT_GLOBAL_MATRIX @ ob_mat
             obj_matrix_data = {
-                "name" : ob.name,
-                "matrix_transformed": matrix_transformed.copy(),
-                "location": ob.location.copy(),
-                "scale": ob.scale.copy()
+                "name" : ob_main.name,
+                "object_location" : ob_main.location.copy(),
+                "object_rotation": ob_mat.to_euler().copy(),
+                "object_scale": ob_mat.to_scale().copy(),
+                "mesh_location" : ob_main.location.copy(),
+                "mesh_rotation": ob_mat.to_euler().copy(),
+                "mesh_scale": ob_mat.to_scale().copy()
             }
 
             # If negative scaling, we need to invert the direction of light if it's directional
@@ -664,7 +715,7 @@ def write_light_data(out, scene, depsgraph):
             type_lut['AREA' ] = 'TargetDirect' # swy: this is sort of wrong ¯\_(ツ)_/¯
 
             out.write('\t*LIGHT_TYPE %s\n' % type_lut[light_data.type]) #Seems that always used "Omni" lights in 3dsMax, in blender is called "Point"
-            write_node_pivot_node(out, False, obj_matrix_data)
+            write_tm_node(out, obj_matrix_data)
 
             #---------------------------------------------[Light Props]---------------------------------------------
             if (light_data.use_shadow):
@@ -712,7 +763,7 @@ def write_light_data(out, scene, depsgraph):
                         # Actualizamos los datos anteriores con los datos actuales
                         previous_light_data = light_data
                 out.write('\t}\n')
-                write_animation_node(out, ob, ob_mat, ob_for_convert)
+                write_animation_node(out, ob_main, ob_main.type)
             out.write("}\n")
 
 #-------------------------------------------------------------------------------------------------------------------------------
@@ -757,20 +808,22 @@ def write_camera_data(out, scene, depsgraph):
                 continue
             
             # Apply transformation matrix to light object
-            matrix_transformed = EXPORT_GLOBAL_MATRIX @ ob_mat
             obj_matrix_data = {
                 "name" : ob.name,
-                "matrix_transformed": matrix_transformed.copy(),
-                "location": ob.location.copy(),
-                "scale": ob.scale.copy()
+                "object_location" : ob_main.location.copy(),
+                "object_rotation": ob_mat.to_euler().copy(),
+                "object_scale": ob_mat.to_scale().copy(),
+                "mesh_location" : ob_main.location.copy(),
+                "mesh_rotation": ob_mat.to_euler().copy(),
+                "mesh_scale": ob_mat.to_scale().copy()
             }
       
         # Imprime el bloque con las propiedades de la cámara
         camera_type = camera_data.type
         out.write("*CAMERAOBJECT {\n")
         out.write('\t*NODE_NAME "%s"\n' % ob.name)
-        out.write('\t*CAMERA_TYPE %s\n' % camera_type)
-        write_node_pivot_node(out, False, obj_matrix_data)
+        out.write('\t*CAMERA_TYPE %s\n' % "target")
+        write_tm_node(out, obj_matrix_data, ob_main.type)
         write_camera_settings(out, camera_data, ob, scene.frame_current)
 
         #---------------------------------------------[Camera Animation]---------------------------------------------
@@ -805,7 +858,7 @@ def write_camera_data(out, scene, depsgraph):
                     previous_camera_data = camera_data
                     frameIndex += TICKS_PER_FRAME
             out.write('\t}\n')
-            write_animation_node(out, ob, ob_mat, ob_for_convert)
+            write_animation_node(out, ob_main, ob_main.type)
             
             
         #===============================================================================================
