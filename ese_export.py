@@ -78,30 +78,69 @@ def veckey3d(v):
     return round(v.x, 4), round(v.y, 4), round(v.z, 4)
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def create_euroland_matrix(location, rotation, flip_z = True):
-    #Create a new rotation vector
-    rotation_radians = Euler((rotation.x, rotation.y, rotation.z))
-    rotation_matrix = rotation_radians.to_matrix().to_4x4()
+def create_euroland_matrix(obj_matrix, obj_type):
     
-    #Create a new location vector
-    translation_vector = Vector((location.x, location.y, location.z))
-    translation_matrix = Matrix.Translation(translation_vector)
-       
-    #Build new matrix
-    transformation_matrix = (MESH_GLOBAL_MATRIX @ (translation_matrix @ rotation_matrix)).normalized()
-    #transformation_matrix = (translation_matrix @ rotation_matrix).normalized()
+    if obj_type == 'CAMERA':
+        euroland_matrix = MESH_GLOBAL_MATRIX @ obj_matrix
+                
+        # Cameras seems that needs to invert Z axis
+        for i in range(len(euroland_matrix)):
+            euroland_matrix[i][2] *= -1      
+            
+        #Euler stuf
+        rot_yxz = euroland_matrix.to_euler('YXZ')
+        euroland_euler = Euler([-angle for angle in rot_yxz], 'YXZ')          
+    else: 
+        transformed_matrix = ROT_GLOBAL_MATRIX @ obj_matrix
+        transformed_pos = MESH_GLOBAL_MATRIX @ transformed_matrix.translation
 
-    # Invert Z axis
-    if flip_z:
-        transformation_matrix[0].z = -transformation_matrix[0].z
-        transformation_matrix[1].z = -transformation_matrix[1].z
-        transformation_matrix[2].z = -transformation_matrix[2].z
-    else:
-        transformation_matrix[0].x = -transformation_matrix[0].x
-        transformation_matrix[1].x = -transformation_matrix[1].x
-        transformation_matrix[2].x = -transformation_matrix[2].x
+        # Crear una matriz 4x4 vacía (matriz identidad como base)
+        euroland_matrix = Matrix.Identity(4)
 
-    return transformation_matrix
+        # Rellenar la matriz con los datos en el orden especificado
+        for i, indices in enumerate([(0, 0), (2, 0), (1, 0)]):  # Fila X, Y, Z
+            euroland_matrix[i].x = transformed_matrix[indices[0]].x
+            euroland_matrix[i].y = transformed_matrix[indices[0]].z
+            euroland_matrix[i].z = transformed_matrix[indices[0]].y
+
+        # Agregar la posición/translation a la matriz
+        euroland_matrix[0][3] = transformed_pos.x  # Posición X
+        euroland_matrix[1][3] = transformed_pos.y  # Posición Y
+        euroland_matrix[2][3] = transformed_pos.z  # Posición Z  
+        
+        #Euler stufff
+        euroland_euler = obj_matrix.to_euler('ZXY')
+
+    #Pack data
+    matrix_data = {
+        "eland_matrix": euroland_matrix,
+        "eland_euler": euroland_euler
+    }
+
+    return matrix_data
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def printCustomProperties(out):
+    scene = bpy.context.scene
+    custom_properties = {key: value for key, value in scene.items() if key not in '_RNA_UI'}
+
+    #print only the visible ones
+    visible_properties = {key: value for key, value in custom_properties.items() if isinstance(value, (int, float, str, bool))}
+      
+    type_mapping = {
+        int: "Numeric",
+        float: "Numeric",
+        str: "String",
+        bool: "Boolean"
+    }      
+
+    out.write('\t*SCENE_UDPROPS {\n')
+    out.write('\t\t*PROP_COUNT\t%d\n' % len(visible_properties))
+    
+    for index, (key, value) in enumerate(visible_properties.items()):
+        type_name = type_mapping.get(type(value), type(value).__name__)
+        out.write('\t\t*PROP\t%d\t"%s"\t"%s"\t"%s"\n' % (index, key, type_name, value))
+    out.write('\t}\n')
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def write_scene_data(out, scene):
@@ -127,6 +166,7 @@ def write_scene_data(out, scene):
     out.write('\t*SCENE_TICKSPERFRAME %s\n' % TICKS_PER_FRAME)
     out.write(f'\t*SCENE_BACKGROUND_STATIC {df} {df} {df}\n' % (world_amb[0], world_amb[1], world_amb[2]))
     out.write(f'\t*SCENE_AMBIENT_STATIC {df} {df} {df}\n' % (world_amb[0], world_amb[1], world_amb[2]))
+    printCustomProperties(out)
     out.write("}\n\n")
     
 #-------------------------------------------------------------------------------------------------------------------------------
@@ -237,19 +277,19 @@ def write_scene_materials(out):
 def write_tm_node(out, obj_matrix_data, isPivot = False):
 
     if isPivot:
-        base_matrix = obj_matrix_data["matrix_transformed"]
+        matrix_data = obj_matrix_data["matrix_transformed"]
 
         # Apply transform matrix
         if TRANSFORM_TO_CENTER:
-            base_matrix = Matrix.Identity(4) 
+            matrix_data = Matrix.Identity(4) 
 
         out.write('\t*NODE_PIVOT_TM {\n')
     else:
-        base_matrix = obj_matrix_data["matrix_original"]
+        matrix_data = obj_matrix_data["matrix_original"]
 
         # Apply transform matrix
         if not TRANSFORM_TO_CENTER:
-            base_matrix = Matrix.Identity(4) 
+            matrix_data = Matrix.Identity(4) 
 
         out.write('\t*NODE_TM {\n')
 
@@ -258,42 +298,25 @@ def write_tm_node(out, obj_matrix_data, isPivot = False):
     out.write('\t\t*INHERIT_ROT %d %d %d\n' % (0, 0, 0))
     out.write('\t\t*INHERIT_SCL %d %d %d\n' % (0, 0, 0))
         
-    if obj_matrix_data["type"] == 'CAMERA':        
-        matrix_rotation = MESH_GLOBAL_MATRIX @ base_matrix
+    #Calculate matrix rotations.... 
+    eland_data = create_euroland_matrix(matrix_data, obj_matrix_data["type"])
+    eland_matrix = eland_data["eland_matrix"]
+    eland_euler = eland_data["eland_euler"]
 
-        matrix_rotation[0].z = -matrix_rotation[0].z
-        matrix_rotation[1].z = -matrix_rotation[1].z
-        matrix_rotation[2].z = -matrix_rotation[2].z
-
-        out.write(f'\t\t*TM_ROW0 {df} {df} {df}\n' % (matrix_rotation[0].x, matrix_rotation[1].x, matrix_rotation[2].x))
-        out.write(f'\t\t*TM_ROW1 {df} {df} {df}\n' % (matrix_rotation[0].y, matrix_rotation[1].y, matrix_rotation[2].y))
-        out.write(f'\t\t*TM_ROW2 {df} {df} {df}\n' % (matrix_rotation[0].z, matrix_rotation[1].z, matrix_rotation[2].z))
-        
-        #Transform position
-        obj_position = matrix_rotation.translation
-        out.write(f'\t\t*TM_ROW3 {df} {df} {df}\n' % (obj_position.x,obj_position.y,obj_position.z))
-        out.write(f'\t\t*TM_POS {df} {df} {df}\n' % (obj_position.x,obj_position.y,obj_position.z))
-        
-        #Transform rotation
-        euler_rotation = matrix_rotation.to_euler('ZXY') 
-        out.write(f'\t\t*TM_ROTANGLE {df} {df} {df}\n' % (euler_rotation.x, euler_rotation.y, euler_rotation.z))
-    else:
-        matrix_rotation = ROT_GLOBAL_MATRIX @ base_matrix
-        out.write(f'\t\t*TM_ROW0 {df} {df} {df}\n' % (matrix_rotation[0].x, matrix_rotation[2].x, matrix_rotation[1].x))
-        out.write(f'\t\t*TM_ROW1 {df} {df} {df}\n' % (matrix_rotation[0].z, matrix_rotation[2].z, matrix_rotation[1].z))
-        out.write(f'\t\t*TM_ROW2 {df} {df} {df}\n' % (matrix_rotation[0].y, matrix_rotation[2].y, matrix_rotation[1].y))
+    out.write(f'\t\t*TM_ROW0 {df} {df} {df}\n' % (eland_matrix[0].x, eland_matrix[1].x, eland_matrix[2].x))
+    out.write(f'\t\t*TM_ROW1 {df} {df} {df}\n' % (eland_matrix[0].y, eland_matrix[1].y, eland_matrix[2].y))
+    out.write(f'\t\t*TM_ROW2 {df} {df} {df}\n' % (eland_matrix[0].z, eland_matrix[1].z, eland_matrix[2].z))
     
-        #Transform position
-        obj_position = matrix_rotation.translation
-        out.write(f'\t\t*TM_ROW3 {df} {df} {df}\n' % (obj_position.x,obj_position.z,obj_position.y))
-        out.write(f'\t\t*TM_POS {df} {df} {df}\n' % (obj_position.x,obj_position.z,obj_position.y))
-        
-        #Transform rotation
-        euler_rotation = matrix_rotation.to_euler('ZXY') 
-        out.write(f'\t\t*TM_ROTANGLE {df} {df} {df}\n' % (euler_rotation.x, euler_rotation.z, euler_rotation.y))
+    #Transform position
+    obj_position = eland_matrix.translation
+    out.write(f'\t\t*TM_ROW3 {df} {df} {df}\n' % (obj_position.x,obj_position.y,obj_position.z))
+    out.write(f'\t\t*TM_POS {df} {df} {df}\n' % (obj_position.x,obj_position.y,obj_position.z))
+    
+    #Transform rotation
+    out.write(f'\t\t*TM_ROTANGLE {df} {df} {df}\n' % (eland_euler.x, eland_euler.y, eland_euler.z))
 
     #Print scale
-    transformed_scale = matrix_rotation.to_scale()
+    transformed_scale = eland_matrix.to_scale()
     out.write(f'\t\t*TM_SCALE {df} {df} {df}\n' % (transformed_scale.x, transformed_scale.z, transformed_scale.y))
     out.write(f'\t\t*TM_SCALEANGLE {df} {df} {df}\n' % (0, 0, 0))
     out.write('\t}\n')
@@ -316,29 +339,17 @@ def write_animation_node(out, object_data):
 
         #Print rotation
         out.write('\t\t\t*TM_FRAME  {:<5d}'.format(frameIndex))
-        if object_data.type == 'CAMERA':        
-            matrix_rotation = MESH_GLOBAL_MATRIX @ object_data.matrix_world
 
-            matrix_rotation[0].z = -matrix_rotation[0].z
-            matrix_rotation[1].z = -matrix_rotation[1].z
-            matrix_rotation[2].z = -matrix_rotation[2].z
+        eland_data = create_euroland_matrix(object_data.matrix_world.copy(), object_data.type)
+        eland_matrix = eland_data["eland_matrix"]
 
-            out.write(f' {df} {df} {df}' % (matrix_rotation[0].x, matrix_rotation[1].x, matrix_rotation[2].x))
-            out.write(f' {df} {df} {df}' % (matrix_rotation[0].y, matrix_rotation[1].y, matrix_rotation[2].y))
-            out.write(f' {df} {df} {df}' % (matrix_rotation[0].z, matrix_rotation[1].z, matrix_rotation[2].z))
-            
-            #Transform position
-            obj_position = matrix_rotation.translation
-            out.write(f' {df} {df} {df}\n' % (obj_position.x,obj_position.y,obj_position.z))
-        else:
-            matrix_rotation = ROT_GLOBAL_MATRIX @ object_data.matrix_world
-            out.write(f' {df} {df} {df}' % (matrix_rotation[0].x, matrix_rotation[2].x, matrix_rotation[1].x))
-            out.write(f' {df} {df} {df}' % (matrix_rotation[0].z, matrix_rotation[2].z, matrix_rotation[1].z))
-            out.write(f' {df} {df} {df}' % (matrix_rotation[0].y, matrix_rotation[2].y, matrix_rotation[1].y))
-
-            #Transform position
-            obj_position = matrix_rotation.translation
-            out.write(f' {df} {df} {df}\n' % (obj_position.x,obj_position.z,obj_position.y))
+        out.write(f' {df} {df} {df}' % (eland_matrix[0].x, eland_matrix[1].x, eland_matrix[2].x))
+        out.write(f' {df} {df} {df}' % (eland_matrix[0].y, eland_matrix[1].y, eland_matrix[2].y))
+        out.write(f' {df} {df} {df}' % (eland_matrix[0].z, eland_matrix[1].z, eland_matrix[2].z))
+        
+        #Transform position
+        obj_position = eland_matrix.translation
+        out.write(f' {df} {df} {df}\n' % (obj_position.x,obj_position.y,obj_position.z))
 
     out.write('\t\t}\n')
     out.write('\t}\n')
@@ -770,24 +781,64 @@ def write_light_data(out, scene, depsgraph):
             out.write("}\n")
 
 #-------------------------------------------------------------------------------------------------------------------------------
+def userWantsCameraScript(scene):
+    printScript = False
+    
+    if "cameraScriptEditor" in scene.keys():
+        camera_script_value = scene["cameraScriptEditor"]
+    
+        # Comprueba si el valor es mayor a 0
+        if isinstance(camera_script_value, (int, float)) and camera_script_value > 0:
+            printScript = True
+    return printScript
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def write_script_camera(out):
+    markers = [m for m in bpy.context.scene.timeline_markers if m.camera is not None]
+    num_cameras = len(markers)
+
+    out.write('\t*USER_DATA %u {\n' % 0)
+    out.write('\t\tCameraScript = %u\n' % 1)
+    out.write('\t\tCameraScript_numCameras = %u\n' % num_cameras)
+    out.write('\t\tCameraScript_globalOffset = %u\n' % 0)
+
+    # Recorrer los marcadores y generar la información requerida
+    for idx, marker in enumerate(markers, start=1):
+        name = marker.name
+        position = marker.frame  # Keyframe del marcador
+        camera = marker.camera
+
+        # Obtener el primer y último keyframe de la cámara asociada
+        if camera.animation_data and camera.animation_data.action:
+            fcurves = camera.animation_data.action.fcurves
+            keyframes = sorted(set(kp.co[0] for fc in fcurves for kp in fc.keyframe_points))
+            first_keyframe = int(keyframes[0]) if keyframes else position
+            last_keyframe = int(keyframes[-1]) if keyframes else position
+            timeline_frame = position + (last_keyframe - first_keyframe)
+
+            # Imprimir la información en el formato requerido
+            out.write('\t\tCameraScript_camera%u = %s %u %u %u %u\n' % (idx, name, first_keyframe, last_keyframe, position, timeline_frame))
+    out.write('\t}\n')
+
+#-------------------------------------------------------------------------------------------------------------------------------
 def write_camera_settings(out, camera_object, camera_data, current_frame, tab_level = 1):
     tab = get_tabs(tab_level)
 
     out.write(f'{tab}*CAMERA_SETTINGS {{\n')
     out.write(f'{tab}\t*TIMEVALUE %u\n' % current_frame)
-    #out.write(f'{tab}\t*CAMERA_NEAR %d\n' % (camera_object.clip_start))
-    #out.write(f'{tab}\t*CAMERA_FAR %d\n' % (camera_object.clip_end))
+    out.write(f'{tab}\t*CAMERA_NEAR %d\n' % (camera_object.clip_start))
+    out.write(f'{tab}\t*CAMERA_FAR %d\n' % (camera_object.clip_end))
     out.write(f'{tab}\t*CAMERA_FOV {df}\n' % (camera_object.angle))
     #out.write(f'{tab}\t*CAMERA_TDIST {df}\n' % (camera_data.location.length))
     out.write(f'{tab}}}\n')
-    
+
 #-------------------------------------------------------------------------------------------------------------------------------
 def write_camera_data(out, scene, depsgraph):
     global FRAMES_COUNT
 
     CamerasList = sorted([obj for obj in bpy.context.scene.objects if obj.type == 'CAMERA'], key=lambda obj: obj.name)
 
-    for ob_main in scene.objects:
+    for ob_main in CamerasList:
         # Check if the object is a camera source
         if ob_main.type != 'CAMERA':
             continue
@@ -865,38 +916,9 @@ def write_camera_data(out, scene, depsgraph):
         #===============================================================================================
         # swy: Jmarti856 found that this is needed for the time range of each camera to show up properly in
         #      the script timeline, without this all of them cover the entire thing from beginning to end
-        if ob_main == CamerasList[-1] and len(CamerasList) > 1:
-            out.write('\t*USER_DATA %u {\n' % 0)
-            out.write('\t\tCameraScript = %u\n' % 1)
-            out.write('\t\tCameraScript_numCameras = %u\n' % len(CamerasList))
-            out.write('\t\tCameraScript_globalOffset = %u\n' % 0)
-
-            # Print Cameras Info
-            CameraNumber = 1
-            CamStart = 0
-
-            for ob in CamerasList:
-                if ob.type == 'CAMERA':
-                    # Get Camera Keyframes
-                    if not ob.animation_data or ob.animation_data.action is None:
-                        continue
-
-                    Keyframe_Points_list = sorted({int(key.co[0]) for curve in ob.animation_data.action.fcurves for key in curve.keyframe_points})
-
-                    if not Keyframe_Points_list:
-                        continue
-
-                    # Calculate keyframe range and cumulative script offsets
-                    FirstKeyframe = Keyframe_Points_list[0]
-                    LastKeyframe = Keyframe_Points_list[-1]
-                    CamEnd = CamStart + (LastKeyframe - FirstKeyframe)
-                    out.write('\t\tCameraScript_camera%u = %s %u %u %u %u\n' % (CameraNumber, ob.name, FirstKeyframe, LastKeyframe, CamStart, CamEnd))
-
-                    # Update CamStart for the next camera
-                    CamStart = CamEnd + 1
-                    CameraNumber += 1
-
-            out.write('\t}\n')  # USER_DATA
+        if ob_main == CamerasList[-1]:
+            if userWantsCameraScript(scene):
+                    write_script_camera(out)            
         out.write("}\n")
 
 #-------------------------------------------------------------------------------------------------------------------------------
