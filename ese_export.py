@@ -8,15 +8,15 @@ Group: 'Export'
 Tooltip: 'Blender ESE Exporter for EuroLand'
 Authors: Swyter and Jmarti856
 """
+
 import bpy
-from math import degrees, radians
-from mathutils import Matrix, Euler, Vector
+from math import degrees
+from mathutils import Matrix
 from datetime import datetime
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
+from eland_utils import *
 
 #-------------------------------------------------------------------------------------------------------------------------------
-MESH_GLOBAL_MATRIX = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4()
-ROT_GLOBAL_MATRIX = Matrix(((1, 0, 0),(0, 1, 0),(0, 0, 1))).to_4x4()
 ESE_VERSION = '1.00'
 EXPORT_TRI = True
 EXPORT_NORMALS = True
@@ -27,97 +27,17 @@ EXPORT_APPLY_MODIFIERS=True
 #SET BY USER
 EXPORT_MESH = True
 EXPORT_CAMERAS = True
-EXPORT_LIGHTS = False
+EXPORT_LIGHTS = True
 EXPORT_ANIMATIONS = True
+TRANSFORM_TO_CENTER = False
+STATIC_FRAME = 1
 DECIMAL_PRECISION = 6
-TRANSFORM_TO_CENTER = True
 df = f'%.{DECIMAL_PRECISION}f'
 dcf = f'{{:>{DECIMAL_PRECISION}f}}'
 
 #Global variables
 FRAMES_COUNT = 0
 TICKS_PER_FRAME = 0
-
-#-------------------------------------------------------------------------------------------------------------------------------
-def tri_edge_is_from_ngon(polygon, tri_loop_indices, tri_idx, mesh_loops):
-    loop_start = polygon.loop_start
-    loop_end = loop_start + polygon.loop_total
-
-    current_loop_idx = tri_loop_indices[tri_idx]
-    next_loop_idx = tri_loop_indices[(tri_idx + 1) % len(tri_loop_indices)]
-
-    return next_loop_idx not in range(loop_start, loop_end) or current_loop_idx not in range(loop_start, loop_end)
-
-#-------------------------------------------------------------------------------------------------------------------------------
-def get_tabs(level):
-    return '\t' * level
-
-#-------------------------------------------------------------------------------------------------------------------------------
-def mesh_triangulate(me):
-    import bmesh
-    bm = bmesh.new()
-    bm.from_mesh(me)
-    bmesh.ops.triangulate(bm, faces=bm.faces)
-    bm.to_mesh(me)
-    bm.free()
-
-#-------------------------------------------------------------------------------------------------------------------------------
-def adjust_rgb(r, g, b, a):
-    brightness_scale = 10
-    r = min(max((r * brightness_scale), 0), 255)
-    g = min(max((g * brightness_scale), 0), 255)
-    b = min(max((b * brightness_scale), 0), 255)
-    return r, g, b, a
-
-#-------------------------------------------------------------------------------------------------------------------------------
-def veckey2d(v):
-    return round(v[0], 4), round(v[1], 4)
-
-#-------------------------------------------------------------------------------------------------------------------------------
-def veckey3d(v):
-    return round(v.x, 4), round(v.y, 4), round(v.z, 4)
-
-#-------------------------------------------------------------------------------------------------------------------------------
-def create_euroland_matrix(obj_matrix, obj_type):
-    
-    if obj_type == 'CAMERA':
-        euroland_matrix = MESH_GLOBAL_MATRIX @ obj_matrix
-                
-        # Cameras seems that needs to invert Z axis
-        for i in range(len(euroland_matrix)):
-            euroland_matrix[i][2] *= -1      
-            
-        #Euler stuf
-        rot_yxz = euroland_matrix.to_euler('YXZ')
-        euroland_euler = Euler([-angle for angle in rot_yxz], 'YXZ')          
-    else: 
-        transformed_matrix = ROT_GLOBAL_MATRIX @ obj_matrix
-        transformed_pos = MESH_GLOBAL_MATRIX @ transformed_matrix.translation
-
-        # Crear una matriz 4x4 vacía (matriz identidad como base)
-        euroland_matrix = Matrix.Identity(4)
-
-        # Rellenar la matriz con los datos en el orden especificado
-        for i, indices in enumerate([(0, 0), (2, 0), (1, 0)]):  # Fila X, Y, Z
-            euroland_matrix[i].x = transformed_matrix[indices[0]].x
-            euroland_matrix[i].y = transformed_matrix[indices[0]].z
-            euroland_matrix[i].z = transformed_matrix[indices[0]].y
-
-        # Agregar la posición/translation a la matriz
-        euroland_matrix[0][3] = transformed_pos.x  # Posición X
-        euroland_matrix[1][3] = transformed_pos.y  # Posición Y
-        euroland_matrix[2][3] = transformed_pos.z  # Posición Z  
-        
-        #Euler stufff
-        euroland_euler = obj_matrix.to_euler('ZXY')
-
-    #Pack data
-    matrix_data = {
-        "eland_matrix": euroland_matrix,
-        "eland_euler": euroland_euler
-    }
-
-    return matrix_data
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def printCustomProperties(out):
@@ -322,7 +242,7 @@ def write_tm_node(out, obj_matrix_data, isPivot = False):
     out.write('\t}\n')
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def write_animation_node(out, object_data):
+def write_animation_node(out, object_data, object_matrix_data):
     global TICKS_PER_FRAME
     
     out.write('\t*TM_ANIMATION {\n')
@@ -343,13 +263,20 @@ def write_animation_node(out, object_data):
         eland_data = create_euroland_matrix(object_data.matrix_world.copy(), object_data.type)
         eland_matrix = eland_data["eland_matrix"]
 
+        if not TRANSFORM_TO_CENTER:
+            current_matrix = object_data.matrix_world.copy()        
+            relative_matrix = current_matrix @ object_matrix_data["matrix_original"]
+            eland_data = create_euroland_matrix(relative_matrix, object_data.type)
+            eland_matrix = eland_data["eland_matrix"]
+            eland_matrix.translation = (Matrix.Identity(4) @ current_matrix).translation
+
         out.write(f' {df} {df} {df}' % (eland_matrix[0].x, eland_matrix[1].x, eland_matrix[2].x))
         out.write(f' {df} {df} {df}' % (eland_matrix[0].y, eland_matrix[1].y, eland_matrix[2].y))
         out.write(f' {df} {df} {df}' % (eland_matrix[0].z, eland_matrix[1].z, eland_matrix[2].z))
         
         #Transform position
         obj_position = eland_matrix.translation
-        out.write(f' {df} {df} {df}\n' % (obj_position.x,obj_position.y,obj_position.z))
+        out.write(f' {df} {df} {df}\n' % (obj_position.x, obj_position.y, obj_position.z))
 
     out.write('\t\t}\n')
     out.write('\t}\n')
@@ -530,7 +457,7 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
 
             #Mesh data
             out.write('\t*MESH {\n')
-            out.write('\t\t*TIMEVALUE %d\n' % scene.frame_current)
+            out.write('\t\t*TIMEVALUE %d\n' % STATIC_FRAME)
             out.write('\t\t*MESH_NUMVERTEX %u\n' % len(me_verts))
             out.write('\t\t*MESH_NUMFACES %u\n' % len(me.polygons))
 
@@ -652,7 +579,7 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
 
             #Print animations
             if FRAMES_COUNT > 0 and EXPORT_ANIMATIONS:
-                write_animation_node(out, ob_main)
+                write_animation_node(out, ob_main, obj_matrix_data)
 
             out.write(f'\t*WIREFRAME_COLOR {df} {df} {df}\n' % (ob.color[0], ob.color[1], ob.color[2]))
             out.write('\t*MATERIAL_REF %d\n' % list(scene_materials.keys()).index(ob.name))
@@ -744,13 +671,13 @@ def write_light_data(out, scene, depsgraph):
                 out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "Off") #for now
             out.write('\t*LIGHT_AMBIENT_ONLY %s\n' % "Off") #for now
 
-            write_light_settings(out, light_data, scene.frame_current)
+            write_light_settings(out, light_data, STATIC_FRAME)
 
             #---------------------------------------------[Light Animation]---------------------------------------------
-            print(FRAMES_COUNT)
             if FRAMES_COUNT > 1 and EXPORT_ANIMATIONS:
                 out.write('\t*LIGHT_ANIMATION {\n')
                 previous_light_data = None
+                frameIndex = 0
 
                 for frame in range(scene.frame_start, scene.frame_end + 1):
                     scene.frame_set(frame)
@@ -772,12 +699,13 @@ def write_light_data(out, scene, depsgraph):
                         (light_data.type == 'SUN' and light_data.angle != previous_light_data.angle)):
 
                         # Si hay alguna propiedad diferente, escribimos la configuración de la luz
-                        write_light_settings(out, light_data, scene.frame_current, 2)
+                        write_light_settings(out, light_data, frameIndex, 2)
 
                         # Actualizamos los datos anteriores con los datos actuales
                         previous_light_data = light_data
+                        frameIndex += TICKS_PER_FRAME
                 out.write('\t}\n')
-                write_animation_node(out, ob_main)
+                write_animation_node(out, ob_main, obj_matrix_data)
             out.write("}\n")
 
 #-------------------------------------------------------------------------------------------------------------------------------
@@ -874,7 +802,7 @@ def write_camera_data(out, scene, depsgraph):
         out.write('\t*NODE_NAME "%s"\n' % ob.name)
         out.write('\t*CAMERA_TYPE %s\n' % "target")
         write_tm_node(out, obj_matrix_data)
-        write_camera_settings(out, camera_data, ob, scene.frame_current)
+        write_camera_settings(out, camera_data, ob, STATIC_FRAME)
 
         #---------------------------------------------[Camera Animation]---------------------------------------------
         print(FRAMES_COUNT)
@@ -908,7 +836,7 @@ def write_camera_data(out, scene, depsgraph):
                     previous_camera_data = camera_data
                     frameIndex += TICKS_PER_FRAME
             out.write('\t}\n')
-            write_animation_node(out, ob_main)
+            write_animation_node(out, ob_main, obj_matrix_data)
             
             
         #===============================================================================================
