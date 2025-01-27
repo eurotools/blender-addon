@@ -3,7 +3,7 @@ import sys
 import os
 
 # Ruta del script a ejecutar
-filename = "F:/Repositories/EuroTools/Development/Tools/euroland_exporters/ese_export.py"
+filename = "F:/Repositories/EuroTools/Development/Tools/euroland_exporters/io_scene_sphinx/ese_export.py"
 
 # Agregar el directorio del script al sys.path
 script_dir = os.path.dirname(filename)

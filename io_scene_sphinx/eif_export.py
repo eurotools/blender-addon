@@ -28,7 +28,6 @@ def _write(context, filepath,
            EXPORT_GEOMNODE, 
            EXPORT_PLACENODE, 
            TRANSFORM_TO_CENTER, 
-           EXPORT_NORMALS,
            EXPORT_UV,
            EXPORT_VERTEX_COLORS,
            DECIMAL_PRECISION,
@@ -269,13 +268,6 @@ def _write(context, filepath,
                             color_corrected = adjust_rgb(col[0], col[1], col[2], col[3], 0.57)
                             out.write(f'\t\t{df} {df} {df} {df}\n' % (color_corrected[0], color_corrected[1], color_corrected[2], color_corrected[3]))
                     out.write('\t}\n')
-                    
-                # Normals
-                if EXPORT_NORMALS:
-                    out.write('\t*NORMALS_LIST {\n')
-                    if unique_normals:
-                        faceformat = faceformat + "N"
-                    out.write('\t}\n')
 
                 # Materials
                 if EXPORT_UV and len(me.materials) > 0:
@@ -454,7 +446,6 @@ def save(context,
          Output_GeomNode, 
          Output_PlaceNode, 
          Transform_Center,
-         Output_Mesh_Normals,
          Output_Mesh_UV,
          Output_Mesh_Vertex_Colors,
          Decimal_Precision,
@@ -464,7 +455,6 @@ def save(context,
            EXPORT_GEOMNODE=Output_GeomNode,
            EXPORT_PLACENODE=Output_PlaceNode, 
            TRANSFORM_TO_CENTER=Transform_Center, 
-           EXPORT_NORMALS=Output_Mesh_Normals,
            EXPORT_UV=Output_Mesh_UV,
            EXPORT_VERTEX_COLORS=Output_Mesh_Vertex_Colors,
            DECIMAL_PRECISION=Decimal_Precision,

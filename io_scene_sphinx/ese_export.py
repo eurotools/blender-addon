@@ -29,6 +29,7 @@ EXPORT_MESH = True
 EXPORT_CAMERAS = True
 EXPORT_LIGHTS = True
 EXPORT_ANIMATIONS = True
+EXPORT_MESH_ANIMATIONS = True
 TRANSFORM_TO_CENTER = True
 STATIC_FRAME = 1
 DECIMAL_PRECISION = 6
@@ -334,121 +335,34 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
             if ob_mat.determinant() < 0.0:
                 me.flip_normals()
 
+            # Crear listas únicas de coordenadas de vértices, UVs y colores de vértices
+            unique_vertices = list({tuple(v.co) for v in me.vertices})
+
+            #Get UVs
+            unique_uvs = []
             if EXPORT_UV:
-                faceuv = len(me.uv_layers) > 0
-                if faceuv:
-                    uv_layer = me.uv_layers.active.data[:]
-            else:
-                faceuv = False
+                if me.uv_layers:
+                    for uv_layer in me.uv_layers:
+                        for loop in me.loops:
+                            unique_uvs.append(tuple(uv_layer.data[loop.index].uv))
+                    unique_uvs = list(set(unique_uvs))
 
+            #Get colors
+            unique_colors = []
             if EXPORT_VERTEX_COLORS:
-                facecolors = len(me.vertex_colors) > 0
-                if facecolors:
-                    color_layer = me.vertex_colors.active.data[:]
-            else:
-                facecolors = False
+                if me.vertex_colors:
+                    for color_layer in me.vertex_colors:
+                        for loop in me.loops:
+                            unique_colors.append(tuple(color_layer.data[loop.index].color))
+                    unique_colors = list(set(unique_colors))
 
-            me_verts = me.vertices[:]
-
-            # Make our own list so it can be sorted to reduce context switching
-            face_index_pairs = [(face, index) for index, face in enumerate(me.polygons)]
-
-            if not (len(face_index_pairs) + len(me.vertices)):  # Make sure there is something to write
-                # clean up
-                bpy.data.meshes.remove(me)
-                continue  # dont bother with this mesh.
-
-            loops = me.loops
-            materials = me.materials[:]
-            material_names = [m.name if m else None for m in materials]
-
-            # UV
-            uv_unique_count = 0
-            uv_list = []
-            if faceuv:
-                # in case removing some of these dont get defined.
-                uv = f_index = uv_index = uv_key = uv_val = uv_ls = None
-
-                uv_face_mapping = [None] * len(face_index_pairs)
-
-                uv_dict = {}
-                uv_get = uv_dict.get
-                for f, f_index in face_index_pairs:
-                    uv_ls = uv_face_mapping[f_index] = []
-                    for uv_index, l_index in enumerate(f.loop_indices):
-                        uv = uv_layer[l_index].uv
-                        # include the vertex index in the key so we don't share UV's between vertices,
-                        # allowed by the OBJ spec but can cause issues for other importers, see: T47010.
-
-                        # this works too, shared UV's for all verts
-                        #~ uv_key = veckey2d(uv)
-                        uv_key = loops[l_index].vertex_index, veckey2d(uv)
-
-                        uv_val = uv_get(uv_key)
-                        if uv_val is None:
-                            uv_val = uv_dict[uv_key] = uv_unique_count
-                            uv_list.append((uv[0], uv[1]))
-                            uv_unique_count += 1
-                        uv_ls.append(uv_val)
-
-                del uv_dict, uv, f_index, uv_index, uv_ls, uv_get, uv_key, uv_val
-                # Only need uv_unique_count and uv_face_mapping
-
-            # Vertex Colors
-            vcolor_unique_count = 0
-            vcolor_list = []
-            if facecolors:
-                # Crear el mapeo de colores de vértices
-                vcolor_face_mapping = [None] * len(face_index_pairs)
-                
-                vcolor_dict = {}
-                vcolor_get = vcolor_dict.get
-                for f, f_index in face_index_pairs:
-                    color_ls = vcolor_face_mapping[f_index] = []
-                    for col_index, l_index in enumerate(f.loop_indices):
-                        v_color = color_layer[l_index].color
-
-                        # Usamos un diccionario para evitar colores duplicados
-                        color_key = (v_color[0], v_color[1], v_color[2], v_color[3])  # Clave por el color RGBA
-                        
-                        color_val = vcolor_get(color_key)
-                        if color_val is None:
-                            color_val = vcolor_dict[color_key] = vcolor_unique_count
-                            vcolor_list.append(v_color)  # Añadir el nuevo color a la lista
-                            vcolor_unique_count +=1
-                        color_ls.append(color_val)
-
-                # Limpieza de variables temporales
-                del vcolor_dict, v_color, f_index, col_index, color_ls, vcolor_get, color_key, color_val
-
-            # Añadir por defecto el color de la escena para que no se vea completamente negro en EuroLand
-            if not vcolor_list:
-                if scene.world:
-                    ambient_color = (scene.world.color.r, scene.world.color.g, scene.world.color.b, 1.0)  # Añadir alpha = 1.0
-                else:
-                    ambient_color = (0.8, 0.8, 0.8, 1.0)
-                vcolor_list.append(adjust_rgb(ambient_color[0], ambient_color[1], ambient_color[2], ambient_color[3]))
-                vcolor_unique_count +=1
-
-            # NORMAL, Smooth/Non smoothed.
-            if EXPORT_NORMALS:
-                normal_list = []
-                no_unique_count = 0
-                no_key = no_val = None
-                normals_to_idx = {}
-                no_get = normals_to_idx.get
-                loops_to_normals = [0] * len(loops)
-                for f, f_index in face_index_pairs:
-                    for l_idx in f.loop_indices:
-                        no_key = veckey3d(loops[l_idx].normal)
-                        no_val = no_get(no_key)
-                        if no_val is None:
-                            no_val = normals_to_idx[no_key] = no_unique_count
-                            normal_list.append(no_key)
-                            no_unique_count += 1
-                        loops_to_normals[l_idx] = no_val
-                del normals_to_idx, no_get, no_key, no_val
-
+            # Create mapping lists
+            vertex_index_map = {v: idx for idx, v in enumerate(unique_vertices)}
+            uv_index_map = {uv: idx for idx, uv in enumerate(unique_uvs)}
+            color_index_map = {color: idx for idx, color in enumerate(unique_colors)}
+            mesh_materials = scene_materials[ob_main.name]
+            mesh_materials_names = [m.name if m else None for m in mesh_materials]
+            
             # Start printing
             out.write("*GEOMOBJECT {\n")
             out.write('\t*NODE_NAME "%s"\n' % ob_main.name)
@@ -458,40 +372,28 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
             #Mesh data
             out.write('\t*MESH {\n')
             out.write('\t\t*TIMEVALUE %d\n' % STATIC_FRAME)
-            out.write('\t\t*MESH_NUMVERTEX %u\n' % len(me_verts))
+            out.write('\t\t*MESH_NUMVERTEX %u\n' % len(unique_vertices))
             out.write('\t\t*MESH_NUMFACES %u\n' % len(me.polygons))
 
-            #Vertex
+            #-------------------------------------------------------------------------------------------------------------------------------
+            #Vertex lists
             out.write('\t\t*MESH_VERTEX_LIST {\n')
-            for vindex, v in enumerate(me_verts):
-                out.write(f'\t\t\t*MESH_VERTEX  {{:>5d}}   {dcf}    {dcf}    {dcf}\n'.format(vindex, v.co.x, v.co.y, v.co.z))
+            for vindex, uv in enumerate(unique_vertices):
+                out.write(f'\t\t\t*MESH_VERTEX  {{:>5d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(vindex, uv[0], uv[1], uv[2]))
             out.write('\t\t}\n')    
             
-            #Faces
+            #Vertex mapping
             out.write('\t\t*MESH_FACE_LIST {\n')
-            for f, f_index in face_index_pairs:               
+            for p_index, poly in enumerate(me.polygons):
                 
-                f_v = [(vi, me_verts[v_idx], l_idx)
-                        for vi, (v_idx, l_idx) in enumerate(zip(f.vertices, f.loop_indices))]
-                
-                vertex_indices = [v.index for vi, v, li in (f_v)]
+                vertex_indices = [vertex_index_map[tuple(me.vertices[v].co)] for v in (poly.vertices)]
 
-                #Get material name from mesh materials list
-                f_mat = min(f.material_index, len(materials) - 1)
-
-                if len(material_names) > 0:
-                    material_name = material_names[f_mat] 
-                else:
-                    material_name = ""
-
-                #Find index in the global scene list (*MATERIALS_LIST)
-                mesh_materials = scene_materials[ob_main.name]
-                mesh_materials_names = [m.name if m else None for m in mesh_materials]
-
-                if material_name in mesh_materials_names:
-                    mesh_material_index = mesh_materials_names.index(material_name)
-                else:
-                    mesh_material_index = -1
+                #Get material index
+                material_index = -1
+                if poly.material_index < len(me.materials):
+                    material_name = me.materials[poly.material_index].name
+                    if material_name in mesh_materials_names:
+                        material_index = mesh_materials_names.index(material_name)
                 
                 # swy: the calc_loop_triangles() doesn't modify the original faces, and instead does temporary ad-hoc triangulation
                 #      returning us a list of three loops per "virtual triangle" that only exists in the returned thingie
@@ -500,85 +402,71 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
                 #           points to the original model's loop chain; the loops of our triangle aren't really linked
                 edges_from_ngon = []  # Almacenar el resultado para cada borde del triángulo
                 for tri_idx in range(len(vertex_indices)):
-                    is_from_ngon = tri_edge_is_from_ngon(f, vertex_indices, tri_idx, loops)
+                    is_from_ngon = tri_edge_is_from_ngon(poly, vertex_indices, tri_idx, me.loops)
                     edges_from_ngon.append(1 if is_from_ngon else 0)
 
                 #Face Vertex Index
-                out.write('\t\t\t*MESH_FACE    {:>3d}:    A: {:>6d} B: {:>6d} C: {:>6d}'.format(f_index, vertex_indices[0], vertex_indices[1], vertex_indices[2]))
-                out.write('    AB: {:<6d} BC: {:<6d} CA: {:<6d}  *MESH_SMOOTHING   *MESH_MTLID {:<3d}\n'.format(edges_from_ngon[0], edges_from_ngon[1], edges_from_ngon[2], mesh_material_index))
+                out.write('\t\t\t*MESH_FACE    {:>3d}:    A: {:>6d} B: {:>6d} C: {:>6d}'.format(p_index, vertex_indices[0], vertex_indices[1], vertex_indices[2]))
+                out.write('    AB: {:<6d} BC: {:<6d} CA: {:<6d}  *MESH_SMOOTHING   *MESH_MTLID {:<3d}\n'.format(edges_from_ngon[0], edges_from_ngon[1], edges_from_ngon[2], material_index))
             out.write('\t\t}\n')
 
-            #UVs
-            if faceuv:
-                out.write('\t\t*MESH_NUMTVERTEX %d\n' % uv_unique_count)
+            #-------------------------------------------------------------------------------------------------------------------------------
+            if EXPORT_UV:
+                #Print list
+                out.write('\t\t*MESH_NUMTVERTEX %u\n' % len(unique_uvs))
                 out.write('\t\t*MESH_TVERTLIST {\n')
-                for idx, TextUV in enumerate(uv_list):
-                    out.write(f'\t\t\t*MESH_TVERT {{:<3d}}  {dcf}   {dcf}   {dcf}\n'.format(idx, TextUV[0], TextUV[1], 0))
-                out.write('\t\t}\n') 
-                
-                #UVs mapping
+                for uv_index, uv in enumerate(unique_uvs):
+                    out.write(f'\t\t\t*MESH_TVERT {{:>5d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(uv_index, uv[0], uv[1], 0))
+                out.write('\t\t}\n')
+
+                #Map UVs
                 out.write('\t\t*MESH_NUMTVFACES %d\n' % len(me.polygons))
                 out.write('\t\t*MESH_TFACELIST {\n')
-                for f, f_index in face_index_pairs:               
-                    
-                    f_v = [(vi, me_verts[v_idx], l_idx)
-                            for vi, (v_idx, l_idx) in enumerate(zip(f.vertices, f.loop_indices))]
-
-                    out.write('\t\t\t*MESH_TFACE {:<3d}  '.format(f_index))
-                    for vi, v_idx, l_idx in (f_v):
-                        uv_idx = uv_face_mapping[f_index][vi] if uv_face_mapping[f_index] else 0
-                        out.write("%d   " % (uv_idx))
-                    out.write("\n")
+                for p_index, poly in enumerate(me.polygons):
+                    uv_indices = []
+                    for loop_index in (poly.loop_indices):
+                        uv = tuple(me.uv_layers.active.data[loop_index].uv)
+                        uv_indices.append(uv_index_map.get(uv, -1))
+                    out.write(f'\t\t\t*MESH_TFACE {{:<3d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(p_index, uv_indices[0], uv_indices[1], uv_indices[2]))
                 out.write('\t\t}\n')
 
-            # Vertex Colors
-            out.write('\t\t*MESH_NUMCVERTEX %d\n' % vcolor_unique_count)
-            out.write('\t\t*MESH_CVERTLIST {\n')
-            for idx, col in enumerate(vcolor_list):
-                out.write(f'\t\t\t*MESH_VERTCOL {{:<3d}}  {dcf}   {dcf}   {dcf}   {dcf}\n'.format(idx, col[0], col[1], col[2], col[3]))
-            out.write('\t\t}\n') 
-            
-            # Vertex Colors mapping
-            out.write('\t\t*MESH_NUMCVFACES %d\n' % len(me.polygons))
-            out.write('\t\t*MESH_CFACELIST {\n')
-            for f, f_index in face_index_pairs:               
-                
-                f_v = [(vi, me_verts[v_idx], l_idx)
-                        for vi, (v_idx, l_idx) in enumerate(zip(f.vertices, f.loop_indices))]
+            #-------------------------------------------------------------------------------------------------------------------------------
+            if EXPORT_VERTEX_COLORS:
+                #Print list
+                out.write('\t\t*MESH_NUMCVERTEX %u\n' % len(unique_colors))
+                out.write('\t\t*MESH_CVERTLIST {\n')
+                for col_index, col  in enumerate(unique_colors):
+                    out.write(f'\t\t\t*MESH_VERTCOL {{:>5d}}\t{dcf}\t{dcf}\t{dcf}\t{dcf}\n'.format(col_index, col[0], col[1], col[2], col[3]))
+                out.write('\t\t}\n')
 
-                out.write('\t\t\t*MESH_CFACE {:<3d}  '.format(f_index))
-                if vcolor_list and facecolors:
-                    for vi, v_idx, l_idx in (f_v):
-                        color_idx = vcolor_face_mapping[f_index][vi] if vcolor_face_mapping[f_index] else 0
-                        out.write("%d   " % (color_idx))
-                else:
-                    for _ in range(3):
-                        out.write("%d   " % (0))
-                out.write("\n")
-            out.write('\t\t}\n')
+                #Map colors
+                out.write('\t\t*MESH_NUMCVFACES %d\n' % len(me.polygons))
+                out.write('\t\t*MESH_CFACELIST {\n')
+                for p_index, poly in enumerate(me.polygons):
+                    color_indices = []
+                    for loop_index in (poly.loop_indices):
+                        color = tuple(me.vertex_colors.active.data[loop_index].color)
+                        color_indices.append(color_index_map.get(color, -1))
+                    out.write(f'\t\t\t*MESH_CFACE {{:<3d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(p_index, color_indices[0], color_indices[1], color_indices[2]))
+                out.write('\t\t}\n')           
 
-            #Normals
+            #-------------------------------------------------------------------------------------------------------------------------------
             if EXPORT_NORMALS:
                 out.write('\t\t*MESH_NORMALS {\n')
-                for f, f_index in face_index_pairs:  
-                    # Imprimir la normal de la cara
-                    face_normal = loops_to_normals[f_index]
-                    out.write(f'\t\t\t*MESH_FACENORMAL {{:<3d}}  {dcf}   {dcf}   {dcf}\n'.format(f_index, normal_list[face_normal][0], normal_list[face_normal][1], normal_list[face_normal][2]))
-
-                    # Imprimir las normales de los vértices correspondientes
-                    f_v = [(vi, me_verts[v_idx], l_idx)
-                            for vi, (v_idx, l_idx) in enumerate(zip(f.vertices, f.loop_indices))]
-                    
-                    vertex_indices = [v.index for vi, v, li in (f_v)]
+                for p_index, poly in enumerate(me.polygons):
+                    poly_normals = poly.normal
+                    vertex_indices = [vertex_index_map[tuple(me.vertices[v].co)] for v in (poly.vertices)]    
+                
+                    out.write(f'\t\t\t*MESH_FACENORMAL {{:<3d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(p_index, poly_normals[0], poly_normals[1], poly_normals[2]))
                     for tri_idx in range(len(vertex_indices)):
-                        out.write(f'\t\t\t\t*MESH_VERTEXNORMAL {{:<3d}}  {dcf}   {dcf}   {dcf}\n'.format(vertex_indices[tri_idx], normal_list[face_normal][0], normal_list[face_normal][1], normal_list[face_normal][2]))
+                        out.write(f'\t\t\t\t*MESH_VERTEXNORMAL {{:<3d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(tri_idx, poly_normals[0], poly_normals[1], poly_normals[2]))
                 out.write('\t\t}\n')
-
-            #Close Mesh block
+        
+            #Close mesh block
             out.write('\t}\n')
 
             #Print animations
-            if FRAMES_COUNT > 0 and EXPORT_ANIMATIONS:
+            if EXPORT_MESH_ANIMATIONS:
                 write_animation_node(out, ob_main, obj_matrix_data)
 
             out.write(f'\t*WIREFRAME_COLOR {df} {df} {df}\n' % (ob.color[0], ob.color[1], ob.color[2]))
@@ -839,11 +727,10 @@ def write_camera_data(out, scene, depsgraph):
             write_animation_node(out, ob_main, obj_matrix_data)
             
             
-        #===============================================================================================
-        #  USER DATA (ONLY FOR SCRIPTS)
-        #===============================================================================================
+        #-------------------------------------------------------------------------------------------------------------------------------
         # swy: Jmarti856 found that this is needed for the time range of each camera to show up properly in
         #      the script timeline, without this all of them cover the entire thing from beginning to end
+        #-------------------------------------------------------------------------------------------------------------------------------
         if ob_main == CamerasList[-1]:
             if userWantsCameraScript(scene):
                     write_script_camera(out)            

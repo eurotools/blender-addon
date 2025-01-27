@@ -76,12 +76,6 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
     #-------------------------------------------------------------------------------------------------------------------------------
     # Mesh Options
     #-------------------------------------------------------------------------------------------------------------------------------
-    Output_Mesh_Normals : BoolProperty(
-        name="Mesh Normals",
-        description="Export mesh normals",
-        default=False,
-    ) # type: ignore
-
     Output_Mesh_UV : BoolProperty(
         name="Mapping Coordinates",
         description="Export mesh UVs",
@@ -164,7 +158,6 @@ class EIF_EXPORT_PT_Mesh_Options(bpy.types.Panel):
         return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_eif"
 
     def draw(self, context):
-        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Normals')
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_UV')
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Vertex_Colors')
 
