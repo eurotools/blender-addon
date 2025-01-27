@@ -28,8 +28,7 @@ def get_tabs(level):
     return '\t' * level
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def adjust_rgb(r, g, b, a):
-    brightness_scale = 10
+def adjust_rgb(r, g, b, a, brightness_scale = 10):
     r = min(max((r * brightness_scale), 0), 255)
     g = min(max((g * brightness_scale), 0), 255)
     b = min(max((b * brightness_scale), 0), 255)
