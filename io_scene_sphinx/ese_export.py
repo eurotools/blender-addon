@@ -20,6 +20,7 @@ from eland_utils import *
 ESE_VERSION = '1.00'
 EXPORT_TRI = True
 EXPORT_NORMALS = True
+EXPORT_FLAGS = True
 EXPORT_UV=True
 EXPORT_VERTEX_COLORS = True
 EXPORT_APPLY_MODIFIERS=True
@@ -28,6 +29,7 @@ EXPORT_APPLY_MODIFIERS=True
 EXPORT_MESH = True
 EXPORT_CAMERAS = True
 EXPORT_LIGHTS = True
+EXPORT_BONES = True
 EXPORT_ANIMATIONS = True
 EXPORT_MESH_ANIMATIONS = True
 TRANSFORM_TO_CENTER = True
@@ -378,8 +380,8 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
             #-------------------------------------------------------------------------------------------------------------------------------
             #Vertex lists
             out.write('\t\t*MESH_VERTEX_LIST {\n')
-            for vindex, uv in enumerate(unique_vertices):
-                out.write(f'\t\t\t*MESH_VERTEX  {{:>5d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(vindex, uv[0], uv[1], uv[2]))
+            for vindex, vertex in enumerate(unique_vertices):
+                out.write(f'\t\t\t*MESH_VERTEX  {{:>5d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(vindex, vertex[0], vertex[1], vertex[2]))
             out.write('\t\t}\n')    
             
             #Vertex mapping
@@ -425,8 +427,8 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
                 for p_index, poly in enumerate(me.polygons):
                     uv_indices = []
                     for loop_index in (poly.loop_indices):
-                        uv = tuple(me.uv_layers.active.data[loop_index].uv)
-                        uv_indices.append(uv_index_map.get(uv, -1))
+                        vertex = tuple(me.uv_layers.active.data[loop_index].uv)
+                        uv_indices.append(uv_index_map.get(vertex, -1))
                     out.write(f'\t\t\t*MESH_TFACE {{:<3d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(p_index, uv_indices[0], uv_indices[1], uv_indices[2]))
                 out.write('\t\t}\n')
 
@@ -461,7 +463,37 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
                     for tri_idx in range(len(vertex_indices)):
                         out.write(f'\t\t\t\t*MESH_VERTEXNORMAL {{:<3d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(tri_idx, poly_normals[0], poly_normals[1], poly_normals[2]))
                 out.write('\t\t}\n')
-        
+
+            #-------------------------------------------------------------------------------------------------------------------------------
+            if EXPORT_FLAGS:
+                import bmesh
+                bm = bmesh.new()
+                bm.from_mesh(me)
+
+                euro_vtx_flags = bm.verts.layers.int['euro_vtx_flags']
+                euro_fac_flags = bm.faces.layers.int['euro_fac_flags']
+
+                # swy: add the custom mesh attributes here
+                out.write('\t\t*MESH_NUMFACEFLAGS %u\n' % len(bm.faces))
+                out.write('\t\t*MESH_FACEFLAGLIST {\n')
+                for face in bm.faces:
+                    a = face[euro_fac_flags]
+                    # swy: don't set it where it isn't needed
+                    if face[euro_fac_flags] != 0:
+                        out.write(f'\t\t\t*MESH_FACEFLAG %u %u\n' % (face.index, face[euro_fac_flags]))
+                out.write('\t\t}\n') # MESH_NUMFACEFLAGS
+
+                out.write('\t\t*MESH_VERTFLAGSLIST {\n')
+                for idx, vert in enumerate(bm.verts):
+                    # swy: don't set it where it isn't needed
+                    if vert[euro_vtx_flags] != 0:
+                        out.write(f'\t\t\t*VFLAG %u %u\n' % (idx, vert[euro_vtx_flags]))
+                out.write('\t\t}\n') # MESH_VERTFLAGSLIST
+                
+                # Actualiza la malla con los cambios realizados en bmesh
+                bm.to_mesh(me)
+                bm.free()  # Libera la memoria de bmesh
+
             #Close mesh block
             out.write('\t}\n')
 
@@ -471,10 +503,135 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
 
             out.write(f'\t*WIREFRAME_COLOR {df} {df} {df}\n' % (ob.color[0], ob.color[1], ob.color[2]))
             out.write('\t*MATERIAL_REF %d\n' % list(scene_materials.keys()).index(ob.name))
-            out.write("}\n")
+
+            #-------------------------------------------------------------------------------------------------------------------------------
+            #  SHAPE KEYS
+            #-------------------------------------------------------------------------------------------------------------------------------
+            # swy: here go our blend shape weights with the mixed-in amount for each frame in the timeline
+            if ob.data.shape_keys:
+                frame_count = bpy.context.scene.frame_end - bpy.context.scene.frame_start + 1
+                out.write('\t*MORPH_DATA {')
+                for key in ob.data.shape_keys.key_blocks:
+                    if key.relative_key != key:
+                        out.write(f'\n\t*MORPH_FRAMES "%s" %u {{\n' % (key.name.replace(' ', '_'), frame_count))
+
+                        for f in range(bpy.context.scene.frame_start, bpy.context.scene.frame_end + 1):
+                            bpy.context.scene.frame_set(f)
+                            out.write(f'\t\t\t%u {df}\n' % (f, key.value))
+
+                        out.write('\t\t}\n') # MORPH_FRAMES
+                out.write('\t}') # MORPH_DATA
+
+            #-------------------------------------------------------------------------------------------------------------------------------
+            #  SKELETAL RIGGING / BONE HIERARCHY DEFINITION / ARMATURE
+            #-------------------------------------------------------------------------------------------------------------------------------
+            for indx, mod in enumerate(ob.modifiers):
+                # swy: find the armature element between the possible mesh modifiers
+                if mod.type == 'ARMATURE' and mod.object and mod.object.type == 'ARMATURE':
+                    armat = mod.object
+                    out.write('\t*SKIN_DATA {\n')
+                    out.write('\t\t*BONE_LIST {\n')
+
+                    # create a skeletal lookup list for bone names
+                    bone_names = [bone.name for bone in armat.data.bones]
+
+                    for bidx, bone in enumerate(armat.data.bones):
+                        out.write('\t\t\n*BONE %u "%s"\n' % (bidx, bone.name))
+                    out.write('\t\t}') # BONE_LIST
+
+                    # create a vertex group lookup list for names
+                    # https://blender.stackexchange.com/a/28273/42781
+                    vgroup_names = [vgroup.name for vgroup in ob.vertex_groups]
+
+                    out.write('\t\t*SKIN_VERTEX_DATA {\n')
+                    for vidx, vert in enumerate(me.vertices):
+                        out.write('\t\t\n*VERTEX %5u %u' % (vidx, len(vert.groups)))
+
+                        # swy: make it so that the bones that have more influence appear first
+                        #      in the listing, otherwise order seems random.
+                        sorted_groups = sorted(vert.groups, key = lambda i: i.weight, reverse = True)
+
+                        for gidx, group in enumerate(sorted_groups):
+                            # swy: get the actual vertex group name from the local index (the .group thing)
+                            cur_vgroup_name = vgroup_names[group.group]
+                            # swy: and test it to see if it matches a bone name from the bound armature/skeleton
+                            #      otherwise it probably isn't a weighting group and is used for something else
+                            if cur_vgroup_name not in bone_names:
+                                continue
+
+                            # swy: because the bone names are in the same order as in the BONE_LIST above everything works out
+                            global_bone_index = bone_names.index(cur_vgroup_name)
+                            out.write(f'  %2u {df}' % (global_bone_index, group.weight))
+                        out.write("\n")
+
+                    out.write('\t\t}') # SKIN_VERTEX_DATA
+                    out.write('\t}') # SKIN_DATA
+
+                    # swy: we only support one armature modifier/binding per mesh for now, stop looking for more
+                    break
+
+            out.write("}\n") # GEOMOBJECT
+
+            # swy: here goes the changed geometry/vertex positions for each of the shape keys, globally.
+            #      they are referenced by name.
+            if ob.data.shape_keys:
+                for key in ob.data.shape_keys.key_blocks:
+                    # swy: don't export the 'Basis' one that is just the normal mesh data other keys are relative/substracted to
+                    if key.relative_key != key:
+                        out.write('*MORPH_LIST {\n')
+                        out.write('\t*MORPH_TARGET "%s" %u {\n' % (key.name.replace(' ', '_'), len(key.data)))
+
+                        for vidx, vert in enumerate(key.data):
+                            out.write('\t\t\t{df}\t{df}\t{df}\n' % (vert.co.x, vert.co.y, vert.co.z))
+
+                        out.write('\t}\n') # MORPH_TARGET
+                        out.write('}\n') # MORPH_LIST
 
             # clean up
             ob_for_convert.to_mesh_clear()
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def write_biped_bones(out, scene, depsgraph):
+    for ob_main in scene.objects:
+        # Check if the object is a bone source
+        if ob_main.type != 'ARMATURE':
+            continue
+
+        # Handle object instances (duplicated lights)
+        obs = [(ob_main, ob_main.matrix_world)]
+        if ob_main.is_instancer:
+            obs += [(dup.instance_object.original, dup.matrix_world.copy())
+                    for dup in depsgraph.object_instances
+                    if dup.parent and dup.parent.original == ob_main]
+            # ~ print(ob_main.name, 'has', len(obs) - 1, 'dupli children')
+
+        for ob, ob_mat in obs:
+            ob_for_convert = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
+
+            try:
+                # Extract the bone data
+                bone_data = ob_for_convert.data
+            except AttributeError:
+                bone_data = None
+
+            if bone_data is None:
+                continue
+            
+            # Apply transformation matrix to light object
+            obj_matrix_data = {
+                "name" : ob_main.name,
+                "type" : ob_main.type,
+                "matrix_original" : ob_mat.copy(),
+                "matrix_transformed": ob_mat.copy()
+            }
+			
+            for bidx, bone in enumerate(bone_data.bones):
+                out.write('*BONEOBJECT {\n')
+                out.write('*NODE_NAME "%s"\n' % bone.name)
+                out.write('*NODE_BIPED_BODY\n')
+                if (bone.parent):
+                    out.write('*NODE_PARENT "%s"\n' % bone.parent.name)
+                out.write('}') # BONEOBJECT
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def write_light_settings(out, light_object, current_frame, tab_level = 1):
@@ -766,6 +923,8 @@ def export_file(filepath):
             write_camera_data(out, scene, depsgraph)
         if EXPORT_LIGHTS:
             write_light_data(out, scene, depsgraph)
+        if EXPORT_BONES:
+            write_biped_bones(out, scene, depsgraph)
                 
     print(f"Archivo exportado con éxito: {filepath}")
 
