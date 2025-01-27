@@ -11,14 +11,13 @@ Authors: Swyter and Jmarti856
 
 import os
 import bpy
-from math import radians, degrees
+from math import degrees
 from mathutils import Matrix
 from datetime import datetime
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
+from eland_utils import *
 
 #-------------------------------------------------------------------------------------------------------------------------------
-MESH_GLOBAL_MATRIX = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4()
-ROT_GLOBAL_MATRIX = Matrix(((1, 0, 0),(0, 1, 0),(0, 0, 1))).to_4x4()
 EIF_VERSION = '1.00'
 EXPORT_TRI=False
 EXPORT_UV=True
@@ -28,30 +27,9 @@ EXPORT_APPLY_MODIFIERS=True
 #SET BY USER
 EXPORT_GEOMNODE = True
 EXPORT_PLACENODE = True
-TRANSFORM_TO_CENTER = True
+TRANSFORM_TO_CENTER = False
 DECIMAL_PRECISION = 6
 df = f'%.{DECIMAL_PRECISION}f'
-
-#-------------------------------------------------------------------------------------------------------------------------------
-def mesh_triangulate(me):
-    import bmesh
-    bm = bmesh.new()
-    bm.from_mesh(me)
-    bmesh.ops.triangulate(bm, faces=bm.faces)
-    bm.to_mesh(me)
-    bm.free()
-
-#-------------------------------------------------------------------------------------------------------------------------------
-def adjust_rgb(r, g, b, a):
-    brightness_scale = 10
-    r = min(max((r * brightness_scale), 0), 255)
-    g = min(max((g * brightness_scale), 0), 255)
-    b = min(max((b * brightness_scale), 0), 255)
-    return r, g, b, a
-
-#-------------------------------------------------------------------------------------------------------------------------------
-def veckey2d(v):
-    return round(v[0], 4), round(v[1], 4)
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def write_scene_data(out, scene):
@@ -210,6 +188,7 @@ def write_mesh_data(out, scene, depsgraph, materials_list):
             #Append data to dictionary, will be used for place and geom node.
             if me.name not in matrix_data:
                 matrix_data[ob_main.name] = {
+                    "type" : ob_main.type,
                     "matrix_original" : ob_mat.copy(),
                     "matrix_transformed": matrix_transformed.copy()
                 }
@@ -406,80 +385,59 @@ def write_mesh_data(out, scene, depsgraph, materials_list):
     return matrix_data
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def write_geom_node(out, object_matrix_data):
-    for mesh_name, data in object_matrix_data.items():
-        base_matrix = data["matrix_transformed"]
+def write_geom_and_place_node(out, obj_matrix_data, isGeomNode = False):
+    for mesh_name, data in obj_matrix_data.items():
+        if isGeomNode:
+            matrix_data = data["matrix_transformed"]
 
-        # Apply transform matrix
-        if TRANSFORM_TO_CENTER:
-            base_matrix = Matrix.Identity(4) 
+            # Apply transform matrix
+            if TRANSFORM_TO_CENTER:
+                matrix_data = Matrix.Identity(4) 
 
-        out.write('*GEOMNODE {\n')
+            out.write('*GEOMNODE {\n')
+        else:
+            matrix_data = data["matrix_original"]
+
+            # Apply transform matrix
+            if not TRANSFORM_TO_CENTER:
+                matrix_data = Matrix.Identity(4) 
+
+            out.write('*PLACENODE {\n')
+        #Write common content
         out.write('\t*NAME "%s"\n' % (mesh_name))
         out.write('\t*MESH "%s"\n' % (mesh_name))
         out.write('\t*WORLD_TM {\n')
 
+        #Calculate matrix rotations.... 
+        eland_data = create_euroland_matrix(matrix_data, data["type"])
+        eland_matrix = eland_data["eland_matrix"]
+        eland_euler = eland_data["eland_euler"]
+
         #Matrix rotation
-        matrix_rotation = ROT_GLOBAL_MATRIX @ base_matrix
-        out.write(f'\t\t*TMROW0 {df} {df} {df} {df}\n' % (matrix_rotation[0].x, matrix_rotation[2].x, matrix_rotation[1].x, 0))
-        out.write(f'\t\t*TMROW1 {df} {df} {df} {df}\n' % (matrix_rotation[0].z, matrix_rotation[2].z, matrix_rotation[1].z, 0))
-        out.write(f'\t\t*TMROW2 {df} {df} {df} {df}\n' % (matrix_rotation[0].y, matrix_rotation[2].y, matrix_rotation[1].y, 0))     
+        out.write(f'\t\t*TMROW0 {df} {df} {df} {df}\n' % (eland_matrix[0].x, eland_matrix[1].x, eland_matrix[2].x, 0))
+        out.write(f'\t\t*TMROW1 {df} {df} {df} {df}\n' % (eland_matrix[0].y, eland_matrix[1].y, eland_matrix[2].y, 0))
+        out.write(f'\t\t*TMROW2 {df} {df} {df} {df}\n' % (eland_matrix[0].z, eland_matrix[1].z, eland_matrix[2].z, 0))     
 
         # Position
-        obj_position = matrix_rotation.translation
-        out.write(f'\t\t*TMROW3 {df} {df} {df} {df}\n' % (obj_position.x, obj_position.z, obj_position.y, 1))
-        out.write(f'\t\t*POS {df} {df} {df}\n' % (obj_position.x, obj_position.z, obj_position.y))
+        obj_position = eland_matrix.translation
+        out.write(f'\t\t*TMROW3 {df} {df} {df} {df}\n' % (obj_position.x, obj_position.y, obj_position.z, 1))
+        out.write(f'\t\t*POS {df} {df} {df}\n' % (obj_position.x, obj_position.y, obj_position.z))
         
         # Rotation
-        euler_rotation = matrix_rotation.to_euler('ZXY') 
-        out.write(f'\t\t*ROT: {df} {df} {df}\n' % (degrees(euler_rotation.x), degrees(euler_rotation.z),degrees(euler_rotation.y)))
+        out.write(f'\t\t*ROT: {df} {df} {df}\n' % (degrees(eland_euler.x), degrees(eland_euler.z),degrees(eland_euler.y)))
         
         #Scale
-        transformed_scale = matrix_rotation.to_scale()
+        transformed_scale = eland_matrix.to_scale()
         out.write(f'\t\t*SCL {df} {df} {df}\n' % (transformed_scale.x, transformed_scale.z, transformed_scale.y))
         out.write('\t}\n')
 
         #Print flags
-        out.write('\t*USER_FLAGS_COUNT %u\n' % 1)
-        out.write('\t*USER_FLAGS {\n')
-        out.write('\t\t*SET 0 0x00000000\n')
-        out.write('\t}\n')
+        if isGeomNode:
+            out.write('\t*USER_FLAGS_COUNT %u\n' % 1)
+            out.write('\t*USER_FLAGS {\n')
+            out.write('\t\t*SET 0 0x00000000\n')
+            out.write('\t}\n')
         out.write("}\n")
-
-#-------------------------------------------------------------------------------------------------------------------------------
-def write_place_node(out, object_matrix_data):
-    for mesh_name, data in object_matrix_data.items():
-        base_matrix = data["matrix_original"]
-
-        # Apply transform matrix
-        if not TRANSFORM_TO_CENTER:
-            base_matrix = Matrix.Identity(4) 
-
-        out.write('*PLACENODE {\n')
-        out.write('\t*NAME "%s"\n' % (mesh_name))
-        out.write('\t*MESH "%s"\n' % (mesh_name))
-        out.write('\t*WORLD_TM {\n')
-
-        #Matrix rotation
-        matrix_rotation = ROT_GLOBAL_MATRIX @ base_matrix
-        out.write(f'\t\t*TMROW0 {df} {df} {df} {df}\n' % (matrix_rotation[0].x, matrix_rotation[2].x, matrix_rotation[1].x, 0))
-        out.write(f'\t\t*TMROW1 {df} {df} {df} {df}\n' % (matrix_rotation[0].z, matrix_rotation[2].z, matrix_rotation[1].z, 0))
-        out.write(f'\t\t*TMROW2 {df} {df} {df} {df}\n' % (matrix_rotation[0].y, matrix_rotation[2].y, matrix_rotation[1].y, 0))     
-
-        # Position
-        obj_position = matrix_rotation.translation
-        out.write(f'\t\t*TMROW3 {df} {df} {df} {df}\n' % (obj_position.x, obj_position.z, obj_position.y, 1))
-        out.write(f'\t\t*POS {df} {df} {df}\n' % (obj_position.x, obj_position.z, obj_position.y))
-        
-        # Rotation
-        euler_rotation = matrix_rotation.to_euler('ZXY') 
-        out.write(f'\t\t*ROT: {df} {df} {df}\n' % (degrees(euler_rotation.x), degrees(euler_rotation.z),degrees(euler_rotation.y)))
-        
-        #Scale
-        transformed_scale = matrix_rotation.to_scale()
-        out.write(f'\t\t*SCL {df} {df} {df}\n' % (transformed_scale.x, transformed_scale.z, transformed_scale.y))
-        out.write('\t}\n')
-        out.write('}\n')
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def export_file(filepath):
@@ -492,7 +450,6 @@ def export_file(filepath):
 
     # Create text file
     with open(filepath, 'w', encoding="utf8",) as out:
-        # Header data
         out.write("*EUROCOM_INTERCHANGE_FILE 100\n")
         out.write('*COMMENT Eurocom Interchange File Version 1.00 %s\n' % datetime.now().strftime("%A %B %d %Y %H:%M"))
         out.write('*COMMENT Version of eif-plugin that wrote this file %s\n' % EIF_VERSION)
@@ -506,10 +463,10 @@ def export_file(filepath):
         mesh_position_data = write_mesh_data(out, scene, depsgraph, processed_materials)
 
         if EXPORT_GEOMNODE:
-            write_geom_node(out, mesh_position_data)
+            write_geom_and_place_node(out, mesh_position_data, True)
 
         if EXPORT_PLACENODE:
-            write_place_node(out, mesh_position_data)
+            write_geom_and_place_node(out, mesh_position_data)
                 
     print(f"Archivo exportado con éxito: {filepath}")
 

@@ -1,0 +1,19 @@
+import bpy
+import sys
+import os
+
+# Ruta del script a ejecutar
+filename = "F:/Repositories/EuroTools/Development/Tools/euroland_exporters/ese_export.py"
+
+# Agregar el directorio del script al sys.path
+script_dir = os.path.dirname(filename)
+if script_dir not in sys.path:
+    sys.path.append(script_dir)
+
+# Ejecutar el script
+exec(compile(open(filename).read(), filename, 'exec'))
+
+# Eliminar el directorio del script de sys.path
+if script_dir in sys.path:
+    sys.path.remove(script_dir)
+
