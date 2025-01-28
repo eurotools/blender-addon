@@ -46,11 +46,9 @@ def _write(context, filepath,
            EXPORT_FROM_FRAME_ENABLED,
            EXPORT_FROM_FRAME,
            EXPORT_END_FRAME_ENABLED,
-           EXPORT_END_FRAME,
-           EXPORT_ONLY_FIRST_FRAME
+           EXPORT_END_FRAME
         ):
     
-    print(EXPORT_STATIC_FRAME)
     df = f'%.{DECIMAL_PRECISION}f'
     dcf = f'{{:>{DECIMAL_PRECISION}f}}'
 
@@ -78,34 +76,26 @@ def _write(context, filepath,
             properties_list.append(property_data)
 
         # Check for the camera script property
-        if scene.euro_properties:
-            euro_properties = scene.euro_properties
+        if userWantsCameraScript(scene):
+            property_data = {
+                "name": "cameraScriptEditor",
+                "type": "Numeric",
+                "value": 1}
+            properties_list.append(property_data)
 
-            # Si la propiedad 'enable_camera_script' no existe, puedes establecerla o usarla
-            if not hasattr(euro_properties, 'enable_camera_script'):
-                euro_properties.enable_camera_script = False
+            #add info
+            current_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            computer_name = platform.node() 
+            user_name = platform.uname().node
+            blender_version = bpy.app.version_string
 
-            # Acceder al valor de la propiedad
-            if euro_properties.enable_camera_script:
-                property_data = {
-                    "name": "cameraScriptEditor",
-                    "type": "Numeric",
-                    "value": 1}
-                properties_list.append(property_data)
-
-                #add info
-                current_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                computer_name = platform.node() 
-                user_name = platform.uname().node
-                blender_version = bpy.app.version_string
-
-                # Crear la propiedad extra con la información requerida
-                extra_property = {
-                    "name": "cameraScriptEditor Info",
-                    "type": "String",
-                    "value": f"{current_time} Computer:{computer_name} UserName:{user_name} BlenderVer:#({blender_version})"
-                }
-                properties_list.append(extra_property)
+            # Crear la propiedad extra con la información requerida
+            extra_property = {
+                "name": "cameraScriptEditor Info",
+                "type": "String",
+                "value": f"{current_time} Computer:{computer_name} UserName:{user_name} BlenderVer:#({blender_version})"
+            }
+            properties_list.append(extra_property)
 
         # Imprimir las propiedades almacenadas
         out.write('\t*SCENE_UDPROPS {\n')
@@ -817,12 +807,18 @@ def _write(context, filepath,
     def userWantsCameraScript(scene):
         printScript = False
         
-        if "cameraScriptEditor" in scene.keys():
-            camera_script_value = scene["cameraScriptEditor"]
-        
-            # Comprueba si el valor es mayor a 0
-            if isinstance(camera_script_value, (int, float)) and camera_script_value > 0:
+        # Check for the camera script property
+        if scene.euro_properties:
+            euro_properties = scene.euro_properties
+
+            # Si la propiedad 'enable_camera_script' no existe, puedes establecerla o usarla
+            if not hasattr(euro_properties, 'enable_camera_script'):
+                euro_properties.enable_camera_script = False
+
+            # Acceder al valor de la propiedad
+            if euro_properties.enable_camera_script:
                 printScript = True
+
         return printScript
 
     #-------------------------------------------------------------------------------------------------------------------------------
@@ -1028,8 +1024,7 @@ def save(context,
            EXPORT_FROM_FRAME_ENABLED=Enable_Start_From_Frame,
            EXPORT_FROM_FRAME=Start_From_Frame,
            EXPORT_END_FRAME_ENABLED=Enable_End_With_Frame,
-           EXPORT_END_FRAME=End_With_Frame,
-           EXPORT_ONLY_FIRST_FRAME=Output_First_Only)
+           EXPORT_END_FRAME=End_With_Frame)
 
     return {'FINISHED'}
 if __name__ == '__main__':
