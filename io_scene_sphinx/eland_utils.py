@@ -1,8 +1,14 @@
 from mathutils import Matrix, Euler
+from . import bl_info
 
 #-------------------------------------------------------------------------------------------------------------------------------
 MESH_GLOBAL_MATRIX = Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4()
 ROT_GLOBAL_MATRIX = Matrix(((1, 0, 0),(0, 1, 0),(0, 0, 1))).to_4x4()
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def get_plugin_version():
+    version = bl_info.get('version', (0, 0, 0))  # Obtiene la versión o (0, 0, 0) si no está definida
+    return version
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def tri_edge_is_from_ngon(polygon, tri_loop_indices, tri_idx, mesh_loops):

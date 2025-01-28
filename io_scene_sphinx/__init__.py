@@ -4,8 +4,8 @@
 bl_info = {
            'name': 'Eurocom 3D formats for Sphinx and the Cursed Mummy™',
          'author': 'Swyter, for THQ Nordic GmbH',
-        'version': (2020, 10, 10),
-        'blender': (2, 81, 6),
+        'version': (1, 0, 0),
+        'blender': (4, 3, 2),
        'location': 'File > Import-Export',
     'description': 'Export and import EIF, ESE and RTG files compatible with Euroland.',
         'warning': 'Importing still doesn\'t work, export in progress. ¯\_(ツ)_/¯',
@@ -352,6 +352,21 @@ class ExportESE(bpy.types.Operator, ExportHelper):
     #-------------------------------------------------------------------------------------------------------------------------------
     def execute(self, context):
         from . import ese_export
+
+        frame_start = bpy.context.scene.frame_start
+        frame_end = bpy.context.scene.frame_end
+
+        #Override values
+        if self.Enable_Start_From_Frame and (self.Start_From_Frame >= frame_start):
+            self.Static_Frame = self.Start_From_Frame
+        if self.Output_First_Only:
+            self.Static_Frame = frame_start
+
+        # Set the first frame
+        if self.Static_Frame < frame_start:
+            self.Static_Frame = frame_start
+        if self.Static_Frame > frame_end:
+            self.Static_Frame = frame_end
 
         keywords = self.as_keywords(ignore=("axis_forward",
                                             "axis_up",
