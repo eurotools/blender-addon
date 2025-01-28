@@ -280,13 +280,11 @@ def _write(context, filepath,
                 uv_index_map = {uv: idx for idx, uv in enumerate(unique_uvs)}
                 color_index_map = {color: idx for idx, color in enumerate(unique_colors)}
 
-                #Check for flags
-                import bmesh
-                bm = bmesh.new()
-                bm.from_mesh(me)
+                # swy: refresh the custom mesh layer/attributes in case they don't exist
+                if 'euro_fac_flags' not in me.attributes:
+                    me.attributes.new(name='euro_fac_flags', type='INT', domain='FACE')
 
-                euro_vtx_flags = bm.verts.layers.int['euro_vtx_flags']
-                euro_fac_flags = bm.faces.layers.int['euro_fac_flags']
+                euro_fac_flags = me.attributes['euro_fac_flags']
 
                 # Iterar por cada cara y generar la información
                 for poly in me.polygons:
@@ -338,17 +336,11 @@ def _write(context, filepath,
                             out.write("%d " % material_index)
 
                     # Flags ---F                  
-                    face = bm.faces[poly.index]
-                    flags = face[euro_fac_flags]
-
-                    out.write('%d\n' % flags)
+                    flag_value = euro_fac_flags.data[poly.index].value
+                    out.write('%d\n' % flag_value)
 
                 out.write("\t}\n")
                 out.write("}\n\n")
-
-                # Actualiza la malla con los cambios realizados en bmesh
-                bm.to_mesh(me)
-                bm.free()  # Libera la memoria de bmesh
 
                 # clean up
                 ob_for_convert.to_mesh_clear()
