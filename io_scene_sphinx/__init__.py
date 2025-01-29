@@ -4,7 +4,7 @@
 bl_info = {
            'name': 'Eurocom 3D formats for Sphinx and the Cursed Mummy™',
          'author': 'Swyter, for THQ Nordic GmbH',
-        'version': (1, 0, 0),
+        'version': (1, 0, 1),
         'blender': (4, 3, 2),
        'location': 'File > Import-Export',
     'description': 'Export and import EIF, ESE and RTG files compatible with Euroland.',

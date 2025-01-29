@@ -46,7 +46,7 @@ For more info about which things each format supports, you can look at the [wiki
   - [X] Scripts
 
 * RTG (_Real Time Game_)
-  - [ ] Arbitrary polygons: Visible vertex edges is not implemented yet
+  - [X] Arbitrary polygons: Visible vertex edges is not implemented yet
   - [ ] Vertex colors
   - [ ] LODs
   - [ ] Layers
@@ -54,7 +54,7 @@ For more info about which things each format supports, you can look at the [wiki
   - [ ] Maps
   - [ ] Animations + Skins
   - [ ] Scripts
-  - [x] Cameras and camera animations, but rotations need fixing
+  - [x] Cameras and camera animations
 
 
 # To develop
