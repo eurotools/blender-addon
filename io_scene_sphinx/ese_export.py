@@ -636,6 +636,8 @@ def _write(context, filepath,
 
                                 out.write('\t}\n') # MORPH_TARGET
                                 out.write('}\n') # MORPH_LIST
+                else:
+                    out.write("}\n") # GEOMOBJECT
 
                 # clean up
                 ob_for_convert.to_mesh_clear()
