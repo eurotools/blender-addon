@@ -25,17 +25,15 @@ jobs:
         #      we need to do this because python throws an error due to the invalid octal prefix:
         #      https://unix.stackexchange.com/a/79372/295814
         #      https://stackoverflow.com/a/1315213/674685 ' -> '\''
-        sed -i --regexp-extended 's/('\''version'\'':) .+(,.+)/\1 '"$(date "+(%-Y, %-m, %-d)" -u)"'\2/'  io_scene_sphnx/__init__.py
+        sed -i --regexp-extended 's/('\''version'\'':) .+(,.+)/\1 '"$(date "+(%-Y, %-m, %-d)" -u)"'\2/'  io_scene_sphinx/__init__.py
 
         # swy: only pack it when the folder has changed since the last time we ran a GitHub Actions job
-        if [[ ! -z "$(git diff --quiet HEAD "$prev_run_sha" -- io_scene_sphnx || echo changed)" || "$(git rev-list --format=%B --max-count=1 HEAD | grep --count --ignore-case --max-count=1 '!force')" -ge 1 ]]; then
-          7z a "sphinx-blender-tools-$(date +%Y.%m.%d-%H.%M -u).zip" io_scene_sphnx
+        if [[ ! -z "$(git diff --quiet HEAD "$prev_run_sha" -- io_scene_sphinx || echo changed)" || "$(git rev-list --format=%B --max-count=1 HEAD | grep --count --ignore-case --max-count=1 '!force')" -ge 1 ]]; then
+          7z a "sphinx-blender-tools-$(date +%Y.%m.%d-%H.%M -u).zip" io_scene_sphinx
         fi
 
     - name: Upload Release Asset
       id: upload-release-asset
-      env:
-        GITHUB_TOKEN: ${{ secrets.TK }}
       run: |
         owner="eurotools"; repo="blender-addon"; release_id="32423809"
         
@@ -44,7 +42,7 @@ jobs:
         echo "$GH_ASSET"; echo "$FILENAME"
         
         if [[ -f "$FILENAME" ]]; then
-          curl --fail --location --data-binary @"$FILENAME" -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/octet-stream" "$GH_ASSET"
+          curl --fail --location --data-binary @"$FILENAME" -H 'Authorization: token ${{ secrets.GITHUB_TOKEN }}' -H "Content-Type: application/octet-stream" "$GH_ASSET"
         else
           echo "[no changes in the add-on folder this time around; skipped]"
         fi
