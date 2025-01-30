@@ -1,6 +1,6 @@
 # Euroland Blender add-on
 
-Import and export intermediate Eurocom formats for *Sphinx and the Cursed Mummy* in Blender. This project aims to reimplement the missing *3ds Max* (EIF, ESE) and *Maya* (RTG) plug-ins and make creating Euroland assets possible. Heavily work in progress.
+Export intermediate Eurocom formats for *Sphinx and the Cursed Mummy* in Blender. This project aims to reimplement the missing *3ds Max* (EIF, ESE) and *Maya* (RTG) plug-ins and make creating Euroland assets possible. Heavily work in progress.
 
 > ➥ *You can [download the latest version from the Releases tab](https://github.com/Swyter/sphinx-euroland/releases/tag/latest)*.
 
@@ -30,7 +30,7 @@ For more info about which things each format supports, you can look at the [wiki
   - [x] Arbitrary polygons
   - [x] Vertex colors
   - [ ] Layers
-  - [X] Maps: Issues with rotations
+  - [X] Maps
 
 * ESE (_Eurocom Export Scene_)
   - [x] Arbitrary polygons
@@ -41,9 +41,9 @@ For more info about which things each format supports, you can look at the [wiki
   - [x] Lights and animated lights
   - [x] Cameras and animated cameras
   - [ ] Layers
-  - [ ] Maps
+  - [X] Maps
   - [ ] Animations + Skins
-  - [ ] Scripts
+  - [X] Scripts
 
 * RTG (_Real Time Game_)
   - [ ] Arbitrary polygons: Visible vertex edges is not implemented yet
