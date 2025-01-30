@@ -19,7 +19,6 @@ from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 from .eland_utils import *
 
 #-------------------------------------------------------------------------------------------------------------------------------
-ESE_VERSION = '1.00'
 EXPORT_TRI = True
 EXPORT_APPLY_MODIFIERS = True
 START_FRAME = 0
@@ -48,8 +47,10 @@ def _write(context, filepath,
            EXPORT_FROM_FRAME,
            EXPORT_END_FRAME_ENABLED,
            EXPORT_END_FRAME,
-           EXPORT_ONLY_FIRST_FRAME):
+           EXPORT_ONLY_FIRST_FRAME
+        ):
     
+    print(EXPORT_STATIC_FRAME)
     df = f'%.{DECIMAL_PRECISION}f'
     dcf = f'{{:>{DECIMAL_PRECISION}f}}'
 
@@ -115,28 +116,18 @@ def _write(context, filepath,
 
     #-------------------------------------------------------------------------------------------------------------------------------
     def write_scene_data(out, scene):
-        global FRAMES_COUNT, TICKS_PER_FRAME, START_FRAME, END_FRAME, EXPORT_STATIC_FRAME
+        global FRAMES_COUNT, TICKS_PER_FRAME, START_FRAME, END_FRAME
 
         #Get set default scene data
         START_FRAME = scene.frame_start
         END_FRAME = scene.frame_end
 
-        #Check frame is in range
-        if EXPORT_STATIC_FRAME < START_FRAME:
-            EXPORT_STATIC_FRAME = START_FRAME
-        if EXPORT_STATIC_FRAME > END_FRAME:
-            EXPORT_STATIC_FRAME = END_FRAME      
-
         #Override values
         if EXPORT_FROM_FRAME_ENABLED and (EXPORT_FROM_FRAME >= START_FRAME):
-            EXPORT_STATIC_FRAME = EXPORT_FROM_FRAME
             START_FRAME = EXPORT_FROM_FRAME
         if EXPORT_END_FRAME_ENABLED and (EXPORT_END_FRAME <= END_FRAME):
             END_FRAME = EXPORT_END_FRAME
-        if EXPORT_ONLY_FIRST_FRAME:
-            EXPORT_STATIC_FRAME = START_FRAME
-
-        # Set the first frame
+            
         bpy.context.scene.frame_set(EXPORT_STATIC_FRAME)
 
         #Get scene data
@@ -970,13 +961,16 @@ def _write(context, filepath,
         if bpy.ops.object.mode_set.poll():
             bpy.ops.object.mode_set(mode='OBJECT')
 
+        # Get current plugin version
+        plugin_version = get_plugin_version()
+
         # Create text file
         with open(filepath, 'w', encoding="utf8",) as out:
             # Header data
             out.write("*3DSMAX_EUROEXPORT	300\n")
             out.write('*COMMENT "Eurocom Export Version  3.00 - %s\n' % datetime.now().strftime("%A %B %d %Y %H:%M"))
             out.write('*COMMENT "Version of Blender that output this file: %s"\n' % bpy.app.version_string)
-            out.write('*COMMENT "Version of ESE Plug-in: %s"\n\n' % ESE_VERSION)
+            out.write('*COMMENT "Version of ESE Plug-in: %d.%d.%d"\n\n' % (plugin_version[0], plugin_version[1], plugin_version[2]))
 
             write_scene_data(out, scene)
             
@@ -1026,17 +1020,17 @@ def save(context,
            EXPORT_OBJECTS=Object_Types,
            EXPORT_MESH_NORMALS=Output_Mesh_Normals,
            EXPORT_MESH_UV=Output_Mesh_UV,
-           EXPORT_MESH_VCOLORS = Output_Mesh_Vertex_Colors,
+           EXPORT_MESH_VCOLORS=Output_Mesh_Vertex_Colors,
            EXPORT_MESH_MORPH=Output_Mesh_Morph,
-           EXPORT_STATIC_FRAME = Static_Frame,
+           EXPORT_STATIC_FRAME=Static_Frame,
            DECIMAL_PRECISION=Decimal_Precision,
            GLOBAL_SCALE=Output_Scale,
-           EXPORT_FROM_FRAME_ENABLED = Enable_Start_From_Frame,
-           EXPORT_FROM_FRAME = Start_From_Frame,
-           EXPORT_END_FRAME_ENABLED = Enable_End_With_Frame,
-           EXPORT_END_FRAME = End_With_Frame,
-           EXPORT_ONLY_FIRST_FRAME = Output_First_Only)
+           EXPORT_FROM_FRAME_ENABLED=Enable_Start_From_Frame,
+           EXPORT_FROM_FRAME=Start_From_Frame,
+           EXPORT_END_FRAME_ENABLED=Enable_End_With_Frame,
+           EXPORT_END_FRAME=End_With_Frame,
+           EXPORT_ONLY_FIRST_FRAME=Output_First_Only)
 
     return {'FINISHED'}
 if __name__ == '__main__':
-    save({}, str(Path.home()) + '/Desktop/EurocomEIF.eif')
+    save({}, str(Path.home()) + '/Desktop/EurocomESE.ese')

@@ -11,15 +11,14 @@ Authors: Swyter and Jmarti856
 
 import os
 import bpy
-from .eland_utils import *
 from math import degrees
 from pathlib import Path
 from mathutils import Matrix
 from datetime import datetime
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
+from .eland_utils import *
 
 #-------------------------------------------------------------------------------------------------------------------------------
-EIF_VERSION = '1.00'
 EXPORT_TRI=False
 EXPORT_APPLY_MODIFIERS=True
 
@@ -410,12 +409,15 @@ def _write(context, filepath,
         # Exit edit mode before exporting, so current object states are exported properly.
         if bpy.ops.object.mode_set.poll():
             bpy.ops.object.mode_set(mode='OBJECT')
+            
+        # Get current plugin version
+        plugin_version = get_plugin_version()
 
         # Create text file
         with open(filepath, 'w', encoding="utf8",) as out:
             out.write("*EUROCOM_INTERCHANGE_FILE 100\n")
             out.write('*COMMENT Eurocom Interchange File Version 1.00 %s\n' % datetime.now().strftime("%A %B %d %Y %H:%M"))
-            out.write('*COMMENT Version of eif-plugin that wrote this file %s\n' % EIF_VERSION)
+            out.write('*COMMENT Version of eif-plugin that wrote this file %d.%d\n' % (plugin_version[0], plugin_version[1]))
             out.write('*COMMENT Version of blender that wrote this file %s\n\n' % bpy.app.version_string)
             out.write("*OPTIONS {\n")
             out.write("\t*COORD_SYSTEM LH\n")
