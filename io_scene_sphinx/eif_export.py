@@ -223,7 +223,7 @@ def _write(context, filepath,
                         unique_colors = list(set(unique_colors))
 
                 #Get number of layers that should be in EuroLand, based in the UV Layers
-                faceLayersCount = len(me.uv_layers)
+                faceLayersCount = max(len(me.uv_layers), len(me.vertex_colors))
                 materials = me.materials[:]
                 material_names = [m.name if m else None for m in materials]
 

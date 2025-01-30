@@ -387,7 +387,8 @@ def _write(context, filepath,
                     me.flip_normals()
 
                 # Crear listas únicas de coordenadas de vértices, UVs y colores de vértices
-                unique_vertices = list({tuple(v.co) for v in me.vertices})
+                me_verts = me.vertices[:]
+                unique_vertices = list({tuple(v.co) for v in me_verts})
 
                 #Get UVs
                 unique_uvs = []
@@ -437,7 +438,7 @@ def _write(context, filepath,
                 out.write('\t\t*MESH_FACE_LIST {\n')
                 for p_index, poly in enumerate(me.polygons):
                     
-                    vertex_indices = [vertex_index_map[tuple(me.vertices[v].co)] for v in (poly.vertices)]
+                    vertex_indices = [vertex_index_map[tuple(me_verts[v].co)] for v in (poly.vertices)]
 
                     #Get material index
                     material_index = -1
@@ -508,7 +509,7 @@ def _write(context, filepath,
                     out.write('\t\t*MESH_NORMALS {\n')
                     for p_index, poly in enumerate(me.polygons):
                         poly_normals = poly.normal
-                        vertex_indices = [vertex_index_map[tuple(me.vertices[v].co)] for v in (poly.vertices)]    
+                        vertex_indices = [vertex_index_map[tuple(me_verts[v].co)] for v in (poly.vertices)]    
                     
                         out.write(f'\t\t\t*MESH_FACENORMAL {{:<3d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(p_index, poly_normals[0], poly_normals[1], poly_normals[2]))
                         for tri_idx in range(len(vertex_indices)):
@@ -538,7 +539,7 @@ def _write(context, filepath,
                     out.write('\t\t}\n') # MESH_NUMFACEFLAGS
 
                     out.write('\t\t*MESH_VERTFLAGSLIST {\n')
-                    for idx, vert in enumerate(me.vertices):
+                    for idx, vert in enumerate(me_verts):
                         flag_value = euro_vtx_flags.data[vert.index].value
                         if flag_value != 0:
                             out.write(f'\t\t\t*VFLAG %u %u\n' % (idx, flag_value))
@@ -560,17 +561,17 @@ def _write(context, filepath,
                 # swy: here go our blend shape weights with the mixed-in amount for each frame in the timeline
                 if EXPORT_MESH_MORPH:
                     if ob.data.shape_keys:
-                        out.write('\t*MORPH_DATA {')
+                        out.write('\t*MORPH_DATA {\n')
                         for key in ob.data.shape_keys.key_blocks:
                             if key.relative_key != key:
-                                out.write(f'\n\t*MORPH_FRAMES "%s" %u {{\n' % (key.name.replace(' ', '_'), FRAMES_COUNT))
+                                out.write(f'\t\t*MORPH_FRAMES "%s" %u {{\n' % (key.name.replace(' ', '_'), FRAMES_COUNT))
 
                                 for f in range(START_FRAME, END_FRAME + 1):
                                     bpy.context.scene.frame_set(f)
                                     out.write(f'\t\t\t%u {df}\n' % (f, key.value))
 
                                 out.write('\t\t}\n') # MORPH_FRAMES
-                        out.write('\t}') # MORPH_DATA
+                        out.write('\t}\n') # MORPH_DATA
 
                     #-------------------------------------------------------------------------------------------------------------------------------
                     #  SKELETAL RIGGING / BONE HIERARCHY DEFINITION / ARMATURE
@@ -586,16 +587,17 @@ def _write(context, filepath,
                             bone_names = [bone.name for bone in armat.data.bones]
 
                             for bidx, bone in enumerate(armat.data.bones):
-                                out.write('\t\t\n*BONE %u "%s"\n' % (bidx, bone.name))
-                            out.write('\t\t}') # BONE_LIST
+                                out.write('\t\t\t*BONE %u "%s"\n' % (bidx, bone.name))
+                            out.write('\t\t}\n') # BONE_LIST
 
                             # create a vertex group lookup list for names
                             # https://blender.stackexchange.com/a/28273/42781
                             vgroup_names = [vgroup.name for vgroup in ob.vertex_groups]
 
                             out.write('\t\t*SKIN_VERTEX_DATA {\n')
-                            for vidx, vert in enumerate(me.vertices):
-                                out.write('\t\t\n*VERTEX %5u %u' % (vidx, len(vert.groups)))
+                            vidx = 0
+                            for vidx, vert in enumerate(me_verts):
+                                out.write('\t\t\t*VERTEX %5u %u' % (vidx, len(vert.groups)))
 
                                 # swy: make it so that the bones that have more influence appear first
                                 #      in the listing, otherwise order seems random.
@@ -611,11 +613,11 @@ def _write(context, filepath,
 
                                     # swy: because the bone names are in the same order as in the BONE_LIST above everything works out
                                     global_bone_index = bone_names.index(cur_vgroup_name)
-                                    out.write(f'  %2u {df}' % (global_bone_index, group.weight))
+                                    out.write(f' %2u {df}' % (global_bone_index, group.weight))
                                 out.write("\n")
 
-                            out.write('\t\t}') # SKIN_VERTEX_DATA
-                            out.write('\t}') # SKIN_DATA
+                            out.write('\t\t}\n') # SKIN_VERTEX_DATA
+                            out.write('\t}\n') # SKIN_DATA
 
                             # swy: we only support one armature modifier/binding per mesh for now, stop looking for more
                             break
@@ -632,7 +634,7 @@ def _write(context, filepath,
                                 out.write('\t*MORPH_TARGET "%s" %u {\n' % (key.name.replace(' ', '_'), len(key.data)))
 
                                 for vidx, vert in enumerate(key.data):
-                                    out.write('\t\t\t{df}\t{df}\t{df}\n' % (vert.co.x, vert.co.y, vert.co.z))
+                                    out.write('\t\t\t%s\t%s\t%s\n' % (df % vert.co.x, df % vert.co.y, df % vert.co.z))
 
                                 out.write('\t}\n') # MORPH_TARGET
                                 out.write('}\n') # MORPH_LIST
@@ -679,11 +681,11 @@ def _write(context, filepath,
                 
                 for bidx, bone in enumerate(bone_data.bones):
                     out.write('*BONEOBJECT {\n')
-                    out.write('*NODE_NAME "%s"\n' % bone.name)
-                    out.write('*NODE_BIPED_BODY\n')
+                    out.write('\t*NODE_NAME "%s"\n' % bone.name)
                     if (bone.parent):
-                        out.write('*NODE_PARENT "%s"\n' % bone.parent.name)
-                    out.write('}') # BONEOBJECT
+                        out.write('\t*NODE_PARENT "%s"\n' % bone.parent.name)
+                    out.write('\t*NODE_BIPED_BODY\n')
+                    out.write('}\n') # BONEOBJECT
 
     #-------------------------------------------------------------------------------------------------------------------------------
     def write_light_settings(out, light_object, current_frame, tab_level = 1):
