@@ -2,13 +2,13 @@
 #  SPDX-License-Identifier: Zlib
 
 bl_info = {
-           'name': 'Eurocom 3D formats for Sphinx and the Cursed Mummyâ„¢',
+           'name': 'Eurocom 3D formats for Sphinx and the Cursed Mummy™',
          'author': 'Swyter, for THQ Nordic GmbH',
         'version': (2020, 10, 10),
         'blender': (2, 81, 6),
        'location': 'File > Import-Export',
     'description': 'Export and import EIF, ESE and RTG files compatible with Euroland.',
-        'warning': 'Importing still doesn\'t work, export in progress. Â¯\_(ãƒ„)_/Â¯',
+        'warning': 'Importing still doesn\'t work, export in progress. ¯\_(?)_/¯',
         'doc_url': 'https://sphinxandthecursedmummy.fandom.com/wiki/Technical',
     'tracker_url': 'https://discord.gg/sphinx',
         'support': 'COMMUNITY',
@@ -20,8 +20,10 @@ import bpy
 import bpy.utils.previews
 import bmesh
 
+#-------------------------------------------------------------------------------------------------------------------------------
 from bpy.props import(
         BoolProperty,
+        IntProperty,
         FloatProperty,
         StringProperty,
         EnumProperty,
@@ -30,106 +32,12 @@ from bpy.props import(
 from bpy_extras.io_utils import(
         ImportHelper,
         ExportHelper,
-        orientation_helper,
         path_reference_mode,
-        axis_conversion,
 )
 
-#===============================================================================================
-#  IMPORTERS (TO DO)
-#===============================================================================================
-@orientation_helper(axis_forward='-Z', axis_up='Y')
-class ImportRTG(bpy.types.Operator, ImportHelper):
-    """Load a dynamic Maya Euroland file; for animations, scripts and maps"""
-    bl_idname = "import_scene.rtg"
-    bl_label = "Import RTG"
-    bl_options = {'PRESET', 'UNDO'}
-
-    filename_ext = ".rtg"
-    filter_glob: StringProperty(default="*.rtg", options={'HIDDEN'})
-
-    def execute(self, context):
-        print("Selected: " + context.active_object.name)
-        from . import import_rtg
-        return import_rtg.load(context, self.filepath)
-
-    def draw(self, context):
-        pass
-
-    @classmethod
-    def poll(cls, context):
-        return False
-
-@orientation_helper(axis_forward='-Z', axis_up='Y')
-class ImportEIF(bpy.types.Operator, ImportHelper):
-    """Load a static 3ds Max Euroland file, for scenes and entities"""
-    bl_idname = "import_scene.eif"
-    bl_label = "Import EIF"
-    bl_options = {'PRESET', 'UNDO'}
-
-    filename_ext = ".eif"
-    filter_glob: StringProperty(default="*.eif", options={'HIDDEN'})
-
-    def execute(self, context):
-        print("Selected: " + context.active_object.name)
-        from . import import_eif
-        return import_eif.load(context, self.filepath)
-
-    def draw(self, context):
-        pass
-
-    @classmethod
-    def poll(cls, context):
-        return False
-
-@orientation_helper(axis_forward='-Z', axis_up='Y')
-class ImportESE(bpy.types.Operator, ImportHelper):
-    """Load a dynamic 3ds Max Euroland file; for cutscenes and maps"""
-    bl_idname = "import_scene.ese"
-    bl_label = "Import ESE"
-    bl_options = {'PRESET', 'UNDO'}
-
-    filename_ext = ".ese"
-    filter_glob: StringProperty(default="*.ese", options={'HIDDEN'})
-
-    def execute(self, context):
-        print("Selected: " + context.active_object.name)
-        from . import import_ese
-        return import_ese.load(context, self.filepath)
-
-    def draw(self, context):
-        pass
-
-    @classmethod
-    def poll(cls, context):
-        return False
-
-#===============================================================================================
-#  EXPORTERS (ON IT)
-#===============================================================================================
-@orientation_helper(axis_forward='Z', axis_up='Y')
-class ExportRTG(bpy.types.Operator, ExportHelper):
-    """Save a dynamic Maya Euroland file; for animations, scripts and maps"""
-
-    bl_idname = "export_scene.rtg"
-    bl_label = 'Export RTG'
-    bl_options = {'PRESET'}
-
-    filename_ext = ".rtg"
-    filter_glob: StringProperty(default="*.rtg", options={'HIDDEN'})
-
-    path_mode: path_reference_mode
-
-    check_extension = True
-
-    def execute(self, context):
-        from . import export_rtg
-        return export_rtg.save(context, self.filepath)
-
-    def draw(self, context):
-        pass
-
-@orientation_helper(axis_forward='Z', axis_up='Y')
+#-------------------------------------------------------------------------------------------------------------------------------
+# EIF Exporter
+#-------------------------------------------------------------------------------------------------------------------------------
 class ExportEIF(bpy.types.Operator, ExportHelper):
     """Save a static 3ds Max Euroland file, for scenes and entities"""
 
@@ -137,35 +45,83 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
     bl_label = 'Export EIF'
     bl_options = {'PRESET'}
 
+    #-------------------------------------------------------------------------------------------------------------------------------
     filename_ext = ".eif"
-    filter_glob: StringProperty(default="*.eif", options={'HIDDEN'})
+    filter_glob: StringProperty(
+                    default="*.eif", 
+                    options={'HIDDEN'}
+                ) # type: ignore
 
-    #Output Options
-    Output_Map: BoolProperty(
-        name="Output as a Map",
-        description="Output scene as a new map for EuroLand.",
-        default=False,
-    )
-    Output_Transform: BoolProperty(
-        name="Transform Objects to (0,0,0)",
-        description="Transform objects to position (0,0,0).",
-        default=False,
-    )
+    #-------------------------------------------------------------------------------------------------------------------------------
+    # Output Options
+    #-------------------------------------------------------------------------------------------------------------------------------
+    Output_GeomNode: BoolProperty(
+        name="Output GeomNodes", 
+        description="Output scene as a new map for EuroLand.", 
+        default=True,
+    ) # type: ignore
 
-    #Scale Options
-    global_scale: FloatProperty(
-        name="Scale",
-        min=0.01,
-        max=1000.0,
+    Output_PlaceNode: BoolProperty(
+        name="Output PlaceNodes", 
+        description="Used to stamp clones of a GEOMNODE in a map.", 
+        default=True,
+    ) # type: ignore
+
+    Transform_Center: BoolProperty(
+        name="Transform Objects to (0,0,0)", 
+        description="Transform objects location and rotation to (0,0,0).", 
+        default=True,
+    ) # type: ignore
+
+    #-------------------------------------------------------------------------------------------------------------------------------
+    # Mesh Options
+    #-------------------------------------------------------------------------------------------------------------------------------
+    Output_Mesh_Normals : BoolProperty(
+        name="Mesh Normals",
+        description="Export mesh normals",
+        default=False,
+    ) # type: ignore
+
+    Output_Mesh_UV : BoolProperty(
+        name="Mapping Coordinates",
+        description="Export mesh UVs",
+        default=True,
+    ) # type: ignore
+
+    Output_Mesh_Vertex_Colors : BoolProperty(
+        name="Vertex Colors",
+        description="Export mesh vertex colors",
+        default=True,
+    ) # type: ignore
+
+    #-------------------------------------------------------------------------------------------------------------------------------
+    # Precision
+    #-------------------------------------------------------------------------------------------------------------------------------
+    Decimal_Precision: IntProperty(
+        name="Decimals:", 
+        min=1, 
+        max=10, 
+        default=6,
+    ) # type: ignore
+
+    #-------------------------------------------------------------------------------------------------------------------------------
+    # Scale
+    #-------------------------------------------------------------------------------------------------------------------------------
+    Output_Scale: FloatProperty(
+        name="Scale", 
+        min=0.01, 
+        max=1000.0, 
         default=1.0,
-    )
+    ) # type: ignore
 
+    #-------------------------------------------------------------------------------------------------------------------------------
     path_mode: path_reference_mode
     check_extension = True
 
+    #-------------------------------------------------------------------------------------------------------------------------------
     def execute(self, context):
         from mathutils import Matrix
-        from . import export_eif
+        from . import eif_export
 
         keywords = self.as_keywords(ignore=("axis_forward",
                                             "axis_up",
@@ -175,15 +131,13 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
                                             "path_mode",
                                         ))
 
-        global_matrix = (Matrix.Scale(self.global_scale, 4) @ Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4())
-        keywords["global_matrix"] = global_matrix
-
-        return export_eif.save(context, **keywords)
+        return eif_export.save(context, **keywords)
 
     def draw(self, context):
         pass
 
-class EIF_EXPORT_PT_output_options(bpy.types.Panel):
+#-------------------------------------------------------------------------------------------------------------------------------
+class EIF_EXPORT_PT_Output_Settings(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
     bl_label = "Output Options"
@@ -194,13 +148,15 @@ class EIF_EXPORT_PT_output_options(bpy.types.Panel):
         return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_eif"
 
     def draw(self, context):
-        self.layout.prop(context.space_data.active_operator, 'Output_Map')
-        self.layout.prop(context.space_data.active_operator, 'Output_Transform')
+        self.layout.prop(context.space_data.active_operator, 'Transform_Center')
+        self.layout.prop(context.space_data.active_operator, 'Output_GeomNode')
+        self.layout.prop(context.space_data.active_operator, 'Output_PlaceNode')
 
-class EIF_EXPORT_PT_scale(bpy.types.Panel):
+#-------------------------------------------------------------------------------------------------------------------------------
+class EIF_EXPORT_PT_Mesh_Options(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
-    bl_label = "Transform"
+    bl_label = "Mesh Options"
     bl_parent_id = "FILE_PT_operator"
 
     @classmethod
@@ -208,9 +164,41 @@ class EIF_EXPORT_PT_scale(bpy.types.Panel):
         return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_eif"
 
     def draw(self, context):
-        self.layout.prop(context.space_data.active_operator, "global_scale")
+        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Normals')
+        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_UV')
+        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Vertex_Colors')
 
-@orientation_helper(axis_forward='Z', axis_up='Y')
+#-------------------------------------------------------------------------------------------------------------------------------
+class EIF_EXPORT_PT_Decimals_Precision(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Precision"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_eif"
+
+    def draw(self, context):
+        self.layout.prop(context.space_data.active_operator, 'Decimal_Precision')
+
+#-------------------------------------------------------------------------------------------------------------------------------
+class EIF_EXPORT_PT_Scale_Output(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Scale"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_eif"
+
+    def draw(self, context):
+        self.layout.prop(context.space_data.active_operator, 'Output_Scale')
+
+#-------------------------------------------------------------------------------------------------------------------------------
+# ESE Exporter
+#-------------------------------------------------------------------------------------------------------------------------------
 class ExportESE(bpy.types.Operator, ExportHelper):
     """Save a dynamic 3ds Max Euroland file; for cutscenes and maps"""
 
@@ -218,61 +206,110 @@ class ExportESE(bpy.types.Operator, ExportHelper):
     bl_label = 'Export ESE'
     bl_options = {'PRESET'}
 
+    #-------------------------------------------------------------------------------------------------------------------------------
     filename_ext = ".ese"
-    filter_glob: StringProperty(default="*.ese", options={'HIDDEN'})
+    filter_glob: StringProperty(
+                    default="*.ese", 
+                    options={'HIDDEN'}
+                ) # type: ignore
 
-    #Output Options
+    #-------------------------------------------------------------------------------------------------------------------------------
+    # Output Options
+    #-------------------------------------------------------------------------------------------------------------------------------
     Output_Materials: BoolProperty(
         name="Materials",
         description="Output scene materials.",
         default=False,
-    )
+    ) # type: ignore
+
+    Output_Mesh_Anims: BoolProperty(
+        name="Animated Mesh",
+        description="Export mesh animations",
+        default=True,
+    ) # type: ignore
+
     Output_CameraLightAnims: BoolProperty(
         name="Animated Camera/Light settings",
         description="Export animations from Camera and Light object types.",
         default=False,
-    )
-    Output_Animations: BoolProperty(
-        name="Animations",
-        description="Export animations.",
-        default=True,
-    )
+    ) # type: ignore
 
-    #Output Types
-    object_types: EnumProperty(
+    Transform_Center: BoolProperty(
+        name="Transform Objects to (0,0,0)", 
+        description="Transform objects location and rotation to (0,0,0).", 
+        default=False,
+    ) # type: ignore
+
+    #-------------------------------------------------------------------------------------------------------------------------------
+    # Object Types
+    #-------------------------------------------------------------------------------------------------------------------------------
+    Object_Types: EnumProperty(
         name="Output Types",
         options={'ENUM_FLAG'},
-        items=(('CAMERA', "Cameras", ""),
-               ('LIGHT', "Lights", ""),
-               ('MESH', "Mesh", ""),
-               ),
+        items=(('MESH', "Geometric", ""),
+               ('CAMERA', "Cameras", ""),
+               ('LIGHT', "Lights", ""),               
+            ),
         description="Which kind of object to export",
-        default={'CAMERA', 'LIGHT', 'MESH'}
-    )
+        default={'MESH'}
+    ) # type: ignore
 
-    #Mesh Options
-    Output_VertexColors : BoolProperty(
+    #-------------------------------------------------------------------------------------------------------------------------------
+    # Mesh Options
+    #-------------------------------------------------------------------------------------------------------------------------------
+    Output_Mesh_Normals : BoolProperty(
+        name="Mesh Normals",
+        description="Export mesh normals",
+        default=False,
+    ) # type: ignore
+
+    Output_Mesh_UV : BoolProperty(
+        name="Mapping Coordinates",
+        description="Export mesh UVs",
+        default=False,
+    ) # type: ignore
+
+    Output_Mesh_Vertex_Colors : BoolProperty(
         name="Vertex Colors",
-        description="Export vertex colors from each mesh",
+        description="Export mesh vertex colors",
         default=False,
-    )
-    Flip_Polygons: BoolProperty(
-        name="Flip Polygons",
-        description="Flip polygons direction in which polygon faces.",
-        default=False,
-    )
+    ) # type: ignore
 
-    #Scale Options
-    global_scale: FloatProperty(
-        name="Scale",
+    #-------------------------------------------------------------------------------------------------------------------------------
+    # Static Output
+    #-------------------------------------------------------------------------------------------------------------------------------
+    Static_Frame: IntProperty(
+        name="Frame #", 
+        min=0, 
+        max=2147483647, 
+        default=1,
+    ) # type: ignore
+
+    #-------------------------------------------------------------------------------------------------------------------------------
+    # Precision
+    #-------------------------------------------------------------------------------------------------------------------------------
+    Decimal_Precision: IntProperty(
+        name="Decimals:", 
+        min=1, 
+        max=10, 
+        default=6,
+    ) # type: ignore
+
+    #-------------------------------------------------------------------------------------------------------------------------------
+    # Scale
+    #-------------------------------------------------------------------------------------------------------------------------------
+    Output_Scale: FloatProperty(
+        name="Scale Factor",
         min=0.01,
         max=1000.0,
         default=1.0,
-    )
+    )# type: ignore
 
+    #-------------------------------------------------------------------------------------------------------------------------------
     path_mode: path_reference_mode
     check_extension = True
 
+    #-------------------------------------------------------------------------------------------------------------------------------
     def execute(self, context):
         from mathutils import Matrix
         from . import export_ese
@@ -285,18 +322,13 @@ class ExportESE(bpy.types.Operator, ExportHelper):
                                             "path_mode",
                                             ))
 
-        global_matrix = (Matrix.Scale(self.global_scale, 4) @ Matrix(((1, 0, 0),(0, 0, 1),(0, 1, 0))).to_4x4())
-        keywords["global_matrix"] = global_matrix
-
         return export_ese.save(context, **keywords)
 
     def draw(self, context):
         pass
 
-#===============================================================================================
-#  ESE OUTPUT PANELS OPTIONS
-#===============================================================================================
-class ESE_EXPORT_PT_output_options(bpy.types.Panel):
+#-------------------------------------------------------------------------------------------------------------------------------
+class ESE_EXPORT_PT_Output_Options(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
     bl_label = "Output Options"
@@ -308,10 +340,26 @@ class ESE_EXPORT_PT_output_options(bpy.types.Panel):
 
     def draw(self, context):
         self.layout.prop(context.space_data.active_operator, 'Output_Materials')
+        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Anims')
         self.layout.prop(context.space_data.active_operator, 'Output_CameraLightAnims')
-        self.layout.prop(context.space_data.active_operator, 'Output_Animations')
+        self.layout.prop(context.space_data.active_operator, 'Transform_Center')
 
-class ESE_EXPORT_PT_mesh_options(bpy.types.Panel):
+#-------------------------------------------------------------------------------------------------------------------------------
+class ESE_EXPORT_PT_Object_Types(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Object Types"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_ese"
+
+    def draw(self, context):
+        self.layout.column().prop(context.space_data.active_operator, "Object_Types")
+
+#-------------------------------------------------------------------------------------------------------------------------------
+class ESE_EXPORT_PT_Mesh_Options(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
     bl_label = "Mesh Options"
@@ -322,27 +370,15 @@ class ESE_EXPORT_PT_mesh_options(bpy.types.Panel):
         return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_ese"
 
     def draw(self, context):
-        self.layout.prop(context.space_data.active_operator, 'Flip_Polygons')
-        self.layout.prop(context.space_data.active_operator, 'Output_VertexColors')
+        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Normals')
+        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_UV')
+        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Vertex_Colors')
 
-class ESE_EXPORT_PT_object_types(bpy.types.Panel):
+#-------------------------------------------------------------------------------------------------------------------------------
+class ESE_EXPORT_PT_Static_Output(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
-    bl_label = ""
-    bl_parent_id = "FILE_PT_operator"
-    bl_options = {'HIDE_HEADER'}
-
-    @classmethod
-    def poll(cls, context):
-        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_ese"
-
-    def draw(self, context):
-        self.layout.column().prop(context.space_data.active_operator, "object_types")
-
-class ESE_EXPORT_PT_scale(bpy.types.Panel):
-    bl_space_type = 'FILE_BROWSER'
-    bl_region_type = 'TOOL_PROPS'
-    bl_label = "Transform"
+    bl_label = "Static Output"
     bl_parent_id = "FILE_PT_operator"
 
     @classmethod
@@ -350,11 +386,40 @@ class ESE_EXPORT_PT_scale(bpy.types.Panel):
         return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_ese"
 
     def draw(self, context):
-        self.layout.prop(context.space_data.active_operator, "global_scale")
+        self.layout.prop(context.space_data.active_operator, 'Static_Frame')
 
-last_sel_object = False
-last_sel_indexes = False
+#-------------------------------------------------------------------------------------------------------------------------------
+class ESE_EXPORT_PT_Decimals_Precision(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Precision"
+    bl_parent_id = "FILE_PT_operator"
 
+    @classmethod
+    def poll(cls, context):
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_ese"
+
+    def draw(self, context):
+        self.layout.prop(context.space_data.active_operator, 'Decimal_Precision')
+
+#-------------------------------------------------------------------------------------------------------------------------------
+class ESE_EXPORT_PT_Scale_Output(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Scale"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_ese"
+
+    def draw(self, context):
+        self.layout.prop(context.space_data.active_operator, 'Output_Scale')
+
+
+#-------------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------------------
 def scene_update_post_handler(scene):
     context = bpy.context
 
@@ -410,10 +475,11 @@ def scene_update_post_handler(scene):
                 context.active_object.data.euroland.face_flags.update()
     return
 
+#-------------------------------------------------------------------------------------------------------------------------------
 def update_after_enum(self, context):
     print('self.face_flags ---->', self.face_flags)
 
-
+#-------------------------------------------------------------------------------------------------------------------------------
 class EuroProperties(bpy.types.PropertyGroup):
     ''' Per-face bitfield for Euroland entities. '''
     face_flags: bpy.props.EnumProperty(
@@ -487,9 +553,11 @@ class EuroProperties(bpy.types.PropertyGroup):
         update = update_after_enum
     )
 
+#-------------------------------------------------------------------------------------------------------------------------------
 # swy: use a callback function to iterate across the whole thing,
 #      works with vertices and faces, depending on the context:
 #      https://stackoverflow.com/a/42544997/674685
+#-------------------------------------------------------------------------------------------------------------------------------
 def iterate_over_mesh(context, func):
     me = bpy.context.active_object.data
     bm = bmesh.from_edit_mesh(me)
@@ -516,12 +584,15 @@ def iterate_over_mesh(context, func):
     bm.select_flush_mode()
     bmesh.update_edit_mesh(me)
 
+#-------------------------------------------------------------------------------------------------------------------------------
 def get_toggled_flags(context):
     in_vtx_sel_mode = context.tool_settings.mesh_select_mode[0]
     return enum_property_to_bitfield(in_vtx_sel_mode and context.mesh.euroland.vertex_flags or
                                                          context.mesh.euroland.face_flags)
 
+#-------------------------------------------------------------------------------------------------------------------------------
 # swy: the functional meat for the buttons in the Mesh > Eurocom Tools panel
+#-------------------------------------------------------------------------------------------------------------------------------
 class EApplyFlags(bpy.types.Operator):
     """Assigns toggled flags from the panel in the current selection"""
     bl_idname  = "wm.ea"
@@ -545,6 +616,7 @@ class EApplyFlags(bpy.types.Operator):
     def draw(self, context):
         pass
 
+#-------------------------------------------------------------------------------------------------------------------------------
 class ESelectChFlags(bpy.types.Operator):
     """Select any elements with this combination of flags"""
     bl_idname  = "wm.eb"
@@ -567,8 +639,7 @@ class ESelectChFlags(bpy.types.Operator):
     def draw(self, context):
         pass
 
-
-
+#-------------------------------------------------------------------------------------------------------------------------------
 class ESelectNoFlags(bpy.types.Operator):
     """Select any elements with no flags checked"""
     bl_idname = "wm.ec"
@@ -595,7 +666,9 @@ import textwrap
 def poll(cls, context):
     return False
 
+#-------------------------------------------------------------------------------------------------------------------------------
 # swy: for this to work the identifier of each enum element must be an hex string
+#-------------------------------------------------------------------------------------------------------------------------------
 def bitfield_to_enum_property(prop_group, prop, bitfield):
     result = set()
 
@@ -607,6 +680,7 @@ def bitfield_to_enum_property(prop_group, prop, bitfield):
 
     return result
 
+#-------------------------------------------------------------------------------------------------------------------------------
 def enum_property_to_bitfield(prop_val):
     bitfield = 0
 
@@ -615,6 +689,7 @@ def enum_property_to_bitfield(prop_val):
 
     return bitfield
 
+#-------------------------------------------------------------------------------------------------------------------------------
 class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
     bl_label = 'Eurocom Tools'
     bl_space_type = 'PROPERTIES'
@@ -667,55 +742,51 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
             # swy: this is a bit of a silly way of wrapping the text and overflowing
             #      into various lines across the box
             text_list = textwrap.wrap(
-                "Go into either the Â«faceÂ» or Â«vertexÂ» select mode to edit the EuroLand flags...",
+                "Go into either the «face» or «vertex» select mode to edit the EuroLand flags...",
                 width = (context.region.width / 7.2) / context.preferences.system.ui_scale
             )
             for line in text_list:
                 text_row.label(text=(' ' * 6) + line)
 
 
+#-------------------------------------------------------------------------------------------------------------------------------
 # swy: global variable to store icons in
+#-------------------------------------------------------------------------------------------------------------------------------
 custom_icons = None
 
+#-------------------------------------------------------------------------------------------------------------------------------
 # swy: avoid dereferencing non-existing icons, just in case
+#-------------------------------------------------------------------------------------------------------------------------------
 def sphinx_ico():
     if 'sphinx_ico' in custom_icons:
         return custom_icons['sphinx_ico'].icon_id
     return 'EXPERIMENTAL'
 
-def menu_func_eif_import(self, context):
-    self.layout.operator(ImportEIF.bl_idname, icon_value=sphinx_ico(), text='Eurocom Interchange File (.eif)')
 def menu_func_eif_export(self, context):
     self.layout.operator(ExportEIF.bl_idname, icon_value=sphinx_ico(), text='Eurocom Interchange File (.eif)')
-
-def menu_func_rtg_import(self, context):
-    self.layout.operator(ImportRTG.bl_idname, icon_value=sphinx_ico(), text='Eurocom Real Time Game (.rtg)')
-def menu_func_rtg_export(self, context):
-    self.layout.operator(ExportRTG.bl_idname, icon_value=sphinx_ico(), text='Eurocom Real Time Game (.rtg)')
-
-def menu_func_ese_import(self, context):
-    self.layout.operator(ImportESE.bl_idname, icon_value=sphinx_ico(), text='Eurocom Scene Export (.ese)')
 def menu_func_ese_export(self, context):
     self.layout.operator(ExportESE.bl_idname, icon_value=sphinx_ico(), text='Eurocom Scene Export (.ese)')
 
+#-------------------------------------------------------------------------------------------------------------------------------
 # swy: un/register the whole thing in one go, see below
+#-------------------------------------------------------------------------------------------------------------------------------
 classes = (
-    ImportEIF,
-    ImportRTG,
-    ImportESE,
-
     ExportEIF,
-    ExportRTG,
     ExportESE,
 
-    # swy: export panel stuff
-    EIF_EXPORT_PT_output_options,
-    EIF_EXPORT_PT_scale,
+    #EIF Panels
+    EIF_EXPORT_PT_Output_Settings,
+    EIF_EXPORT_PT_Mesh_Options,
+    EIF_EXPORT_PT_Decimals_Precision,
+    EIF_EXPORT_PT_Scale_Output,
 
-    ESE_EXPORT_PT_object_types,
-    ESE_EXPORT_PT_output_options,
-    ESE_EXPORT_PT_mesh_options,
-    ESE_EXPORT_PT_scale,
+    #ESE Panels
+    ESE_EXPORT_PT_Output_Options,
+    ESE_EXPORT_PT_Object_Types,
+    ESE_EXPORT_PT_Mesh_Options,
+    ESE_EXPORT_PT_Static_Output,
+    ESE_EXPORT_PT_Decimals_Precision,
+    ESE_EXPORT_PT_Scale_Output,
 
     # swy: mesh flags panel stuff
     TOOLS_PANEL_PT_eurocom,
@@ -726,16 +797,14 @@ classes = (
     EuroProperties
 )
 
-menu_import = (menu_func_eif_import, menu_func_rtg_import, menu_func_ese_import)
-menu_export = (menu_func_eif_export, menu_func_rtg_export, menu_func_ese_export)
+menu_export = (menu_func_eif_export, menu_func_ese_export)
 
+#-------------------------------------------------------------------------------------------------------------------------------
 # swy: initialize and de-initialize in opposite order
+#-------------------------------------------------------------------------------------------------------------------------------
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
-
-    for m in menu_import:
-        bpy.types.TOPBAR_MT_file_import.append(m)
 
     for m in menu_export:
         bpy.types.TOPBAR_MT_file_export.append(m)
@@ -750,6 +819,7 @@ def register():
 
     bpy.app.handlers.depsgraph_update_post.append(scene_update_post_handler)
 
+#-------------------------------------------------------------------------------------------------------------------------------
 def unregister():
     if scene_update_post_handler in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(scene_update_post_handler)
@@ -759,9 +829,6 @@ def unregister():
 
     for m in reversed(menu_export):
         bpy.types.TOPBAR_MT_file_export.remove(m)
-
-    for m in reversed(menu_import):
-        bpy.types.TOPBAR_MT_file_import.remove(m)
 
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
