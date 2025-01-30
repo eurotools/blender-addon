@@ -2,13 +2,13 @@
 #  SPDX-License-Identifier: Zlib
 
 bl_info = {
-           'name': 'Eurocom 3D formats for Sphinx and the Cursed Mummy™',
+           'name': 'Eurocom 3D formats for Sphinx and the Cursed Mummyâ„¢',
          'author': 'Swyter, for THQ Nordic GmbH',
         'version': (2020, 10, 10),
         'blender': (2, 81, 6),
        'location': 'File > Import-Export',
     'description': 'Export and import EIF, ESE and RTG files compatible with Euroland.',
-        'warning': 'Importing still doesn\'t work, export in progress. ¯\_(?)_/¯',
+        'warning': 'Importing still doesn\'t work, export in progress. Â¯\_(ãƒ„)_/Â¯',
         'doc_url': 'https://sphinxandthecursedmummy.fandom.com/wiki/Technical',
     'tracker_url': 'https://discord.gg/sphinx',
         'support': 'COMMUNITY',
@@ -76,12 +76,6 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
     #-------------------------------------------------------------------------------------------------------------------------------
     # Mesh Options
     #-------------------------------------------------------------------------------------------------------------------------------
-    Output_Mesh_Normals : BoolProperty(
-        name="Mesh Normals",
-        description="Export mesh normals",
-        default=False,
-    ) # type: ignore
-
     Output_Mesh_UV : BoolProperty(
         name="Mapping Coordinates",
         description="Export mesh UVs",
@@ -164,7 +158,6 @@ class EIF_EXPORT_PT_Mesh_Options(bpy.types.Panel):
         return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_eif"
 
     def draw(self, context):
-        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Normals')
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_UV')
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Vertex_Colors')
 
@@ -742,7 +735,7 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
             # swy: this is a bit of a silly way of wrapping the text and overflowing
             #      into various lines across the box
             text_list = textwrap.wrap(
-                "Go into either the «face» or «vertex» select mode to edit the EuroLand flags...",
+                "Go into either the Â«faceÂ» or Â«vertexÂ» select mode to edit the EuroLand flags...",
                 width = (context.region.width / 7.2) / context.preferences.system.ui_scale
             )
             for line in text_list:

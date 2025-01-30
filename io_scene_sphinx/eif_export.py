@@ -28,7 +28,6 @@ def _write(context, filepath,
            EXPORT_GEOMNODE, 
            EXPORT_PLACENODE, 
            TRANSFORM_TO_CENTER, 
-           EXPORT_NORMALS,
            EXPORT_UV,
            EXPORT_VERTEX_COLORS,
            DECIMAL_PRECISION,
@@ -61,7 +60,7 @@ def _write(context, filepath,
                 for mat in obj.data.materials:
                     if mat.name in unique_materials:
                         continue  # Saltar si el material ya fue procesado.
-                    unique_materials.append(mat.name)  # Añadir el material al conjunto.
+                    unique_materials.append(mat.name)  # AÃ±adir el material al conjunto.
                     
                     out.write('\t*MATERIAL %d {\n' % (len(unique_materials) - 1))
                     out.write('\t\t*NAME "%s"\n' % (mat.name))
@@ -203,7 +202,7 @@ def _write(context, filepath,
                 if ob_mat.determinant() < 0.0:
                     me.flip_normals()
 
-                # Crear listas únicas de coordenadas de vértices, UVs y colores de vértices
+                # Crear listas Ãºnicas de coordenadas de vÃ©rtices, UVs y colores de vÃ©rtices
                 unique_vertices = list({tuple(v.co) for v in me.vertices})
 
                 #Get UVs
@@ -269,13 +268,6 @@ def _write(context, filepath,
                             color_corrected = adjust_rgb(col[0], col[1], col[2], col[3], 0.57)
                             out.write(f'\t\t{df} {df} {df} {df}\n' % (color_corrected[0], color_corrected[1], color_corrected[2], color_corrected[3]))
                     out.write('\t}\n')
-                    
-                # Normals
-                if EXPORT_NORMALS:
-                    out.write('\t*NORMALS_LIST {\n')
-                    if unique_normals:
-                        faceformat = faceformat + "N"
-                    out.write('\t}\n')
 
                 # Materials
                 if EXPORT_UV and len(me.materials) > 0:
@@ -294,12 +286,12 @@ def _write(context, filepath,
                 color_index_map = {color: idx for idx, color in enumerate(unique_colors)}
                 normal_index_map = {normal: idx for idx, normal in enumerate(unique_normals)}
 
-                # Iterar por cada cara y generar la información
+                # Iterar por cada cara y generar la informaciÃ³n
                 for poly in me.polygons:
                     
                     #Vertices --- V        
                     vertex_indices = [vertex_index_map[tuple(me.vertices[v].co)] for v in reversed(poly.vertices)]
-                    #--------print(f"Cara {poly.index}: Vértices ({len(poly.vertices)}): {vertex_indices}")
+                    #--------print(f"Cara {poly.index}: VÃ©rtices ({len(poly.vertices)}): {vertex_indices}")
                     out.write(f"\t\t{len(poly.vertices)} " + " ".join(map(str, vertex_indices)) + " ")
                         
                     # Mapeo de UVs --- T
@@ -312,13 +304,13 @@ def _write(context, filepath,
                             #print(f"Cara {poly.index}, Capa UV '{uv_layer.name}': {uv_indices}")
                             out.write(" ".join(map(str, uv_indices)) + " ")
 
-                        # Si hay más capas de colores que UVs, agregar -1 para las capas faltantes
+                        # Si hay mÃ¡s capas de colores que UVs, agregar -1 para las capas faltantes
                         if faceLayersCount > len(me.uv_layers):
                             missing_color_layers = faceLayersCount - len(me.uv_layers)
                             for _ in range(missing_color_layers):
                                 out.write(" ".join(["-1"] * len(poly.vertices)) + " ")
 
-                    # Colores de vértices --- C
+                    # Colores de vÃ©rtices --- C
                     if EXPORT_VERTEX_COLORS and unique_colors:
                         for color_layer in me.vertex_colors:
                             color_indices = []
@@ -328,7 +320,7 @@ def _write(context, filepath,
                             #print(f"Cara {poly.index}, Capa de colores '{color_layer.name}': {color_indices}")
                             out.write(" ".join(map(str, color_indices)) + " ")
                             
-                        # Si hay más capas UV que colores, agregar -1 para las capas faltantes
+                        # Si hay mÃ¡s capas UV que colores, agregar -1 para las capas faltantes
                         if faceLayersCount > len(me.vertex_colors):
                             missing_uv_layers = faceLayersCount - len(me.vertex_colors)
                             for _ in range(missing_uv_layers):
@@ -454,7 +446,6 @@ def save(context,
          Output_GeomNode, 
          Output_PlaceNode, 
          Transform_Center,
-         Output_Mesh_Normals,
          Output_Mesh_UV,
          Output_Mesh_Vertex_Colors,
          Decimal_Precision,
@@ -464,7 +455,6 @@ def save(context,
            EXPORT_GEOMNODE=Output_GeomNode,
            EXPORT_PLACENODE=Output_PlaceNode, 
            TRANSFORM_TO_CENTER=Transform_Center, 
-           EXPORT_NORMALS=Output_Mesh_Normals,
            EXPORT_UV=Output_Mesh_UV,
            EXPORT_VERTEX_COLORS=Output_Mesh_Vertex_Colors,
            DECIMAL_PRECISION=Decimal_Precision,
