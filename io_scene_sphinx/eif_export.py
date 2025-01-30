@@ -223,11 +223,6 @@ def _write(context, filepath,
                                 unique_colors.append(tuple(color_layer.data[loop.index].color))
                         unique_colors = list(set(unique_colors))
 
-                #Get face normals
-                unique_normals = []
-                if EXPORT_NORMALS:
-                    unique_normals = list({tuple(poly.normal) for poly in me.polygons})
-
                 #Get number of layers that should be in EuroLand, based in the UV Layers
                 faceLayersCount = len(me.uv_layers)
                 materials = me.materials[:]
@@ -284,7 +279,14 @@ def _write(context, filepath,
                 vertex_index_map = {v: idx for idx, v in enumerate(unique_vertices)}
                 uv_index_map = {uv: idx for idx, uv in enumerate(unique_uvs)}
                 color_index_map = {color: idx for idx, color in enumerate(unique_colors)}
-                normal_index_map = {normal: idx for idx, normal in enumerate(unique_normals)}
+
+                #Check for flags
+                import bmesh
+                bm = bmesh.new()
+                bm.from_mesh(me)
+
+                euro_vtx_flags = bm.verts.layers.int['euro_vtx_flags']
+                euro_fac_flags = bm.faces.layers.int['euro_fac_flags']
 
                 # Iterar por cada cara y generar la información
                 for poly in me.polygons:
@@ -325,12 +327,6 @@ def _write(context, filepath,
                             missing_uv_layers = faceLayersCount - len(me.vertex_colors)
                             for _ in range(missing_uv_layers):
                                 out.write(" ".join(["-1"] * len(poly.vertices)) + " ")
-
-                    # Face normals ---N
-                    if EXPORT_NORMALS and unique_normals:
-                        normal_index = normal_index_map[tuple(poly.normal)]
-                        #print(f"Cara {poly.index}: Normal: {normal_index}")
-                        out.write(" %d " % normal_index)
                     
                     # Material Index ---M
                     if EXPORT_UV and len(me.materials) > 0:
@@ -341,12 +337,18 @@ def _write(context, filepath,
                                 material_index = materials_list.index(material_name)
                             out.write("%d " % material_index)
 
-                    # Flags ---F
-                    flags = 0
+                    # Flags ---F                  
+                    face = bm.faces[poly.index]
+                    flags = face[euro_fac_flags]
+
                     out.write('%d\n' % flags)
 
                 out.write("\t}\n")
                 out.write("}\n\n")
+
+                # Actualiza la malla con los cambios realizados en bmesh
+                bm.to_mesh(me)
+                bm.free()  # Libera la memoria de bmesh
 
                 # clean up
                 ob_for_convert.to_mesh_clear()
