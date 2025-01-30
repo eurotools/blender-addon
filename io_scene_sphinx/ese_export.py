@@ -10,6 +10,7 @@ Authors: Swyter and Jmarti856
 """
 
 import bpy
+import platform
 from math import degrees
 from mathutils import Matrix
 from datetime import datetime
@@ -48,21 +49,58 @@ def printCustomProperties(out):
     custom_properties = {key: value for key, value in scene.items() if key not in '_RNA_UI'}
 
     #print only the visible ones
-    visible_properties = {key: value for key, value in custom_properties.items() if isinstance(value, (int, float, str, bool))}
-      
+    visible_properties = {key: value for key, value in custom_properties.items() if isinstance(value, (int, float, str, bool))}      
     type_mapping = {
         int: "Numeric",
         float: "Numeric",
         str: "String",
         bool: "Boolean"
-    }      
+    }   
 
-    out.write('\t*SCENE_UDPROPS {\n')
-    out.write('\t\t*PROP_COUNT\t%d\n' % len(visible_properties))
-    
-    for index, (key, value) in enumerate(visible_properties.items()):
+    # Save scene custom properties
+    properties_list = []
+    for key, value in visible_properties.items():
         type_name = type_mapping.get(type(value), type(value).__name__)
-        out.write('\t\t*PROP\t%d\t"%s"\t"%s"\t"%s"\n' % (index, key, type_name, value))
+
+        #create dict object
+        property_data = {"name": key,"type": type_name,"value": value}
+        properties_list.append(property_data)
+
+    # Check for the camera script property
+    if scene.euro_properties:
+        euro_properties = scene.euro_properties
+
+        # Si la propiedad 'enable_camera_script' no existe, puedes establecerla o usarla
+        if not hasattr(euro_properties, 'enable_camera_script'):
+            euro_properties.enable_camera_script = False
+
+        # Acceder al valor de la propiedad
+        if euro_properties.enable_camera_script:
+            property_data = {
+                "name": "cameraScriptEditor",
+                "type": "Numeric",
+                "value": 1}
+            properties_list.append(property_data)
+
+            #add info
+            current_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            computer_name = platform.node() 
+            user_name = platform.uname().node
+            blender_version = bpy.app.version_string
+
+            # Crear la propiedad extra con la información requerida
+            extra_property = {
+                "name": "cameraScriptEditor Info",
+                "type": "String",
+                "value": f"{current_time} Computer:{computer_name} UserName:{user_name} BlenderVer:#({blender_version})"
+            }
+            properties_list.append(extra_property)
+
+    # Imprimir las propiedades almacenadas
+    out.write('\t*SCENE_UDPROPS {\n')
+    out.write('\t\t*PROP_COUNT\t%d\n' % len(properties_list))
+    for index, property_data in enumerate(properties_list):
+        out.write('\t\t*PROP\t%d\t"%s"\t"%s"\t"%s"\n' % (index, property_data["name"], property_data["type"], property_data["value"]))
     out.write('\t}\n')
 
 #-------------------------------------------------------------------------------------------------------------------------------
@@ -444,12 +482,13 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
                 #Map colors
                 out.write('\t\t*MESH_NUMCVFACES %d\n' % len(me.polygons))
                 out.write('\t\t*MESH_CFACELIST {\n')
-                for p_index, poly in enumerate(me.polygons):
-                    color_indices = []
-                    for loop_index in (poly.loop_indices):
-                        color = tuple(me.vertex_colors.active.data[loop_index].color)
-                        color_indices.append(color_index_map.get(color, -1))
-                    out.write(f'\t\t\t*MESH_CFACE {{:<3d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(p_index, color_indices[0], color_indices[1], color_indices[2]))
+                if unique_colors:
+                    for p_index, poly in enumerate(me.polygons):
+                        color_indices = []
+                        for loop_index in (poly.loop_indices):
+                            color = tuple(me.vertex_colors.active.data[loop_index].color)
+                            color_indices.append(color_index_map.get(color, -1))
+                        out.write(f'\t\t\t*MESH_CFACE {{:<3d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(p_index, color_indices[0], color_indices[1], color_indices[2]))
                 out.write('\t\t}\n')           
 
             #-------------------------------------------------------------------------------------------------------------------------------
@@ -849,7 +888,6 @@ def write_camera_data(out, scene, depsgraph):
         write_camera_settings(out, camera_data, ob, STATIC_FRAME)
 
         #---------------------------------------------[Camera Animation]---------------------------------------------
-        print(FRAMES_COUNT)
         if FRAMES_COUNT > 1 and EXPORT_ANIMATIONS:
             out.write('\t*CAMERA_ANIMATION {\n')
             previous_camera_data = None

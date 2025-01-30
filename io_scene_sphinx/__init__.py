@@ -474,6 +474,13 @@ def update_after_enum(self, context):
 
 #-------------------------------------------------------------------------------------------------------------------------------
 class EuroProperties(bpy.types.PropertyGroup):
+    
+    enable_camera_script: bpy.props.BoolProperty(
+        name="Enable Camera Script",
+        description="Enable or disable the camera script",
+        default=False
+    )
+    
     ''' Per-face bitfield for Euroland entities. '''
     face_flags: bpy.props.EnumProperty(
         name = "Eurocom face flags",
@@ -683,6 +690,37 @@ def enum_property_to_bitfield(prop_val):
     return bitfield
 
 #-------------------------------------------------------------------------------------------------------------------------------
+def update_camera_script_property(scene):
+    # Comprobamos cuántas cámaras hay en la escena
+    num_cameras = len([obj for obj in scene.objects if obj.type == 'CAMERA'])
+    
+    # Si no hay cámaras, ponemos la propiedad a False
+    if num_cameras == 0:
+        scene.euro_properties.enable_camera_script = False
+
+#-------------------------------------------------------------------------------------------------------------------------------
+class SCENE_PT_camera_script_panel(bpy.types.Panel):
+    bl_label = "Eurocom Tools"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = 'scene'
+
+    @classmethod
+    def poll(cls, context):
+        # Solo se dibuja si hay al menos una cámara en la escena
+        return len([obj for obj in context.scene.objects if obj.type == 'CAMERA']) > 0
+
+    def draw(self, context):
+        box = self.layout.box()
+        row = box.column_flow(columns=1)
+
+        # Accedemos a la propiedad enable_camera_script de EuroProperties
+        scene_props = context.scene.euro_properties
+
+        # Añadimos la propiedad al panel
+        row.prop(scene_props, "enable_camera_script")
+
+#-------------------------------------------------------------------------------------------------------------------------------
 class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
     bl_label = 'Eurocom Tools'
     bl_space_type = 'PROPERTIES'
@@ -740,7 +778,7 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
             )
             for line in text_list:
                 text_row.label(text=(' ' * 6) + line)
-
+        
 #-------------------------------------------------------------------------------------------------------------------------------
 # swy: global variable to store icons in
 #-------------------------------------------------------------------------------------------------------------------------------
@@ -779,6 +817,9 @@ classes = (
     ESE_EXPORT_PT_Static_Output,
     ESE_EXPORT_PT_Decimals_Precision,
     ESE_EXPORT_PT_Scale_Output,
+    
+    # jmarti856: script camera stuff
+    SCENE_PT_camera_script_panel,
 
     # swy: mesh flags panel stuff
     TOOLS_PANEL_PT_eurocom,
@@ -801,6 +842,9 @@ def register():
     for m in menu_export:
         bpy.types.TOPBAR_MT_file_export.append(m)
 
+
+    bpy.types.Scene.euro_properties = bpy.props.PointerProperty(type=EuroProperties)
+
     # swy: this is a bit of a dummy property for flag display; we actually
     #      retrieve the contents from a custom mesh layer, no other way
     bpy.types.Mesh.euroland = bpy.props.PointerProperty(type=EuroProperties)
@@ -810,12 +854,14 @@ def register():
     custom_icons.load('sphinx_ico', os.path.join(os.path.dirname(__file__), 'icons/sphinx.png'), 'IMAGE')
 
     bpy.app.handlers.depsgraph_update_post.append(scene_update_post_handler)
+    bpy.app.handlers.depsgraph_update_post.append(update_camera_script_property)
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def unregister():
     if scene_update_post_handler in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(scene_update_post_handler)
-
+        bpy.app.handlers.depsgraph_update_post.remove(update_camera_script_property)
+        
     global custom_icons; custom_icons.clear()
     bpy.utils.previews.remove(custom_icons)
 
