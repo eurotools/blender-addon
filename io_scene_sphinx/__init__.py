@@ -491,6 +491,309 @@ class ESE_EXPORT_PT_Controller_Output(bpy.types.Panel):
         self.layout.prop(context.space_data.active_operator, 'Output_First_Only')
 
 #-------------------------------------------------------------------------------------------------------------------------------
+# RTG Exporter
+#-------------------------------------------------------------------------------------------------------------------------------
+class ExportRTG(bpy.types.Operator, ExportHelper):
+    """Save a dynamic Maya Euroland file; for animations, scripts and maps"""
+
+    bl_idname = "export_scene.rtg"
+    bl_label = 'Export RTG'
+    bl_options = {'PRESET'}
+
+    #-------------------------------------------------------------------------------------------------------------------------------
+    filename_ext = ".rtg"
+    filter_glob: StringProperty(
+                    default="*.rtg", 
+                    options={'HIDDEN'}
+                ) # type: ignore
+
+    #-------------------------------------------------------------------------------------------------------------------------------
+    # Output Options
+    #-------------------------------------------------------------------------------------------------------------------------------
+    Output_Mesh_Definition: BoolProperty(
+        name="Mesh Definition",
+        description="Output mesh flags data.",
+        default=True,
+    ) # type: ignore
+
+    Output_Materials: BoolProperty(
+        name="Materials",
+        description="Output scene materials.",
+        default=True,
+    ) # type: ignore
+
+    Output_Mesh_Anims: BoolProperty(
+        name="Animated Mesh",
+        description="Export mesh animations",
+        default=False,
+    ) # type: ignore
+
+    Output_CameraLightAnims: BoolProperty(
+        name="Animated Camera/Light settings",
+        description="Export animations from Camera and Light object types.",
+        default=False,
+    ) # type: ignore
+
+    Transform_Center: BoolProperty(
+        name="Transform Objects to (0,0,0)", 
+        description="Transform objects location and rotation to (0,0,0).", 
+        default=True,
+    ) # type: ignore
+
+    #-------------------------------------------------------------------------------------------------------------------------------
+    # Object Types
+    #-------------------------------------------------------------------------------------------------------------------------------
+    Object_Types: EnumProperty(
+        name="Output Types",
+        options={'ENUM_FLAG'},
+        items=(('MESH', "Geometric", ""),
+               ('CAMERA', "Cameras", ""),
+               ('LIGHT', "Lights", ""),     
+               ('ARMATURE', "Biped Bone", "")         
+            ),
+        description="Which kind of object to export",
+        default={'MESH'}
+    ) # type: ignore
+
+    #-------------------------------------------------------------------------------------------------------------------------------
+    # Mesh Options
+    #-------------------------------------------------------------------------------------------------------------------------------
+    Output_Mesh_Normals : BoolProperty(
+        name="Mesh Normals",
+        description="Export mesh normals",
+        default=True,
+    ) # type: ignore
+
+    Output_Mesh_UV : BoolProperty(
+        name="Mapping Coordinates",
+        description="Export mesh UVs",
+        default=True,
+    ) # type: ignore
+
+    Output_Mesh_Vertex_Colors : BoolProperty(
+        name="Vertex Colors",
+        description="Export mesh vertex colors",
+        default=False,
+    ) # type: ignore
+
+    Output_Mesh_Morph : BoolProperty(
+        name="Skin Deformation Data",
+        description="Export morphs",
+        default=False,
+    ) # type: ignore
+
+    #-------------------------------------------------------------------------------------------------------------------------------
+    # Static Output
+    #-------------------------------------------------------------------------------------------------------------------------------
+    Static_Frame: IntProperty(
+        name="Frame #", 
+        min=0, 
+        max=2147483647, 
+        default=1,
+    ) # type: ignore
+
+    #-------------------------------------------------------------------------------------------------------------------------------
+    # Precision
+    #-------------------------------------------------------------------------------------------------------------------------------
+    Decimal_Precision: IntProperty(
+        name="Decimals:", 
+        min=1, 
+        max=10, 
+        default=6,
+    ) # type: ignore
+
+    #-------------------------------------------------------------------------------------------------------------------------------
+    # Scale
+    #-------------------------------------------------------------------------------------------------------------------------------
+    Output_Scale: FloatProperty(
+        name="Scale Factor",
+        min=0.01,
+        max=1000.0,
+        default=1.0,
+    )# type: ignore
+
+    #-------------------------------------------------------------------------------------------------------------------------------
+    # Controller Output
+    #-------------------------------------------------------------------------------------------------------------------------------
+    Enable_Start_From_Frame : BoolProperty(
+        name="Start output from frame",
+        description="",
+        default=False,
+    ) # type: ignore
+
+    Start_From_Frame: IntProperty(
+        name="", 
+        min=0, 
+        max=2147483647, 
+        default=1,
+    ) # type: ignore
+
+    Enable_End_With_Frame : BoolProperty(
+        name="End output with frame:", 
+        description="",
+        default=False,
+    ) # type: ignore
+
+    End_With_Frame: IntProperty(
+        name="", 
+        min=1, 
+        max=2147483647, 
+        default=250,
+    ) # type: ignore
+
+    Output_First_Only : BoolProperty(
+        name="Output Frame 0", 
+        description="",
+        default=False,
+    ) # type: ignore
+
+    #-------------------------------------------------------------------------------------------------------------------------------
+    path_mode: path_reference_mode
+    check_extension = True
+
+    #-------------------------------------------------------------------------------------------------------------------------------
+    def execute(self, context):
+        from . import rtg_export
+
+        frame_start = bpy.context.scene.frame_start
+        frame_end = bpy.context.scene.frame_end
+
+        #Override values
+        if self.Enable_Start_From_Frame and (self.Start_From_Frame >= frame_start):
+            self.Static_Frame = self.Start_From_Frame
+        if self.Output_First_Only:
+            self.Static_Frame = frame_start
+
+        # Set the first frame
+        if self.Static_Frame < frame_start:
+            self.Static_Frame = frame_start
+        if self.Static_Frame > frame_end:
+            self.Static_Frame = frame_end
+
+        keywords = self.as_keywords(ignore=("axis_forward",
+                                            "axis_up",
+                                            "global_scale",
+                                            "check_existing",
+                                            "filter_glob",
+                                            "path_mode",
+                                            ))
+
+        return rtg_export.save(context, **keywords)
+
+    #-------------------------------------------------------------------------------------------------------------------------------
+    def draw(self, context):
+        pass
+
+#-------------------------------------------------------------------------------------------------------------------------------
+class RTG_EXPORT_PT_Output_Options(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Output Options"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_rtg"
+
+    def draw(self, context):
+        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Definition')
+        self.layout.prop(context.space_data.active_operator, 'Output_Materials')
+        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Anims')
+        self.layout.prop(context.space_data.active_operator, 'Output_CameraLightAnims')
+        self.layout.prop(context.space_data.active_operator, 'Transform_Center')
+
+#-------------------------------------------------------------------------------------------------------------------------------
+class RTG_EXPORT_PT_Object_Types(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Object Types"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_rtg"
+
+    def draw(self, context):
+        self.layout.column().prop(context.space_data.active_operator, "Object_Types")
+
+#-------------------------------------------------------------------------------------------------------------------------------
+class RTG_EXPORT_PT_Mesh_Options(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Mesh Options"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_rtg"
+
+    def draw(self, context):
+        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Normals')
+        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_UV')
+        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Vertex_Colors')
+        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Morph')
+
+#-------------------------------------------------------------------------------------------------------------------------------
+class RTG_EXPORT_PT_Static_Output(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Static Output"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_rtg"
+
+    def draw(self, context):
+        self.layout.prop(context.space_data.active_operator, 'Static_Frame')
+
+#-------------------------------------------------------------------------------------------------------------------------------
+class RTG_EXPORT_PT_Decimals_Precision(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Precision"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_rtg"
+
+    def draw(self, context):
+        self.layout.prop(context.space_data.active_operator, 'Decimal_Precision')
+
+#-------------------------------------------------------------------------------------------------------------------------------
+class RTG_EXPORT_PT_Scale_Output(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Scale"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_rtg"
+
+    def draw(self, context):
+        self.layout.prop(context.space_data.active_operator, 'Output_Scale')
+
+#-------------------------------------------------------------------------------------------------------------------------------
+class RTG_EXPORT_PT_Controller_Output(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Controller Output"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_rtg"
+
+    def draw(self, context):
+        self.layout.prop(context.space_data.active_operator, 'Enable_Start_From_Frame')
+        self.layout.prop(context.space_data.active_operator, 'Start_From_Frame')
+        self.layout.prop(context.space_data.active_operator, 'Enable_End_With_Frame')
+        self.layout.prop(context.space_data.active_operator, 'End_With_Frame')
+        self.layout.prop(context.space_data.active_operator, 'Output_First_Only')
+
+#-------------------------------------------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------------------------
 def scene_update_post_handler(scene):
@@ -876,6 +1179,8 @@ def menu_func_eif_export(self, context):
     self.layout.operator(ExportEIF.bl_idname, icon_value=sphinx_ico(), text='Eurocom Interchange File (.eif)')
 def menu_func_ese_export(self, context):
     self.layout.operator(ExportESE.bl_idname, icon_value=sphinx_ico(), text='Eurocom Scene Export (.ese)')
+def menu_func_rtg_export(self, context):
+    self.layout.operator(ExportRTG.bl_idname, icon_value=sphinx_ico(), text='Eurocom Real Time Game (.rtg)')
 
 #-------------------------------------------------------------------------------------------------------------------------------
 # swy: un/register the whole thing in one go, see below
@@ -883,6 +1188,7 @@ def menu_func_ese_export(self, context):
 classes = (
     ExportEIF,
     ExportESE,
+    ExportRTG,
 
     #EIF Panels
     EIF_EXPORT_PT_Output_Settings,
@@ -898,6 +1204,15 @@ classes = (
     ESE_EXPORT_PT_Decimals_Precision,
     ESE_EXPORT_PT_Scale_Output,
     ESE_EXPORT_PT_Controller_Output,
+
+    #RTG Panels
+    RTG_EXPORT_PT_Output_Options,
+    RTG_EXPORT_PT_Object_Types,
+    RTG_EXPORT_PT_Mesh_Options,
+    RTG_EXPORT_PT_Static_Output,
+    RTG_EXPORT_PT_Decimals_Precision,
+    RTG_EXPORT_PT_Scale_Output,
+    RTG_EXPORT_PT_Controller_Output,
     
     # jmarti856: script camera stuff
     SCENE_PT_camera_script_panel,
@@ -911,7 +1226,7 @@ classes = (
     EuroProperties
 )
 
-menu_export = (menu_func_eif_export, menu_func_ese_export)
+menu_export = (menu_func_eif_export, menu_func_ese_export, menu_func_rtg_export)
 
 #-------------------------------------------------------------------------------------------------------------------------------
 # swy: initialize and de-initialize in opposite order
