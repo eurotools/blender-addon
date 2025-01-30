@@ -114,7 +114,6 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
 
     #-------------------------------------------------------------------------------------------------------------------------------
     def execute(self, context):
-        from mathutils import Matrix
         from . import eif_export
 
         keywords = self.as_keywords(ignore=("axis_forward",
@@ -209,16 +208,22 @@ class ExportESE(bpy.types.Operator, ExportHelper):
     #-------------------------------------------------------------------------------------------------------------------------------
     # Output Options
     #-------------------------------------------------------------------------------------------------------------------------------
+    Output_Mesh_Definition: BoolProperty(
+        name="Mesh Definition",
+        description="Output mesh flags data.",
+        default=True,
+    ) # type: ignore
+
     Output_Materials: BoolProperty(
         name="Materials",
         description="Output scene materials.",
-        default=False,
+        default=True,
     ) # type: ignore
 
     Output_Mesh_Anims: BoolProperty(
         name="Animated Mesh",
         description="Export mesh animations",
-        default=True,
+        default=False,
     ) # type: ignore
 
     Output_CameraLightAnims: BoolProperty(
@@ -230,7 +235,7 @@ class ExportESE(bpy.types.Operator, ExportHelper):
     Transform_Center: BoolProperty(
         name="Transform Objects to (0,0,0)", 
         description="Transform objects location and rotation to (0,0,0).", 
-        default=False,
+        default=True,
     ) # type: ignore
 
     #-------------------------------------------------------------------------------------------------------------------------------
@@ -241,7 +246,8 @@ class ExportESE(bpy.types.Operator, ExportHelper):
         options={'ENUM_FLAG'},
         items=(('MESH', "Geometric", ""),
                ('CAMERA', "Cameras", ""),
-               ('LIGHT', "Lights", ""),               
+               ('LIGHT', "Lights", ""),     
+               ('ARMATURE', "Biped Bone", "")         
             ),
         description="Which kind of object to export",
         default={'MESH'}
@@ -253,18 +259,24 @@ class ExportESE(bpy.types.Operator, ExportHelper):
     Output_Mesh_Normals : BoolProperty(
         name="Mesh Normals",
         description="Export mesh normals",
-        default=False,
+        default=True,
     ) # type: ignore
 
     Output_Mesh_UV : BoolProperty(
         name="Mapping Coordinates",
         description="Export mesh UVs",
-        default=False,
+        default=True,
     ) # type: ignore
 
     Output_Mesh_Vertex_Colors : BoolProperty(
         name="Vertex Colors",
         description="Export mesh vertex colors",
+        default=False,
+    ) # type: ignore
+
+    Output_Mesh_Morph : BoolProperty(
+        name="Skin Deformation Data",
+        description="Export morphs",
         default=False,
     ) # type: ignore
 
@@ -299,13 +311,47 @@ class ExportESE(bpy.types.Operator, ExportHelper):
     )# type: ignore
 
     #-------------------------------------------------------------------------------------------------------------------------------
+    # Controller Output
+    #-------------------------------------------------------------------------------------------------------------------------------
+    Enable_Start_From_Frame : BoolProperty(
+        name="Start output from frame",
+        description="",
+        default=False,
+    ) # type: ignore
+
+    Start_From_Frame: IntProperty(
+        name="", 
+        min=0, 
+        max=2147483647, 
+        default=1,
+    ) # type: ignore
+
+    Enable_End_With_Frame : BoolProperty(
+        name="End output with frame:", 
+        description="",
+        default=False,
+    ) # type: ignore
+
+    End_With_Frame: IntProperty(
+        name="", 
+        min=1, 
+        max=2147483647, 
+        default=250,
+    ) # type: ignore
+
+    Output_First_Only : BoolProperty(
+        name="Output Frame 0", 
+        description="",
+        default=False,
+    ) # type: ignore
+
+    #-------------------------------------------------------------------------------------------------------------------------------
     path_mode: path_reference_mode
     check_extension = True
 
     #-------------------------------------------------------------------------------------------------------------------------------
     def execute(self, context):
-        from mathutils import Matrix
-        from . import export_ese
+        from . import ese_export
 
         keywords = self.as_keywords(ignore=("axis_forward",
                                             "axis_up",
@@ -315,7 +361,7 @@ class ExportESE(bpy.types.Operator, ExportHelper):
                                             "path_mode",
                                             ))
 
-        return export_ese.save(context, **keywords)
+        return ese_export.save(context, **keywords)
 
     def draw(self, context):
         pass
@@ -332,6 +378,7 @@ class ESE_EXPORT_PT_Output_Options(bpy.types.Panel):
         return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_ese"
 
     def draw(self, context):
+        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Definition')
         self.layout.prop(context.space_data.active_operator, 'Output_Materials')
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Anims')
         self.layout.prop(context.space_data.active_operator, 'Output_CameraLightAnims')
@@ -366,6 +413,7 @@ class ESE_EXPORT_PT_Mesh_Options(bpy.types.Panel):
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Normals')
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_UV')
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Vertex_Colors')
+        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Morph')
 
 #-------------------------------------------------------------------------------------------------------------------------------
 class ESE_EXPORT_PT_Static_Output(bpy.types.Panel):
@@ -409,6 +457,23 @@ class ESE_EXPORT_PT_Scale_Output(bpy.types.Panel):
     def draw(self, context):
         self.layout.prop(context.space_data.active_operator, 'Output_Scale')
 
+#-------------------------------------------------------------------------------------------------------------------------------
+class ESE_EXPORT_PT_Controller_Output(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Controller Output"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_ese"
+
+    def draw(self, context):
+        self.layout.prop(context.space_data.active_operator, 'Enable_Start_From_Frame')
+        self.layout.prop(context.space_data.active_operator, 'Start_From_Frame')
+        self.layout.prop(context.space_data.active_operator, 'Enable_End_With_Frame')
+        self.layout.prop(context.space_data.active_operator, 'End_With_Frame')
+        self.layout.prop(context.space_data.active_operator, 'Output_First_Only')
 
 #-------------------------------------------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------------------------
@@ -817,6 +882,7 @@ classes = (
     ESE_EXPORT_PT_Static_Output,
     ESE_EXPORT_PT_Decimals_Precision,
     ESE_EXPORT_PT_Scale_Output,
+    ESE_EXPORT_PT_Controller_Output,
     
     # jmarti856: script camera stuff
     SCENE_PT_camera_script_panel,
