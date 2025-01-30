@@ -466,33 +466,32 @@ def write_mesh_data(out, scene, depsgraph, scene_materials):
 
             #-------------------------------------------------------------------------------------------------------------------------------
             if EXPORT_FLAGS:
-                import bmesh
-                bm = bmesh.new()
-                bm.from_mesh(me)
+                # swy: refresh the custom mesh layer/attributes in case they don't exist
+                if 'euro_fac_flags' not in me.attributes:
+                    me.attributes.new(name='euro_fac_flags', type='INT', domain='FACE')
+                    
+                if 'euro_vtx_flags' not in me.attributes:
+                    me.attributes.new(name='euro_vtx_flags', type='INT', domain='FACE')
 
-                euro_vtx_flags = bm.verts.layers.int['euro_vtx_flags']
-                euro_fac_flags = bm.faces.layers.int['euro_fac_flags']
+                euro_vtx_flags = me.attributes['euro_vtx_flags']
+                euro_fac_flags = me.attributes['euro_fac_flags']
 
                 # swy: add the custom mesh attributes here
-                out.write('\t\t*MESH_NUMFACEFLAGS %u\n' % len(bm.faces))
+                out.write('\t\t*MESH_NUMFACEFLAGS %u\n' % len(me.polygons))
                 out.write('\t\t*MESH_FACEFLAGLIST {\n')
-                for face in bm.faces:
-                    a = face[euro_fac_flags]
+                for face in me.polygons:
+                    flag_value = euro_fac_flags.data[poly.index].value
                     # swy: don't set it where it isn't needed
-                    if face[euro_fac_flags] != 0:
-                        out.write(f'\t\t\t*MESH_FACEFLAG %u %u\n' % (face.index, face[euro_fac_flags]))
+                    if flag_value != 0:
+                        out.write(f'\t\t\t*MESH_FACEFLAG %u %u\n' % (face.index, flag_value))
                 out.write('\t\t}\n') # MESH_NUMFACEFLAGS
 
                 out.write('\t\t*MESH_VERTFLAGSLIST {\n')
-                for idx, vert in enumerate(bm.verts):
-                    # swy: don't set it where it isn't needed
-                    if vert[euro_vtx_flags] != 0:
-                        out.write(f'\t\t\t*VFLAG %u %u\n' % (idx, vert[euro_vtx_flags]))
-                out.write('\t\t}\n') # MESH_VERTFLAGSLIST
-                
-                # Actualiza la malla con los cambios realizados en bmesh
-                bm.to_mesh(me)
-                bm.free()  # Libera la memoria de bmesh
+                for idx, vert in enumerate(me.vertices):
+                    flag_value = euro_vtx_flags.data[vert.index].value
+                    if flag_value != 0:
+                        out.write(f'\t\t\t*VFLAG %u %u\n' % (idx, flag_value))
+                out.write('\t\t}\n') # MESH_VERTFLAGSLIST            
 
             #Close mesh block
             out.write('\t}\n')
