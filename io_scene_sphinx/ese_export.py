@@ -562,82 +562,63 @@ def _write(context, filepath,
                 if EXPORT_MESH_MORPH:
                     if ob.data.shape_keys:
                         out.write('\t*MORPH_DATA {\n')
-                        for key in ob.data.shape_keys.key_blocks:
-                            if key.relative_key != key:
-                                out.write(f'\t\t*MORPH_FRAMES "%s" %u {{\n' % (key.name.replace(' ', '_'), FRAMES_COUNT))
-
-                                for f in range(START_FRAME, END_FRAME + 1):
-                                    bpy.context.scene.frame_set(f)
-                                    out.write(f'\t\t\t%u {df}\n' % (f, key.value))
-
+                        for shape_key in ob.data.shape_keys.key_blocks:
+                            if shape_key.relative_key != shape_key:
+                                out.write(f'\t\t*MORPH_FRAMES "%s" %u {{\n' % (shape_key.name.replace(' ', '_'), FRAMES_COUNT))
+                                for i, frame in enumerate(shape_key.data):
+                                    bpy.context.scene.frame_set(i)
+                                    out.write(f'\t\t\t%u {df}\n' % (i, frame.co[0]))
                                 out.write('\t\t}\n') # MORPH_FRAMES
                         out.write('\t}\n') # MORPH_DATA
 
                     #-------------------------------------------------------------------------------------------------------------------------------
                     #  SKELETAL RIGGING / BONE HIERARCHY DEFINITION / ARMATURE
                     #-------------------------------------------------------------------------------------------------------------------------------
-                    for indx, mod in enumerate(ob.modifiers):
+                    armature = ob.find_armature()
+                    if armature:
                         # swy: find the armature element between the possible mesh modifiers
-                        if mod.type == 'ARMATURE' and mod.object and mod.object.type == 'ARMATURE':
-                            armat = mod.object
-                            out.write('\t*SKIN_DATA {\n')
-                            out.write('\t\t*BONE_LIST {\n')
+                        out.write('\t*SKIN_DATA {\n')
 
-                            # create a skeletal lookup list for bone names
-                            bone_names = [bone.name for bone in armat.data.bones]
+                        #bones list
+                        bone_names = [bone.name for bone in armature.data.bones]
+                        out.write('\t\t*BONE_LIST {\n')
+                        for i, bone in enumerate(bone_names):
+                            out.write('\t\t\t*BONE %u "%s"\n' % (i, bone))
+                        out.write('\t\t}\n') # BONE_LIST
 
-                            for bidx, bone in enumerate(armat.data.bones):
-                                out.write('\t\t\t*BONE %u "%s"\n' % (bidx, bone.name))
-                            out.write('\t\t}\n') # BONE_LIST
+                        #skin vertex
+                        out.write('\t\t*SKIN_VERTEX_DATA {\n')
+                        for v in me_verts:
+                            influences = sorted([(g.group, g.weight) for g in v.groups if g.weight > 0], key=lambda x: x[1], reverse=True)
+                    
+                            if influences:
+                                total_weight = sum(w for _, w in influences)
+                                influences = [(bone_id, w / total_weight) for bone_id, w in influences]
 
-                            # create a vertex group lookup list for names
-                            # https://blender.stackexchange.com/a/28273/42781
-                            vgroup_names = [vgroup.name for vgroup in ob.vertex_groups]
-
-                            out.write('\t\t*SKIN_VERTEX_DATA {\n')
-                            vidx = 0
-                            for vidx, vert in enumerate(me_verts):
-                                out.write('\t\t\t*VERTEX %5u %u' % (vidx, len(vert.groups)))
-
-                                # swy: make it so that the bones that have more influence appear first
-                                #      in the listing, otherwise order seems random.
-                                sorted_groups = sorted(vert.groups, key = lambda i: i.weight, reverse = True)
-
-                                for gidx, group in enumerate(sorted_groups):
-                                    # swy: get the actual vertex group name from the local index (the .group thing)
-                                    cur_vgroup_name = vgroup_names[group.group]
-                                    # swy: and test it to see if it matches a bone name from the bound armature/skeleton
-                                    #      otherwise it probably isn't a weighting group and is used for something else
-                                    if cur_vgroup_name not in bone_names:
+                                out.write('\t\t\t*VERTEX %5u %u' % (v.index, len(influences)))
+                                for bone_id, weight in influences:
+                                    if bone_id not in bone_names:
                                         continue
 
-                                    # swy: because the bone names are in the same order as in the BONE_LIST above everything works out
-                                    global_bone_index = bone_names.index(cur_vgroup_name)
-                                    out.write(f' %2u {df}' % (global_bone_index, group.weight))
+                                    global_bone_index = bone_names.index(bone_id)
+                                    out.write(f' %2u {df}' % (global_bone_index, weight))                                
                                 out.write("\n")
-
-                            out.write('\t\t}\n') # SKIN_VERTEX_DATA
-                            out.write('\t}\n') # SKIN_DATA
-
-                            # swy: we only support one armature modifier/binding per mesh for now, stop looking for more
-                            break
-
+                        out.write('\t\t}\n') # SKIN_VERTEX_DATA
+                        out.write('\t}\n') # SKIN_DATA
                     out.write("}\n") # GEOMOBJECT
 
                     # swy: here goes the changed geometry/vertex positions for each of the shape keys, globally.
                     #      they are referenced by name.
                     if ob.data.shape_keys:
-                        for key in ob.data.shape_keys.key_blocks:
+                        out.write('*MORPH_LIST {\n')
+                        for shape_key in ob.data.shape_keys.key_blocks:
                             # swy: don't export the 'Basis' one that is just the normal mesh data other keys are relative/substracted to
-                            if key.relative_key != key:
-                                out.write('*MORPH_LIST {\n')
-                                out.write('\t*MORPH_TARGET "%s" %u {\n' % (key.name.replace(' ', '_'), len(key.data)))
-
-                                for vidx, vert in enumerate(key.data):
-                                    out.write('\t\t\t%s\t%s\t%s\n' % (df % vert.co.x, df % vert.co.y, df % vert.co.z))
-
+                            if shape_key.relative_key != shape_key:
+                                out.write('\t*MORPH_TARGET "%s" %u {\n' % (shape_key.name.replace(' ', '_'), len(shape_key.data)))
+                                for vert in shape_key.data:
+                                    out.write('\t\t%s\t%s\t%s\n' % (df % vert.co.x, df % vert.co.y, df % vert.co.z))
                                 out.write('\t}\n') # MORPH_TARGET
-                                out.write('}\n') # MORPH_LIST
+                        out.write('}\n') # MORPH_LIST
                 else:
                     out.write("}\n") # GEOMOBJECT
 
