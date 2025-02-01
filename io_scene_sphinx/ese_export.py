@@ -412,7 +412,10 @@ def _write(context, filepath,
                 vertex_index_map = {v: idx for idx, v in enumerate(unique_vertices)}
                 uv_index_map = {uv: idx for idx, uv in enumerate(unique_uvs)}
                 color_index_map = {color: idx for idx, color in enumerate(unique_colors)}
-                mesh_materials = scene_materials[ob_main.name]
+                
+                mesh_materials = []
+                if ob_main.name in scene_materials:                
+                    mesh_materials = scene_materials[ob_main.name]
                 mesh_materials_names = [m.name if m else None for m in mesh_materials]
                 
                 # Start printing
@@ -540,9 +543,10 @@ def _write(context, filepath,
 
                     out.write('\t\t*MESH_VERTFLAGSLIST {\n')
                     for idx, vert in enumerate(me_verts):
-                        flag_value = euro_vtx_flags.data[vert.index].value
-                        if flag_value != 0:
-                            out.write(f'\t\t\t*VFLAG %u %u\n' % (idx, flag_value))
+                        if vert.index < len(euro_vtx_flags.data):
+                            flag_value = euro_vtx_flags.data[vert.index].value
+                            if flag_value != 0:
+                                out.write(f'\t\t\t*VFLAG %u %u\n' % (idx, flag_value))
                     out.write('\t\t}\n') # MESH_VERTFLAGSLIST            
 
                 #Close mesh block
@@ -553,7 +557,10 @@ def _write(context, filepath,
                     write_animation_node(out, ob_main, obj_matrix_data)
 
                 out.write(f'\t*WIREFRAME_COLOR {df} {df} {df}\n' % (ob.color[0], ob.color[1], ob.color[2]))
-                out.write('\t*MATERIAL_REF %d\n' % list(scene_materials.keys()).index(ob.name))
+                
+                #Write material index
+                if ob.name in scene_materials:
+                    out.write('\t*MATERIAL_REF %d\n' % list(scene_materials.keys()).index(ob.name))
 
                 #-------------------------------------------------------------------------------------------------------------------------------
                 #  SHAPE KEYS
