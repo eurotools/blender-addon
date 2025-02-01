@@ -54,7 +54,9 @@ def create_euroland_matrix(obj_matrix, obj_type):
         rot_yxz = euroland_matrix.to_euler('YXZ')
         euroland_euler = Euler([-angle for angle in rot_yxz], 'YXZ')          
     else: 
-        transformed_matrix = ROT_GLOBAL_MATRIX @ obj_matrix
+        matrix_scale = Matrix.Diagonal(obj_matrix.to_scale()).to_4x4()
+        transformed_matrix = (ROT_GLOBAL_MATRIX @ obj_matrix).normalized()
+        transformed_matrix = transformed_matrix @ matrix_scale
         transformed_pos = MESH_GLOBAL_MATRIX @ transformed_matrix.translation
 
         # Crear una matriz 4x4 vacía (matriz identidad como base)
@@ -73,7 +75,6 @@ def create_euroland_matrix(obj_matrix, obj_type):
         
         #Euler stufff
         euroland_euler = obj_matrix.to_euler('ZXY')
-
     #Pack data
     matrix_data = {
         "eland_matrix": euroland_matrix,
