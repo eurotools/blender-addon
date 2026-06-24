@@ -24,16 +24,17 @@ EXPORT_APPLY_MODIFIERS = True
 START_FRAME = 0
 END_FRAME = 0
 
-#Global variables
+# Global variables
 FRAMES_COUNT = 0
 TICKS_PER_FRAME = 0
+
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def _write(context, filepath,
            EXPORT_MESH_FLAGS,
            EXPORT_MATERIALS,
-           EXPORT_MESH_ANIMS, 
-           EXPORT_CAMERA_LIGHT_ANIMS, 
+           EXPORT_MESH_ANIMS,
+           EXPORT_CAMERA_LIGHT_ANIMS,
            TRANSFORM_TO_CENTER,
            EXPORT_OBJECTS,
            EXPORT_MESH_NORMALS,
@@ -48,941 +49,922 @@ def _write(context, filepath,
            EXPORT_END_FRAME_ENABLED,
            EXPORT_END_FRAME
         ):
-    
+
     df = f'%.{DECIMAL_PRECISION}f'
-    dcf = f'{{:>{DECIMAL_PRECISION}f}}'
+    SCENE_LIGHT_SCALE = 1.0
+    TEXTURED_DIFFUSE_SCALE = 0.5
+    SOLID_DIFFUSE_SCALE = 1.0
+    MAP_AMOUNT_SCALE = 1.0
+    TEXTURE_VERTEX_COLOR_SCALE = 0.5
 
-    #-------------------------------------------------------------------------------------------------------------------------------
-    def printCustomProperties(out):
+    #---------------------------------------------------------------------------------------------------------------------------
+    def material_shader_rule(mat):
+        if mat and "euro_shader" in mat:
+            custom_rule = str(mat["euro_shader"])
+            if custom_rule in {'Non', 'HPH', 'OPO', 'OMO', 'OPQ', 'Alp'}:
+                return custom_rule
+
+        if mat and "eif_shader" in mat:
+            custom_rule = str(mat["eif_shader"])
+            if custom_rule in {'Non', 'HPH', 'OPO', 'OMO', 'OPQ', 'Alp'}:
+                return custom_rule
+
+        return 'Non'
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def material_has_texture(mat):
+        mat_wrap = PrincipledBSDFWrapper(mat) if mat and mat.use_nodes else None
+        if not mat_wrap:
+            return False
+
+        tex_wrap = getattr(mat_wrap, "base_color_texture", None)
+        return bool(tex_wrap and tex_wrap.image)
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def has_textured_material(materials):
+        return any(material_has_texture(mat) for mat in materials)
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def scaled_color(color, scale):
+        return tuple(max(0.0, min(component * scale, 1.0)) for component in color[:3])
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def unique_ordered(values):
+        result = []
+        index_map = {}
+
+        for value in values:
+            if value not in index_map:
+                index_map[value] = len(result)
+                result.append(value)
+
+        return result, index_map
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def color_layer_data(mesh):
+        if hasattr(mesh, "color_attributes") and mesh.color_attributes:
+            active = mesh.color_attributes.active_color or mesh.color_attributes.active
+            return active.data if active else None
+
+        if mesh.vertex_colors:
+            active = mesh.vertex_colors.active
+            return active.data if active else None
+
+        return None
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def int_attribute(mesh, name, domain):
+        attr = mesh.attributes.get(name)
+        if attr and attr.data_type == 'INT' and attr.domain == domain:
+            return attr
+        return None
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def parent_name(obj):
+        return obj.parent.name if obj.parent else None
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def write_parent(out, obj, tab_level=1):
+        parent = parent_name(obj)
+        if parent:
+            out.write('%s*NODE_PARENT "%s"\n' % (get_tabs(tab_level), parent))
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def write_scene_custom_properties(out):
         scene = bpy.context.scene
-        custom_properties = {key: value for key, value in scene.items() if key not in '_RNA_UI'}
-
-        #print only the visible ones
-        visible_properties = {key: value for key, value in custom_properties.items() if isinstance(value, (int, float, str, bool))}      
+        custom_properties = {key: value for key, value in scene.items() if key != '_RNA_UI'}
+        visible_properties = {
+            key: value for key, value in custom_properties.items()
+            if isinstance(value, (int, float, str, bool))
+        }
         type_mapping = {
             int: "Numeric",
             float: "Numeric",
             str: "String",
             bool: "Boolean"
-        }   
+        }
 
-        # Save scene custom properties
         properties_list = []
         for key, value in visible_properties.items():
             type_name = type_mapping.get(type(value), type(value).__name__)
+            properties_list.append({"name": key, "type": type_name, "value": value})
 
-            #create dict object
-            property_data = {"name": key,"type": type_name,"value": value}
-            properties_list.append(property_data)
-
-        # Check for the camera script property
-        if userWantsCameraScript(scene):
-            property_data = {
+        if user_wants_camera_script(scene):
+            properties_list.append({
                 "name": "cameraScriptEditor",
                 "type": "Numeric",
-                "value": 1}
-            properties_list.append(property_data)
+                "value": 1
+            })
 
-            #add info
             current_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-            computer_name = platform.node() 
-            user_name = platform.uname().node
+            computer_name = platform.node()
             blender_version = bpy.app.version_string
-
-            # Crear la propiedad extra con la información requerida
-            extra_property = {
+            properties_list.append({
                 "name": "cameraScriptEditor Info",
                 "type": "String",
-                "value": f"{current_time} Computer:{computer_name} UserName:{user_name} BlenderVer:#({blender_version})"
-            }
-            properties_list.append(extra_property)
+                "value": f"{current_time} Computer:{computer_name} UserName:{computer_name} BlenderVer:#({blender_version})"
+            })
 
-        # Imprimir las propiedades almacenadas
         out.write('\t*SCENE_UDPROPS {\n')
         out.write('\t\t*PROP_COUNT\t%d\n' % len(properties_list))
-        for index, property_data in enumerate(properties_list):
-            out.write('\t\t*PROP\t%d\t"%s"\t"%s"\t"%s"\n' % (index, property_data["name"], property_data["type"], property_data["value"]))
+        for index, prop in enumerate(properties_list):
+            out.write('\t\t*PROP\t%d\t"%s"\t"%s"\t"%s"\n' % (index, prop["name"], prop["type"], prop["value"]))
         out.write('\t}\n')
 
-    #-------------------------------------------------------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------------------------------------------------------
     def write_scene_data(out, scene):
         global FRAMES_COUNT, TICKS_PER_FRAME, START_FRAME, END_FRAME
 
-        #Get set default scene data
         START_FRAME = scene.frame_start
         END_FRAME = scene.frame_end
 
-        #Override values
-        if EXPORT_FROM_FRAME_ENABLED and (EXPORT_FROM_FRAME >= START_FRAME):
-            START_FRAME = EXPORT_FROM_FRAME
-        if EXPORT_END_FRAME_ENABLED and (EXPORT_END_FRAME <= END_FRAME):
-            END_FRAME = EXPORT_END_FRAME
-            
-        bpy.context.scene.frame_set(EXPORT_STATIC_FRAME)
+        if EXPORT_FROM_FRAME_ENABLED:
+            START_FRAME = max(START_FRAME, EXPORT_FROM_FRAME)
+        if EXPORT_END_FRAME_ENABLED:
+            END_FRAME = min(END_FRAME, EXPORT_END_FRAME)
+        if END_FRAME < START_FRAME:
+            END_FRAME = START_FRAME
 
-        #Get scene data
+        scene.frame_set(EXPORT_STATIC_FRAME)
+
         frame_rate = scene.render.fps
         FRAMES_COUNT = END_FRAME - START_FRAME + 1
 
-        tick_frequency = 4800 #Matches original examples
-        TICKS_PER_FRAME = tick_frequency // frame_rate
+        tick_frequency = 4800
+        TICKS_PER_FRAME = max(1, tick_frequency // max(1, frame_rate))
 
         world_amb = scene.world.color if scene.world else (0.8, 0.8, 0.8)
+        export_amb = scaled_color(world_amb, SCENE_LIGHT_SCALE)
 
-        #Print scene data
         out.write("*SCENE {\n")
-        out.write('\t*SCENE_FILENAME "%s"\n' % (bpy.data.filepath))
+        out.write('\t*SCENE_FILENAME "%s"\n' % bpy.data.filepath)
         out.write('\t*SCENE_FIRSTFRAME %s\n' % START_FRAME)
         out.write('\t*SCENE_LASTFRAME %s\n' % END_FRAME)
         out.write('\t*SCENE_FRAMESPEED %s\n' % frame_rate)
         out.write('\t*SCENE_TICKSPERFRAME %s\n' % TICKS_PER_FRAME)
-        out.write(f'\t*SCENE_BACKGROUND_STATIC {df} {df} {df}\n' % (world_amb[0], world_amb[1], world_amb[2]))
-        out.write(f'\t*SCENE_AMBIENT_STATIC {df} {df} {df}\n' % (world_amb[0], world_amb[1], world_amb[2]))
-        printCustomProperties(out)
+        out.write(f'\t*SCENE_BACKGROUND_STATIC {df} {df} {df}\n' % export_amb)
+        out.write(f'\t*SCENE_AMBIENT_STATIC {df} {df} {df}\n' % export_amb)
+        write_scene_custom_properties(out)
         out.write("}\n\n")
-        
-    #-------------------------------------------------------------------------------------------------------------------------------
-    def write_material_data(out, mat, tab_level, base_material):
 
+    #---------------------------------------------------------------------------------------------------------------------------
+    def write_material_data(out, mat, tab_level, include_texture):
         tab = get_tabs(tab_level)
-        out.write(f'{tab}*MATERIAL_NAME "%s"\n' % mat.name)
+        mat_name = mat.name if mat else "Default"
+
+        out.write(f'{tab}*MATERIAL_NAME "%s"\n' % mat_name)
         out.write(f'{tab}*MATERIAL_CLASS "Standard"\n')
 
-        # Envolver material para usar PrincipledBSDFWrapper
-        mat_wrap = PrincipledBSDFWrapper(mat) if mat.use_nodes else None
-            
+        mat_wrap = PrincipledBSDFWrapper(mat) if mat and mat.use_nodes else None
+
         if mat_wrap:
-            use_mirror = mat_wrap.metallic != 0.0
-            use_transparency = mat_wrap.alpha != 1.0
+            use_mirror = mat_wrap.metallic > 0.001
+            specular = mat_wrap.specular if use_mirror else 0.0
+            emission_color = getattr(mat_wrap, "emission_color", (0.0, 0.0, 0.0))
+            emission_level = max(emission_color[:3]) if emission_color else 0.0
+            self_illum = max(0.0, min(mat_wrap.emission_strength * emission_level, 1.0))
+            textured = include_texture and getattr(mat_wrap, "base_color_texture", None) and mat_wrap.base_color_texture.image
+            diffuse = (
+                (TEXTURED_DIFFUSE_SCALE, TEXTURED_DIFFUSE_SCALE, TEXTURED_DIFFUSE_SCALE)
+                if textured
+                else scaled_color(mat_wrap.base_color, SOLID_DIFFUSE_SCALE)
+            )
 
-            # The Ka statement specifies the ambient reflectivity using RGB values.
-            if use_mirror:
-                out.write(f'{tab}*MATERIAL_AMBIENT {df} {df} {df}\n' % (mat_wrap.metallic, mat_wrap.metallic, mat_wrap.metallic))
-            else:
-                out.write(f'{tab}*MATERIAL_AMBIENT {df} {df} {df}\n' % (1.0, 1.0, 1.0))
-                
-            # The Kd statement specifies the diffuse reflectivity using RGB values.
-            out.write(f'{tab}*MATERIAL_DIFFUSE {df} {df} {df}\n' % mat_wrap.base_color[:3]) # Diffuse
-            
-            # XXX TODO Find a way to handle tint and diffuse color, in a consistent way with import...
-            out.write(f'{tab}*MATERIAL_SPECULAR {df} {df} {df}\n' % (mat_wrap.specular, mat_wrap.specular, mat_wrap.specular))  # Specular
+            out.write(f'{tab}*MATERIAL_AMBIENT {df} {df} {df}\n' % (0.0, 0.0, 0.0))
+            out.write(f'{tab}*MATERIAL_DIFFUSE {df} {df} {df}\n' % diffuse)
+            out.write(f'{tab}*MATERIAL_SPECULAR {df} {df} {df}\n' % (specular, specular, specular))
+            out.write(f'{tab}*MATERIAL_SHINE %.1f\n' % ((1.0 - mat_wrap.roughness) if use_mirror else 0.0))
+            out.write(f'{tab}*MATERIAL_SHINESTRENGTH %.1f\n' % 0.0)
+            out.write(f'{tab}*MATERIAL_TRANSPARENCY %.1f\n' % (1.0 - mat_wrap.alpha))
+            out.write(f'{tab}*MATERIAL_WIRESIZE %.1f\n' % 1.0)
+            out.write(f'{tab}*MATERIAL_SHADING Blinn\n')
+            out.write(f'{tab}*MATERIAL_XP_FALLOFF %.1f\n' % 0.0)
+            out.write(f'{tab}*MATERIAL_SELFILLUM %.1f\n' % self_illum)
+            out.write(f'{tab}*MATERIAL_FALLOFF In\n')
+            out.write(f'{tab}*MATERIAL_XP_TYPE Filter\n')
 
-            shine = 1.0 - mat_wrap.roughness
-            out.write(f'{tab}*MATERIAL_SHINE %.1f\n' % shine)
-            
-            transparency = 1.0 - mat_wrap.alpha
-            out.write(f'{tab}*MATERIAL_TRANSPARENCY %.1f\n' % transparency)
-                    
-            # Self-illumination (emission) of the material
-            out.write(f'{tab}*MATERIAL_SELFILLUM %.1f\n' % mat_wrap.emission_strength)
+            if include_texture:
+                tex_wrap = getattr(mat_wrap, "base_color_texture", None)
+                image = tex_wrap.image if tex_wrap else None
 
-            if base_material == False:
-                #### And now, the image textures...
-                image_map = {
-                        "map_Kd": "base_color_texture",
-                        #"map_Ka": None,  # ambient...
-                        #"map_Ks": "specular_texture",
-                        #"map_Ns": "roughness_texture",
-                        #"map_d": "alpha_texture",
-                        #"map_Tr": None,  # transmission roughness?
-                        #"map_Bump": "normalmap_texture",
-                        #"disp": None,  # displacement...
-                        #"refl": "metallic_texture",
-                        #"map_Ke": None  # emission...
-                        }
-
-                for key, mat_wrap_key in sorted(image_map.items()):
-                    if mat_wrap_key is None:
-                        continue
-                    tex_wrap = getattr(mat_wrap, mat_wrap_key, None)
-                    if tex_wrap is None:
-                        continue
-                    image = tex_wrap.image
-                    if image is None:
-                        continue
+                if image:
                     out.write(f'{tab}*MAP_DIFFUSE {{\n')
-                    out.write(f'{tab}\t*MATERIAL_NAME "%s"\n' % image.name)
+                    out.write(f'{tab}\t*MAP_NAME "%s"\n' % image.name)
                     out.write(f'{tab}\t*MAP_CLASS "Bitmap"\n')
-                    if use_mirror:
-                        out.write(f'{tab}\t*MAP_AMOUNT %.1f\n' % (mat_wrap.metallic))
-                    else:
-                        out.write(f'{tab}\t*MAP_AMOUNT %.1f\n' % (1))                    
-                    texture_path = bpy.path.abspath(image.filepath)
-                    out.write(f'{tab}\t*BITMAP "%s"\n' % (texture_path))                                                
+                    out.write(f'{tab}\t*MAP_SUBNO 1\n')
+                    out.write(f'{tab}\t*MAP_AMOUNT %.2f\n' % (mat_wrap.metallic if use_mirror else MAP_AMOUNT_SCALE))
+                    out.write(f'{tab}\t*BITMAP "%s"\n' % bpy.path.abspath(image.filepath))
+                    out.write(f'{tab}\t*MAP_TYPE Screen\n')
+                    out.write(f'{tab}\t*UVW_U_OFFSET %.1f\n' % 0.0)
+                    out.write(f'{tab}\t*UVW_V_OFFSET %.1f\n' % 0.0)
+                    out.write(f'{tab}\t*UVW_U_TILING %.1f\n' % 1.0)
+                    out.write(f'{tab}\t*UVW_V_TILING %.1f\n' % 1.0)
+                    out.write(f'{tab}\t*UVW_ANGLE %.1f\n' % 0.0)
+                    out.write(f'{tab}\t*UVW_BLUR %.1f\n' % 1.0)
+                    out.write(f'{tab}\t*UVW_BLUR_OFFSET %.1f\n' % 0.0)
+                    out.write(f'{tab}\t*UVW_NOUSE_AMT %.1f\n' % 1.0)
+                    out.write(f'{tab}\t*UVW_NOISE_SIZE %.1f\n' % 1.0)
+                    out.write(f'{tab}\t*UVW_NOISE_LEVEL 1\n')
+                    out.write(f'{tab}\t*UVW_NOISE_PHASE %.1f\n' % 0.0)
+                    out.write(f'{tab}\t*BITMAP_FILTER Pyramidal\n')
                     out.write(f'{tab}}}\n')
+        else:
+            diffuse = mat.diffuse_color if mat else (0.8, 0.8, 0.8, 1.0)
+            out.write(f'{tab}*MATERIAL_AMBIENT {df} {df} {df}\n' % (0.0, 0.0, 0.0))
+            out.write(f'{tab}*MATERIAL_DIFFUSE {df} {df} {df}\n' % scaled_color(diffuse, SOLID_DIFFUSE_SCALE))
+            out.write(f'{tab}*MATERIAL_SPECULAR {df} {df} {df}\n' % (0.0, 0.0, 0.0))
+            out.write(f'{tab}*MATERIAL_SHINE %.1f\n' % 0.0)
+            out.write(f'{tab}*MATERIAL_SHINESTRENGTH %.1f\n' % 0.0)
+            out.write(f'{tab}*MATERIAL_TRANSPARENCY %.1f\n' % (1.0 - diffuse[3]))
+            out.write(f'{tab}*MATERIAL_WIRESIZE %.1f\n' % 1.0)
+            out.write(f'{tab}*MATERIAL_SHADING Blinn\n')
+            out.write(f'{tab}*MATERIAL_XP_FALLOFF %.1f\n' % 0.0)
+            out.write(f'{tab}*MATERIAL_SELFILLUM %.1f\n' % 0.0)
+            out.write(f'{tab}*MATERIAL_FALLOFF In\n')
+            out.write(f'{tab}*MATERIAL_XP_TYPE Filter\n')
 
-    #-------------------------------------------------------------------------------------------------------------------------------
-    def write_scene_materials(out):
-        #Get scene materials, the key is the object name, the value is the mesh materials list
-        mesh_materials = {}
-        for obj in bpy.data.objects:
-            if obj.type == 'MESH':
-                material_list = []
-                for mat_slot in obj.material_slots:
-                    if mat_slot.material:
-                        material_list.append(mat_slot.material)
-                mesh_materials[obj.name] = material_list
+    #---------------------------------------------------------------------------------------------------------------------------
+    def collect_scene_materials(scene):
+        scene_materials = {}
 
-        # Print materials list                                        
+        for obj in scene.objects:
+            if obj.type != 'MESH':
+                continue
+
+            materials = [slot.material for slot in obj.material_slots if slot.material]
+            scene_materials[obj.name] = materials if materials else [None]
+
+        return scene_materials
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def write_scene_materials(out, scene_materials):
         out.write("*MATERIAL_LIST {\n")
-        out.write("\t*MATERIAL_COUNT %d\n" % len(mesh_materials))
-        for index, (mesh_name, materials) in enumerate(mesh_materials.items()):
+        out.write("\t*MATERIAL_COUNT %d\n" % len(scene_materials))
+
+        for index, materials in enumerate(scene_materials.values()):
             out.write("\t*MATERIAL %d {\n" % index)
-            
-            materials_count = len(materials)
-            if materials_count == 1:
-                write_material_data(out, materials[0], 2, False)
-            elif materials_count > 1:
+
+            if len(materials) == 1:
                 write_material_data(out, materials[0], 2, True)
+            else:
+                write_material_data(out, materials[0], 2, False)
                 out.write("\t\t*MATERIAL_MULTIMAT\n")
-                out.write("\t\t*NUMSUBMTLS %d\n" % materials_count)
+                out.write("\t\t*NUMSUBMTLS %d\n" % len(materials))
+
                 for submat_index, mat in enumerate(materials):
                     out.write("\t\t*SUBMATERIAL %d {\n" % submat_index)
-                    write_material_data(out, mat, 3, False)
+                    write_material_data(out, mat, 3, True)
                     out.write("\t\t}\n")
-            out.write('\t}\n')            
-        out.write('}\n')
 
-        return mesh_materials
+            out.write("\t}\n")
 
-    #-------------------------------------------------------------------------------------------------------------------------------
-    def write_tm_node(out, obj_matrix_data, isPivot = False):
+        out.write("}\n")
 
-        if isPivot:
+    #---------------------------------------------------------------------------------------------------------------------------
+    def write_tm_node(out, obj_matrix_data, is_pivot=False):
+        if is_pivot:
             matrix_data = obj_matrix_data["matrix_transformed"]
-
-            # Apply transform matrix
             if TRANSFORM_TO_CENTER:
-                matrix_data = Matrix.Identity(4) 
-
+                matrix_data = Matrix.Identity(4)
             out.write('\t*NODE_PIVOT_TM {\n')
         else:
             matrix_data = obj_matrix_data["matrix_original"]
-
-            # Apply transform matrix
-            if not TRANSFORM_TO_CENTER:
-                matrix_data = Matrix.Identity(4) 
-
+            if not TRANSFORM_TO_CENTER and obj_matrix_data["type"] == 'MESH':
+                matrix_data = Matrix.Identity(4)
             out.write('\t*NODE_TM {\n')
 
-        out.write('\t\t*NODE_NAME "%s"\n' % (obj_matrix_data["name"]))
+        out.write('\t\t*NODE_NAME "%s"\n' % obj_matrix_data["name"])
         out.write('\t\t*INHERIT_POS %d %d %d\n' % (0, 0, 0))
         out.write('\t\t*INHERIT_ROT %d %d %d\n' % (0, 0, 0))
-        out.write('\t\t*INHERIT_SCL %d %d %d\n' % (0, 0, 0))
-            
-        #Calculate matrix rotations.... 
+        out.write('\t\t*INHERIT_SCL %d %d %d\n' % (1, 1, 1))
+
         eland_data = create_euroland_matrix(matrix_data, obj_matrix_data["type"])
         eland_matrix = eland_data["eland_matrix"]
         eland_euler = eland_data["eland_euler"]
 
-        out.write(f'\t\t*TM_ROW0 {df} {df} {df}\n' % (eland_matrix[0].x, eland_matrix[1].x, eland_matrix[2].x))
-        out.write(f'\t\t*TM_ROW1 {df} {df} {df}\n' % (eland_matrix[0].y, eland_matrix[1].y, eland_matrix[2].y))
-        out.write(f'\t\t*TM_ROW2 {df} {df} {df}\n' % (eland_matrix[0].z, eland_matrix[1].z, eland_matrix[2].z))
-        
-        #Transform position
+        out.write(f'\t\t*TM_ROW0 {df} {df} {df}\n' % (eland_matrix[0].x, eland_matrix[0].y, eland_matrix[0].z))
+        out.write(f'\t\t*TM_ROW1 {df} {df} {df}\n' % (eland_matrix[1].x, eland_matrix[1].y, eland_matrix[1].z))
+        out.write(f'\t\t*TM_ROW2 {df} {df} {df}\n' % (eland_matrix[2].x, eland_matrix[2].y, eland_matrix[2].z))
+
         obj_position = eland_matrix.translation
-        out.write(f'\t\t*TM_ROW3 {df} {df} {df}\n' % (obj_position.x,obj_position.y,obj_position.z))
-        out.write(f'\t\t*TM_POS {df} {df} {df}\n' % (obj_position.x,obj_position.y,obj_position.z))
-        
-        #Transform rotation
+        out.write(f'\t\t*TM_ROW3 {df} {df} {df}\n' % (obj_position.x, obj_position.y, obj_position.z))
+        out.write(f'\t\t*TM_POS {df} {df} {df}\n' % (obj_position.x, obj_position.y, obj_position.z))
         out.write(f'\t\t*TM_ROTANGLE {df} {df} {df}\n' % (eland_euler.x, eland_euler.y, eland_euler.z))
 
-        #Print scale
         transformed_scale = eland_matrix.to_scale()
         out.write(f'\t\t*TM_SCALE {df} {df} {df}\n' % (transformed_scale.x, transformed_scale.z, transformed_scale.y))
         out.write(f'\t\t*TM_SCALEANGLE {df} {df} {df}\n' % (0, 0, 0))
         out.write('\t}\n')
 
-    #-------------------------------------------------------------------------------------------------------------------------------
-    def write_animation_node(out, object_data, object_matrix_data):
+    #---------------------------------------------------------------------------------------------------------------------------
+    def write_animation_node(out, obj, obj_matrix_data):
         global TICKS_PER_FRAME, START_FRAME, END_FRAME
-        
+
         out.write('\t*TM_ANIMATION {\n')
-        out.write('\t\t*TM_ANIMATION "%s"\n' % object_data.name)
-
-        frameIndex = 0 
+        out.write('\t\t*TM_ANIMATION "%s"\n' % obj.name)
         out.write('\t\t*TM_ANIM_FRAMES {\n')
-        for f in range(START_FRAME, END_FRAME + 1):
-            bpy.context.scene.frame_set(f)
-                
-            # Calculate frame index
-            if f > 0:
-                frameIndex += TICKS_PER_FRAME
 
-            #Print rotation
-            out.write('\t\t\t*TM_FRAME  {:<5d}'.format(frameIndex))
+        for frame in range(START_FRAME, END_FRAME + 1):
+            bpy.context.scene.frame_set(frame)
+            tick = (frame - START_FRAME) * TICKS_PER_FRAME
 
-            eland_data = create_euroland_matrix(object_data.matrix_world.copy(), object_data.type)
-            eland_matrix = eland_data["eland_matrix"]
+            matrix_data = obj.matrix_world.copy()
+            if not TRANSFORM_TO_CENTER and obj.type == 'MESH':
+                matrix_data = Matrix.Identity(4)
+                matrix_data.translation = obj.matrix_world.translation
 
-            if not TRANSFORM_TO_CENTER:
-                current_matrix = object_data.matrix_world.copy()        
-                relative_matrix = current_matrix @ object_matrix_data["matrix_original"]
-                eland_data = create_euroland_matrix(relative_matrix, object_data.type)
-                eland_matrix = eland_data["eland_matrix"]
-                eland_matrix.translation = (Matrix.Identity(4) @ current_matrix).translation
+            eland_matrix = create_euroland_matrix(matrix_data, obj_matrix_data["type"])["eland_matrix"]
 
-            out.write(f' {df} {df} {df}' % (eland_matrix[0].x, eland_matrix[1].x, eland_matrix[2].x))
-            out.write(f' {df} {df} {df}' % (eland_matrix[0].y, eland_matrix[1].y, eland_matrix[2].y))
-            out.write(f' {df} {df} {df}' % (eland_matrix[0].z, eland_matrix[1].z, eland_matrix[2].z))
-            
-            #Transform position
+            out.write('\t\t\t*TM_FRAME  %-5d' % tick)
+            out.write(f' {df} {df} {df}' % (eland_matrix[0].x, eland_matrix[0].y, eland_matrix[0].z))
+            out.write(f' {df} {df} {df}' % (eland_matrix[1].x, eland_matrix[1].y, eland_matrix[1].z))
+            out.write(f' {df} {df} {df}' % (eland_matrix[2].x, eland_matrix[2].y, eland_matrix[2].z))
+
             obj_position = eland_matrix.translation
             out.write(f' {df} {df} {df}\n' % (obj_position.x, obj_position.y, obj_position.z))
 
         out.write('\t\t}\n')
         out.write('\t}\n')
 
-    #-------------------------------------------------------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------------------------------------------------------
+    def transformed_mesh(ob, ob_mat, depsgraph):
+        ob_eval = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
+
+        try:
+            mesh = ob_eval.to_mesh()
+        except RuntimeError:
+            return None, None
+
+        if mesh is None:
+            return None, ob_eval
+
+        if EXPORT_TRI:
+            mesh_triangulate(mesh)
+
+        if TRANSFORM_TO_CENTER:
+            matrix_transformed = Matrix.Diagonal(ob_mat.to_scale()).to_4x4()
+        else:
+            matrix_transformed = ob_mat.copy()
+
+        mesh.transform(Matrix.Scale(GLOBAL_SCALE, 4) @ (MESH_GLOBAL_MATRIX @ matrix_transformed))
+
+        if (MESH_GLOBAL_MATRIX @ matrix_transformed).determinant() > 0.0:
+            mesh.flip_normals()
+
+        return mesh, ob_eval
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def material_index_for_poly(poly, materials):
+        if not materials:
+            return -1
+        if poly.material_index < len(materials):
+            return poly.material_index
+        return 0
+
+    #---------------------------------------------------------------------------------------------------------------------------
     def write_mesh_data(out, scene, depsgraph, scene_materials):
         for ob_main in scene.objects:
-            # ignore dupli children
+            if ob_main.type != 'MESH':
+                continue
+
             if ob_main.parent and ob_main.parent.instance_type in {'VERTS', 'FACES'}:
                 continue
 
-            obs = [(ob_main, ob_main.matrix_world)]
+            instances = [(ob_main, ob_main.matrix_world)]
             if ob_main.is_instancer:
-                obs += [(dup.instance_object.original, dup.matrix_world.copy())
-                        for dup in depsgraph.object_instances
-                        if dup.parent and dup.parent.original == ob_main]
-                # ~ print(ob_main.name, 'has', len(obs) - 1, 'dupli children')
-                
-            for ob, ob_mat in obs:
-                ob_for_convert = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
+                instances += [
+                    (dup.instance_object.original, dup.matrix_world.copy())
+                    for dup in depsgraph.object_instances
+                    if dup.parent and dup.parent.original == ob_main
+                ]
 
-                try:
-                    me = ob_for_convert.to_mesh()
-                except RuntimeError:
-                    me = None
-
-                if me is None:
+            for ob, ob_mat in instances:
+                mesh, ob_eval = transformed_mesh(ob, ob_mat, depsgraph)
+                if mesh is None:
                     continue
 
-                # _must_ do this before applying transformation, else tessellation may differ
-                if EXPORT_TRI:
-                    # _must_ do this first since it re-allocs arrays
-                    mesh_triangulate(me)
+                try:
+                    obj_matrix_data = {
+                        "name": ob_main.name,
+                        "type": ob_main.type,
+                        "matrix_original": ob_mat.copy(),
+                        "matrix_transformed": Matrix.Diagonal(ob.scale).to_4x4() if TRANSFORM_TO_CENTER else ob_mat.copy()
+                    }
 
-                # Create transform matrix
-                if TRANSFORM_TO_CENTER:
-                    to_origin = Matrix.Identity(4)
-                    scale_matrix = Matrix.Diagonal(ob.scale).to_4x4()
+                    vertices = mesh.vertices[:]
+                    unique_vertices, vertex_index_map = unique_ordered(tuple(v.co) for v in vertices)
 
-                    matrix_transformed = to_origin @ scale_matrix
-                else:
-                    matrix_transformed = ob_mat
-                
-                # Apply transform matrix
-                me.transform(MESH_GLOBAL_MATRIX @ matrix_transformed)
+                    unique_uvs = []
+                    uv_index_map = {}
+                    if EXPORT_MESH_UV and mesh.uv_layers.active:
+                        unique_uvs, uv_index_map = unique_ordered(
+                            (uv.uv.x, uv.uv.y)
+                            for uv in mesh.uv_layers.active.data
+                        )
 
-                obj_matrix_data = {
-                    "name" : ob_main.name,
-                    "type" : ob_main.type,
-                    "matrix_original" : ob_mat.copy(),
-                    "matrix_transformed": matrix_transformed.copy()
-                }
+                    mesh_materials = scene_materials.get(ob_main.name, [])
+                    colors = color_layer_data(mesh)
+                    unique_colors = []
+                    color_index_map = {}
+                    synthesize_texture_color = False
+                    if EXPORT_MESH_VCOLORS and colors:
+                        unique_colors, color_index_map = unique_ordered(tuple(col.color) for col in colors)
+                    elif has_textured_material(mesh_materials):
+                        synthesize_texture_color = True
+                        unique_colors = [(TEXTURE_VERTEX_COLOR_SCALE, TEXTURE_VERTEX_COLOR_SCALE, TEXTURE_VERTEX_COLOR_SCALE, 1.0)]
 
-                # If negative scaling, we have to invert the normals...
-                if ob_mat.determinant() < 0.0:
-                    me.flip_normals()
+                    out.write("*GEOMOBJECT {\n")
+                    out.write('\t*NODE_NAME "%s"\n' % ob_main.name)
+                    write_parent(out, ob_main)
+                    write_tm_node(out, obj_matrix_data)
+                    write_tm_node(out, obj_matrix_data, True)
 
-                # Crear listas únicas de coordenadas de vértices, UVs y colores de vértices
-                me_verts = me.vertices[:]
-                unique_vertices = list({tuple(v.co) for v in me_verts})
+                    out.write('\t*MESH {\n')
+                    out.write('\t\t*TIMEVALUE %d\n' % EXPORT_STATIC_FRAME)
+                    out.write('\t\t*MESH_NUMVERTEX %u\n' % len(unique_vertices))
+                    out.write('\t\t*MESH_NUMFACES %u\n' % len(mesh.polygons))
 
-                #Get UVs
-                unique_uvs = []
-                if EXPORT_MESH_UV:
-                    if me.uv_layers:
-                        for uv_layer in me.uv_layers:
-                            for loop in me.loops:
-                                unique_uvs.append(tuple(uv_layer.data[loop.index].uv))
-                        unique_uvs = list(set(unique_uvs))
-
-                #Get colors
-                unique_colors = []
-                if EXPORT_MESH_VCOLORS:
-                    if me.vertex_colors:
-                        for color_layer in me.vertex_colors:
-                            for loop in me.loops:
-                                unique_colors.append(tuple(color_layer.data[loop.index].color))
-                        unique_colors = list(set(unique_colors))
-
-                # Create mapping lists
-                vertex_index_map = {v: idx for idx, v in enumerate(unique_vertices)}
-                uv_index_map = {uv: idx for idx, uv in enumerate(unique_uvs)}
-                color_index_map = {color: idx for idx, color in enumerate(unique_colors)}
-                
-                mesh_materials = []
-                if ob_main.name in scene_materials:                
-                    mesh_materials = scene_materials[ob_main.name]
-                mesh_materials_names = [m.name if m else None for m in mesh_materials]
-                
-                # Start printing
-                out.write("*GEOMOBJECT {\n")
-                out.write('\t*NODE_NAME "%s"\n' % ob_main.name)
-                write_tm_node(out, obj_matrix_data)
-                write_tm_node(out, obj_matrix_data, True)
-
-                #Mesh data
-                out.write('\t*MESH {\n')
-                out.write('\t\t*TIMEVALUE %d\n' % EXPORT_STATIC_FRAME)
-                out.write('\t\t*MESH_NUMVERTEX %u\n' % len(unique_vertices))
-                out.write('\t\t*MESH_NUMFACES %u\n' % len(me.polygons))
-
-                #-------------------------------------------------------------------------------------------------------------------------------
-                #Vertex lists
-                out.write('\t\t*MESH_VERTEX_LIST {\n')
-                for vindex, vertex in enumerate(unique_vertices):
-                    out.write(f'\t\t\t*MESH_VERTEX  {{:>5d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(vindex, vertex[0], vertex[1], vertex[2]))
-                out.write('\t\t}\n')    
-                
-                #Vertex mapping
-                out.write('\t\t*MESH_FACE_LIST {\n')
-                for p_index, poly in enumerate(me.polygons):
-                    
-                    vertex_indices = [vertex_index_map[tuple(me_verts[v].co)] for v in (poly.vertices)]
-
-                    #Get material index
-                    material_index = -1
-                    if poly.material_index < len(me.materials):
-                        material_name = me.materials[poly.material_index].name
-                        if material_name in mesh_materials_names:
-                            material_index = mesh_materials_names.index(material_name)
-                    
-                    # swy: the calc_loop_triangles() doesn't modify the original faces, and instead does temporary ad-hoc triangulation
-                    #      returning us a list of three loops per "virtual triangle" that only exists in the returned thingie
-                    #      i.e. len(tri_loop) should always be 3, but internally, for each loop .face we're a member of
-                    #           still has 4 vertices and the four (different) loops of an n-gon, and .link_loop_next
-                    #           points to the original model's loop chain; the loops of our triangle aren't really linked
-                    edges_from_ngon = []  # Almacenar el resultado para cada borde del triángulo
-                    for tri_idx in range(len(vertex_indices)):
-                        is_from_ngon = tri_edge_is_from_ngon(poly, vertex_indices, tri_idx, me.loops)
-                        edges_from_ngon.append(1 if is_from_ngon else 0)
-
-                    #Face Vertex Index
-                    out.write('\t\t\t*MESH_FACE    {:>3d}:    A: {:>6d} B: {:>6d} C: {:>6d}'.format(p_index, vertex_indices[0], vertex_indices[1], vertex_indices[2]))
-                    out.write('    AB: {:<6d} BC: {:<6d} CA: {:<6d}  *MESH_SMOOTHING   *MESH_MTLID {:<3d}\n'.format(edges_from_ngon[0], edges_from_ngon[1], edges_from_ngon[2], material_index))
-                out.write('\t\t}\n')
-
-                #-------------------------------------------------------------------------------------------------------------------------------
-                if EXPORT_MESH_UV:
-                    #Print list
-                    out.write('\t\t*MESH_NUMTVERTEX %u\n' % len(unique_uvs))
-                    if unique_uvs:
-                        out.write('\t\t*MESH_TVERTLIST {\n')
-                        for uv_index, uv in enumerate(unique_uvs):
-                            out.write(f'\t\t\t*MESH_TVERT {{:>5d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(uv_index, uv[0], uv[1], 0))
-                        out.write('\t\t}\n')
-
-                        #Map UVs
-                        out.write('\t\t*MESH_NUMTVFACES %d\n' % len(me.polygons))
-                        out.write('\t\t*MESH_TFACELIST {\n')
-                        for p_index, poly in enumerate(me.polygons):
-                            uv_indices = []
-                            for loop_index in (poly.loop_indices):
-                                vertex = tuple(me.uv_layers.active.data[loop_index].uv)
-                                uv_indices.append(uv_index_map.get(vertex, -1))
-                            out.write(f'\t\t\t*MESH_TFACE {{:<3d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(p_index, uv_indices[0], uv_indices[1], uv_indices[2]))
-                        out.write('\t\t}\n')
-
-                #-------------------------------------------------------------------------------------------------------------------------------
-                if EXPORT_MESH_VCOLORS:
-                    #Print list
-                    out.write('\t\t*MESH_NUMCVERTEX %u\n' % len(unique_colors))
-                    if unique_colors:
-                        out.write('\t\t*MESH_CVERTLIST {\n')
-                        for col_index, col  in enumerate(unique_colors):
-                            out.write(f'\t\t\t*MESH_VERTCOL {{:>5d}}\t{dcf}\t{dcf}\t{dcf}\t{dcf}\n'.format(col_index, col[0], col[1], col[2], col[3]))
-                        out.write('\t\t}\n')
-
-                        #Map colors
-                        out.write('\t\t*MESH_NUMCVFACES %d\n' % len(me.polygons))
-                        out.write('\t\t*MESH_CFACELIST {\n')
-                        for p_index, poly in enumerate(me.polygons):
-                            color_indices = []
-                            for loop_index in (poly.loop_indices):
-                                color = tuple(me.vertex_colors.active.data[loop_index].color)
-                                color_indices.append(color_index_map.get(color, -1))
-                            out.write(f'\t\t\t*MESH_CFACE {{:<3d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(p_index, color_indices[0], color_indices[1], color_indices[2]))
-                        out.write('\t\t}\n')           
-
-                #-------------------------------------------------------------------------------------------------------------------------------
-                if EXPORT_MESH_NORMALS:
-                    out.write('\t\t*MESH_NORMALS {\n')
-                    for p_index, poly in enumerate(me.polygons):
-                        poly_normals = poly.normal
-                        vertex_indices = [vertex_index_map[tuple(me_verts[v].co)] for v in (poly.vertices)]    
-                    
-                        out.write(f'\t\t\t*MESH_FACENORMAL {{:<3d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(p_index, poly_normals[0], poly_normals[1], poly_normals[2]))
-                        for tri_idx in range(len(vertex_indices)):
-                            out.write(f'\t\t\t\t*MESH_VERTEXNORMAL {{:<3d}}\t{dcf}\t{dcf}\t{dcf}\n'.format(tri_idx, poly_normals[0], poly_normals[1], poly_normals[2]))
+                    out.write('\t\t*MESH_VERTEX_LIST {\n')
+                    for index, vertex in enumerate(unique_vertices):
+                        out.write(f'\t\t\t*MESH_VERTEX  {index:>5d}\t{df}\t{df}\t{df}\n' % vertex)
                     out.write('\t\t}\n')
 
-                #-------------------------------------------------------------------------------------------------------------------------------
-                if EXPORT_MESH_FLAGS:
-                    # swy: refresh the custom mesh layer/attributes in case they don't exist
-                    if 'euro_fac_flags' not in me.attributes:
-                        me.attributes.new(name='euro_fac_flags', type='INT', domain='FACE')
-                        
-                    if 'euro_vtx_flags' not in me.attributes:
-                        me.attributes.new(name='euro_vtx_flags', type='INT', domain='FACE')
+                    out.write('\t\t*MESH_FACE_LIST {\n')
+                    for poly_index, poly in enumerate(mesh.polygons):
+                        vertex_indices = [vertex_index_map[tuple(vertices[v].co)] for v in poly.vertices]
+                        material_index = material_index_for_poly(poly, mesh_materials)
 
-                    euro_vtx_flags = me.attributes['euro_vtx_flags']
-                    euro_fac_flags = me.attributes['euro_fac_flags']
+                        out.write('\t\t\t*MESH_FACE    {:>3d}:    A: {:>6d} B: {:>6d} C: {:>6d}'.format(
+                            poly_index, vertex_indices[0], vertex_indices[1], vertex_indices[2]
+                        ))
+                        out.write('    AB: %-6d BC: %-6d CA: %-6d  *MESH_SMOOTHING %u  *MESH_MTLID %-3d\n' % (
+                            1, 1, 1, 1 if poly.use_smooth else 0, material_index
+                        ))
+                    out.write('\t\t}\n')
 
-                    # swy: add the custom mesh attributes here
-                    out.write('\t\t*MESH_NUMFACEFLAGS %u\n' % len(me.polygons))
-                    out.write('\t\t*MESH_FACEFLAGLIST {\n')
-                    for face in me.polygons:
-                        flag_value = euro_fac_flags.data[poly.index].value
-                        # swy: don't set it where it isn't needed
-                        if flag_value != 0:
-                            out.write(f'\t\t\t*MESH_FACEFLAG %u %u\n' % (face.index, flag_value))
-                    out.write('\t\t}\n') # MESH_NUMFACEFLAGS
+                    if EXPORT_MATERIALS and mesh_materials:
+                        out.write('\t\t*SHADER_COUNT\t%d\n' % len(mesh_materials))
+                        out.write('\t\t*SHADER_LIST {\n')
+                        for material_index, mat in enumerate(mesh_materials):
+                            out.write('\t\t\t*SHADER\t%d {\n' % material_index)
+                            out.write('\t\t\t\t%d\t%s\n' % (material_index, material_shader_rule(mat)))
+                            out.write('\t\t\t}\n')
+                        out.write('\t\t}\n')
 
-                    out.write('\t\t*MESH_VERTFLAGSLIST {\n')
-                    for idx, vert in enumerate(me_verts):
-                        if vert.index < len(euro_vtx_flags.data):
-                            flag_value = euro_vtx_flags.data[vert.index].value
-                            if flag_value != 0:
-                                out.write(f'\t\t\t*VFLAG %u %u\n' % (idx, flag_value))
-                    out.write('\t\t}\n') # MESH_VERTFLAGSLIST            
+                    if EXPORT_MESH_UV:
+                        out.write('\t\t*MESH_NUMTVERTEX %u\n' % len(unique_uvs))
+                        if unique_uvs:
+                            out.write('\t\t*MESH_TVERTLIST {\n')
+                            for uv_index, uv in enumerate(unique_uvs):
+                                out.write(f'\t\t\t*MESH_TVERT {uv_index:>5d}\t{df}\t{df}\t{df}\n' % (uv[0], uv[1], 0.0))
+                            out.write('\t\t}\n')
 
-                #Close mesh block
+                            out.write('\t\t*MESH_NUMTVFACES %d\n' % len(mesh.polygons))
+                            out.write('\t\t*MESH_TFACELIST {\n')
+                            for poly_index, poly in enumerate(mesh.polygons):
+                                uv_indices = []
+                                for loop_index in poly.loop_indices:
+                                    uv = mesh.uv_layers.active.data[loop_index].uv
+                                    uv_indices.append(uv_index_map.get((uv.x, uv.y), -1))
+                                out.write('\t\t\t*MESH_TFACE %-3d\t%d\t%d\t%d\n' % (
+                                    poly_index, uv_indices[0], uv_indices[1], uv_indices[2]
+                                ))
+                            out.write('\t\t}\n')
+
+                    if EXPORT_MESH_VCOLORS or synthesize_texture_color:
+                        out.write('\t\t*MESH_NUMCVERTEX %u\n' % len(unique_colors))
+                        if unique_colors:
+                            out.write('\t\t*MESH_CVERTLIST {\n')
+                            for color_index, color in enumerate(unique_colors):
+                                out.write(f'\t\t\t*MESH_VERTCOL {color_index:>5d}\t{df}\t{df}\t{df}\n' % (
+                                    color[0], color[1], color[2]
+                                ))
+                            out.write('\t\t}\n')
+
+                            out.write('\t\t*MESH_NUMCVFACES %d\n' % len(mesh.polygons))
+                            out.write('\t\t*MESH_CFACELIST {\n')
+                            for poly_index, poly in enumerate(mesh.polygons):
+                                if synthesize_texture_color:
+                                    color_indices = [0, 0, 0]
+                                else:
+                                    color_indices = []
+                                    for loop_index in poly.loop_indices:
+                                        color_indices.append(color_index_map.get(tuple(colors[loop_index].color), -1))
+                                out.write('\t\t\t*MESH_CFACE %-3d\t%d\t%d\t%d\n' % (
+                                    poly_index, color_indices[0], color_indices[1], color_indices[2]
+                                ))
+                            out.write('\t\t}\n')
+
+                    if EXPORT_MESH_NORMALS:
+                        out.write('\t\t*MESH_NORMALS {\n')
+                        for poly_index, poly in enumerate(mesh.polygons):
+                            normal = poly.normal
+                            out.write(f'\t\t\t*MESH_FACENORMAL {poly_index:<3d}\t{df}\t{df}\t{df}\n' % (
+                                normal[0], normal[1], normal[2]
+                            ))
+                            for vertex_index in poly.vertices:
+                                export_vertex_index = vertex_index_map[tuple(vertices[vertex_index].co)]
+                                out.write(f'\t\t\t\t*MESH_VERTEXNORMAL {export_vertex_index:<3d}\t{df}\t{df}\t{df}\n' % (
+                                    normal[0], normal[1], normal[2]
+                                ))
+                        out.write('\t\t}\n')
+
+                    if EXPORT_MESH_FLAGS:
+                        face_flags = int_attribute(mesh, 'euro_fac_flags', 'FACE')
+                        vertex_flags = int_attribute(mesh, 'euro_vtx_flags', 'POINT')
+
+                        out.write('\t\t*MESH_NUMFACEFLAGS %u\n' % len(mesh.polygons))
+                        out.write('\t\t*MESH_FACEFLAGLIST {\n')
+                        if face_flags:
+                            for face in mesh.polygons:
+                                flag_value = face_flags.data[face.index].value
+                                if flag_value != 0:
+                                    out.write('\t\t\t*MESH_FACEFLAG %u %u\n' % (face.index, flag_value))
+                        out.write('\t\t}\n')
+
+                        out.write('\t\t*MESH_VERTFLAGSLIST {\n')
+                        if vertex_flags:
+                            for vertex in vertices:
+                                if vertex.index < len(vertex_flags.data):
+                                    flag_value = vertex_flags.data[vertex.index].value
+                                    if flag_value != 0:
+                                        export_vertex_index = vertex_index_map[tuple(vertex.co)]
+                                        out.write('\t\t\t*VFLAG %u %u\n' % (export_vertex_index, flag_value))
+                        out.write('\t\t}\n')
+
+                    out.write('\t}\n')
+
+                    if EXPORT_MESH_ANIMS:
+                        write_animation_node(out, ob_main, obj_matrix_data)
+
+                    out.write(f'\t*WIREFRAME_COLOR {df} {df} {df}\n' % (ob.color[0], ob.color[1], ob.color[2]))
+
+                    if EXPORT_MATERIALS and ob_main.name in scene_materials:
+                        out.write('\t*MATERIAL_REF %d\n' % list(scene_materials.keys()).index(ob_main.name))
+
+                    if EXPORT_MESH_MORPH and ob.data.shape_keys:
+                        write_morph_data(out, ob)
+
+                    if EXPORT_MESH_MORPH:
+                        write_skin_data(out, ob, vertices)
+
+                    out.write("}\n")
+
+                    if EXPORT_MESH_MORPH and ob.data.shape_keys:
+                        write_morph_list(out, ob)
+                finally:
+                    ob_eval.to_mesh_clear()
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def write_morph_data(out, ob):
+        out.write('\t*MORPH_DATA {\n')
+        for shape_key in ob.data.shape_keys.key_blocks:
+            if shape_key.relative_key != shape_key:
+                out.write('\t\t*MORPH_FRAMES "%s" %u {\n' % (shape_key.name.replace(' ', '_'), FRAMES_COUNT))
+                for frame in range(FRAMES_COUNT):
+                    out.write(f'\t\t\t%u {df}\n' % (frame, shape_key.value))
+                out.write('\t\t}\n')
+        out.write('\t}\n')
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def write_morph_list(out, ob):
+        out.write('*MORPH_LIST {\n')
+        for shape_key in ob.data.shape_keys.key_blocks:
+            if shape_key.relative_key != shape_key:
+                out.write('\t*MORPH_TARGET "%s" %u {\n' % (shape_key.name.replace(' ', '_'), len(shape_key.data)))
+                for vert in shape_key.data:
+                    out.write('\t\t%s\t%s\t%s\n' % (df % vert.co.x, df % vert.co.y, df % vert.co.z))
                 out.write('\t}\n')
+        out.write('}\n')
 
-                #Print animations
-                if EXPORT_MESH_ANIMS:
-                    write_animation_node(out, ob_main, obj_matrix_data)
+    #---------------------------------------------------------------------------------------------------------------------------
+    def write_skin_data(out, ob, vertices):
+        armature = ob.find_armature()
+        if not armature:
+            return
 
-                out.write(f'\t*WIREFRAME_COLOR {df} {df} {df}\n' % (ob.color[0], ob.color[1], ob.color[2]))
-                
-                #Write material index
-                if ob.name in scene_materials:
-                    out.write('\t*MATERIAL_REF %d\n' % list(scene_materials.keys()).index(ob.name))
+        vertex_groups = {group.index: group.name for group in ob.vertex_groups}
+        bone_names = [bone.name for bone in armature.data.bones]
 
-                #-------------------------------------------------------------------------------------------------------------------------------
-                #  SHAPE KEYS
-                #-------------------------------------------------------------------------------------------------------------------------------
-                # swy: here go our blend shape weights with the mixed-in amount for each frame in the timeline
-                if EXPORT_MESH_MORPH:
-                    if ob.data.shape_keys:
-                        out.write('\t*MORPH_DATA {\n')
-                        for shape_key in ob.data.shape_keys.key_blocks:
-                            if shape_key.relative_key != shape_key:
-                                out.write(f'\t\t*MORPH_FRAMES "%s" %u {{\n' % (shape_key.name.replace(' ', '_'), FRAMES_COUNT))
-                                for i, frame in enumerate(shape_key.data):
-                                    bpy.context.scene.frame_set(i)
-                                    out.write(f'\t\t\t%u {df}\n' % (i, frame.co[0]))
-                                out.write('\t\t}\n') # MORPH_FRAMES
-                        out.write('\t}\n') # MORPH_DATA
+        out.write('\t*SKIN_DATA {\n')
+        out.write('\t\t*BONE_LIST {\n')
+        for bone_index, bone_name in enumerate(bone_names):
+            out.write('\t\t\t*BONE %u "%s"\n' % (bone_index, bone_name))
+        out.write('\t\t}\n')
 
-                    #-------------------------------------------------------------------------------------------------------------------------------
-                    #  SKELETAL RIGGING / BONE HIERARCHY DEFINITION / ARMATURE
-                    #-------------------------------------------------------------------------------------------------------------------------------
-                    armature = ob.find_armature()
-                    if armature:
-                        # swy: find the armature element between the possible mesh modifiers
-                        out.write('\t*SKIN_DATA {\n')
+        out.write('\t\t*SKIN_VERTEX_DATA {\n')
+        for vertex in vertices:
+            influences = []
+            for group in vertex.groups:
+                bone_name = vertex_groups.get(group.group)
+                if bone_name in bone_names and group.weight > 0:
+                    influences.append((bone_names.index(bone_name), group.weight))
 
-                        #bones list
-                        bone_names = [bone.name for bone in armature.data.bones]
-                        out.write('\t\t*BONE_LIST {\n')
-                        for i, bone in enumerate(bone_names):
-                            out.write('\t\t\t*BONE %u "%s"\n' % (i, bone))
-                        out.write('\t\t}\n') # BONE_LIST
+            if not influences:
+                continue
 
-                        #skin vertex
-                        out.write('\t\t*SKIN_VERTEX_DATA {\n')
-                        for v in me_verts:
-                            influences = sorted([(g.group, g.weight) for g in v.groups if g.weight > 0], key=lambda x: x[1], reverse=True)
-                    
-                            if influences:
-                                total_weight = sum(w for _, w in influences)
-                                influences = [(bone_id, w / total_weight) for bone_id, w in influences]
+            influences.sort(key=lambda item: item[1], reverse=True)
+            total_weight = sum(weight for _, weight in influences)
+            if total_weight:
+                influences = [(bone_index, weight / total_weight) for bone_index, weight in influences]
 
-                                out.write('\t\t\t*VERTEX %5u %u' % (v.index, len(influences)))
-                                for bone_id, weight in influences:
-                                    if bone_id not in bone_names:
-                                        continue
+            out.write('\t\t\t*VERTEX %5u %u' % (vertex.index, len(influences)))
+            for bone_index, weight in influences:
+                out.write(f' %2u {df}' % (bone_index, weight))
+            out.write('\n')
+        out.write('\t\t}\n')
+        out.write('\t}\n')
 
-                                    global_bone_index = bone_names.index(bone_id)
-                                    out.write(f' %2u {df}' % (global_bone_index, weight))                                
-                                out.write("\n")
-                        out.write('\t\t}\n') # SKIN_VERTEX_DATA
-                        out.write('\t}\n') # SKIN_DATA
-                    out.write("}\n") # GEOMOBJECT
-
-                    # swy: here goes the changed geometry/vertex positions for each of the shape keys, globally.
-                    #      they are referenced by name.
-                    if ob.data.shape_keys:
-                        out.write('*MORPH_LIST {\n')
-                        for shape_key in ob.data.shape_keys.key_blocks:
-                            # swy: don't export the 'Basis' one that is just the normal mesh data other keys are relative/substracted to
-                            if shape_key.relative_key != shape_key:
-                                out.write('\t*MORPH_TARGET "%s" %u {\n' % (shape_key.name.replace(' ', '_'), len(shape_key.data)))
-                                for vert in shape_key.data:
-                                    out.write('\t\t%s\t%s\t%s\n' % (df % vert.co.x, df % vert.co.y, df % vert.co.z))
-                                out.write('\t}\n') # MORPH_TARGET
-                        out.write('}\n') # MORPH_LIST
-                else:
-                    out.write("}\n") # GEOMOBJECT
-
-                # clean up
-                ob_for_convert.to_mesh_clear()
-
-    #-------------------------------------------------------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------------------------------------------------------
     def write_biped_bones(out, scene, depsgraph):
         for ob_main in scene.objects:
-            # Check if the object is a bone source
             if ob_main.type != 'ARMATURE':
                 continue
 
-            # Handle object instances (duplicated lights)
-            obs = [(ob_main, ob_main.matrix_world)]
-            if ob_main.is_instancer:
-                obs += [(dup.instance_object.original, dup.matrix_world.copy())
-                        for dup in depsgraph.object_instances
-                        if dup.parent and dup.parent.original == ob_main]
-                # ~ print(ob_main.name, 'has', len(obs) - 1, 'dupli children')
+            bone_data = ob_main.evaluated_get(depsgraph).data if EXPORT_APPLY_MODIFIERS else ob_main.data
 
-            for ob, ob_mat in obs:
-                ob_for_convert = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
+            for bone in bone_data.bones:
+                out.write('*BONEOBJECT {\n')
+                out.write('\t*NODE_NAME "%s"\n' % bone.name)
+                if bone.parent:
+                    out.write('\t*NODE_PARENT "%s"\n' % bone.parent.name)
+                out.write('\t*NODE_BIPED_BODY\n')
+                out.write('}\n')
 
-                try:
-                    # Extract the bone data
-                    bone_data = ob_for_convert.data
-                except AttributeError:
-                    bone_data = None
-
-                if bone_data is None:
-                    continue
-                
-                # Apply transformation matrix to light object
-                obj_matrix_data = {
-                    "name" : ob_main.name,
-                    "type" : ob_main.type,
-                    "matrix_original" : ob_mat.copy(),
-                    "matrix_transformed": ob_mat.copy()
-                }
-                
-                for bidx, bone in enumerate(bone_data.bones):
-                    out.write('*BONEOBJECT {\n')
-                    out.write('\t*NODE_NAME "%s"\n' % bone.name)
-                    if (bone.parent):
-                        out.write('\t*NODE_PARENT "%s"\n' % bone.parent.name)
-                    out.write('\t*NODE_BIPED_BODY\n')
-                    out.write('}\n') # BONEOBJECT
-
-    #-------------------------------------------------------------------------------------------------------------------------------
-    def write_light_settings(out, light_object, current_frame, tab_level = 1):
+    #---------------------------------------------------------------------------------------------------------------------------
+    def write_light_settings(out, light_data, current_frame, tab_level=1):
         tab = get_tabs(tab_level)
 
         out.write(f'{tab}*LIGHT_SETTINGS {{\n')
         out.write(f'{tab}\t*TIMEVALUE %u\n' % current_frame)
-        out.write(f'{tab}\t*COLOR {df} {df} {df}\n' % (light_object.color.r, light_object.color.g, light_object.color.b))
-        out.write(f'{tab}\t*FAR_ATTEN {df} {df}\n' % (light_object.shadow_soft_size, light_object.cutoff_distance))
-        if (light_object.type == 'SUN'):
-            out.write(f'{tab}\t*HOTSPOT %u\n' % degrees(light_object.angle))
-        else:
-            out.write(f'{tab}\t*HOTSPOT %u\n' % 0)
+        out.write(f'{tab}\t*COLOR {df} {df} {df}\n' % (light_data.color.r, light_data.color.g, light_data.color.b))
+        out.write(f'{tab}\t*FAR_ATTEN {df} {df}\n' % (light_data.shadow_soft_size, light_data.cutoff_distance))
+        out.write(f'{tab}\t*HOTSPOT {df}\n' % (degrees(light_data.angle) if light_data.type in {'SUN', 'SPOT'} else 0.0))
         out.write(f'{tab}}}\n')
 
-    #-------------------------------------------------------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------------------------------------------------------
     def write_light_data(out, scene, depsgraph):
-        global FRAMES_COUNT
-
         for ob_main in scene.objects:
-            # Check if the object is a light source
             if ob_main.type != 'LIGHT':
                 continue
 
-            # Handle object instances (duplicated lights)
-            obs = [(ob_main, ob_main.matrix_world)]
+            instances = [(ob_main, ob_main.matrix_world)]
             if ob_main.is_instancer:
-                obs += [(dup.instance_object.original, dup.matrix_world.copy())
-                        for dup in depsgraph.object_instances
-                        if dup.parent and dup.parent.original == ob_main]
-                # ~ print(ob_main.name, 'has', len(obs) - 1, 'dupli children')
+                instances += [
+                    (dup.instance_object.original, dup.matrix_world.copy())
+                    for dup in depsgraph.object_instances
+                    if dup.parent and dup.parent.original == ob_main
+                ]
 
-            for ob, ob_mat in obs:
-                ob_for_convert = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
+            for ob, ob_mat in instances:
+                light_object = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
+                light_data = light_object.data
 
-                try:
-                    # Extract the light data
-                    light_data = ob_for_convert.data
-                except AttributeError:
-                    light_data = None
-
-                if light_data is None:
-                    continue
-                
-                # Apply transformation matrix to light object
                 obj_matrix_data = {
-                    "name" : ob_main.name,
-                    "type" : ob_main.type,
-                    "matrix_original" : ob_mat.copy(),
+                    "name": ob_main.name,
+                    "type": ob_main.type,
+                    "matrix_original": ob_mat.copy(),
                     "matrix_transformed": ob_mat.copy()
                 }
 
-                # If negative scaling, we need to invert the direction of light if it's directional
-                if ob_mat.determinant() < 0.0 and light_data.type == 'SUN':
-                    # Invert the direction of a sun light (directional light)
-                    obj_matrix_data["direction"] = (-ob_for_convert.matrix_world.to_3x3() @ light_data.direction).normalized()
-
-                # Print ligth data                
                 out.write("*LIGHTOBJECT {\n")
                 out.write('\t*NODE_NAME "%s"\n' % ob.name)
-                out.write('\t*NODE_PARENT "%s"\n' % ob.name)
-                
-                type_lut = {}
-                type_lut['POINT'] = 'Omni'
-                type_lut['SPOT' ] = 'TargetSpot'
-                type_lut['SUN'  ] = 'TargetDirect'
-                type_lut['AREA' ] = 'TargetDirect' # swy: this is sort of wrong ¯\_(ツ)_/¯
+                write_parent(out, ob)
 
-                out.write('\t*LIGHT_TYPE %s\n' % type_lut[light_data.type]) #Seems that always used "Omni" lights in 3dsMax, in blender is called "Point"
+                type_lut = {
+                    'POINT': 'Omni',
+                    'SPOT': 'TargetSpot',
+                    'SUN': 'TargetDirect',
+                    'AREA': 'TargetDirect'
+                }
+
+                out.write('\t*LIGHT_TYPE %s\n' % type_lut.get(light_data.type, 'Omni'))
                 write_tm_node(out, obj_matrix_data)
-
-                #---------------------------------------------[Light Props]---------------------------------------------
-                if (light_data.use_shadow):
-                    out.write('\t*LIGHT_SHADOWS %s\n' % "On") #for now
-                else:
-                    out.write('\t*LIGHT_SHADOWS %s\n' % "Off") #for now
-                out.write('\t*LIGHT_DECAY %s\n' % "InvSquare") # swy: this is the only supported mode
-                out.write('\t*LIGHT_AFFECT_DIFFUSE %s\n' % "Off") #for now
-                if (light_data.specular_factor > 0.001):
-                    out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "On") #for now
-                else:
-                    out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % "Off") #for now
-                out.write('\t*LIGHT_AMBIENT_ONLY %s\n' % "Off") #for now
+                out.write('\t*LIGHT_SHADOWS %s\n' % ("On" if light_data.use_shadow else "Off"))
+                out.write('\t*LIGHT_DECAY %s\n' % ("None" if light_data.type == 'SUN' else "InvSquare"))
+                out.write('\t*LIGHT_AFFECT_DIFFUSE On\n')
+                out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % ("On" if light_data.specular_factor > 0.001 else "Off"))
+                out.write('\t*LIGHT_AMBIENT_ONLY Off\n')
 
                 write_light_settings(out, light_data, EXPORT_STATIC_FRAME)
 
-                #---------------------------------------------[Light Animation]---------------------------------------------
                 if EXPORT_CAMERA_LIGHT_ANIMS:
                     out.write('\t*LIGHT_ANIMATION {\n')
-                    previous_light_data = None
-                    frameIndex = 0
-
+                    previous = None
                     for frame in range(START_FRAME, END_FRAME + 1):
                         scene.frame_set(frame)
-
-                        # current frame data
-                        try:
-                            # Extract the light data
-                            light_data = ob_for_convert.data
-                        except AttributeError:
-                            light_data = None
-
-                        if light_data is None:
-                            continue
-
-                        if previous_light_data is None or \
-                        (light_data.color != previous_light_data.color or
-                            light_data.shadow_soft_size != previous_light_data.shadow_soft_size or
-                            light_data.cutoff_distance != previous_light_data.cutoff_distance or
-                            (light_data.type == 'SUN' and light_data.angle != previous_light_data.angle)):
-
-                            # Si hay alguna propiedad diferente, escribimos la configuración de la luz
-                            write_light_settings(out, light_data, frameIndex, 2)
-
-                            # Actualizamos los datos anteriores con los datos actuales
-                            previous_light_data = light_data
-                            frameIndex += TICKS_PER_FRAME
+                        tick = (frame - START_FRAME) * TICKS_PER_FRAME
+                        current = (
+                            tuple(light_data.color),
+                            light_data.shadow_soft_size,
+                            light_data.cutoff_distance,
+                            getattr(light_data, "angle", 0.0)
+                        )
+                        if previous != current:
+                            write_light_settings(out, light_data, tick, 2)
+                            previous = current
                     out.write('\t}\n')
                     write_animation_node(out, ob_main, obj_matrix_data)
+
                 out.write("}\n")
 
-    #-------------------------------------------------------------------------------------------------------------------------------
-    def userWantsCameraScript(scene):
-        printScript = False
-        
-        # Check for the camera script property
-        if scene.euro_properties:
-            euro_properties = scene.euro_properties
+    #---------------------------------------------------------------------------------------------------------------------------
+    def user_wants_camera_script(scene):
+        return bool(getattr(scene, "euro_properties", None) and scene.euro_properties.enable_camera_script)
 
-            # Si la propiedad 'enable_camera_script' no existe, puedes establecerla o usarla
-            if not hasattr(euro_properties, 'enable_camera_script'):
-                euro_properties.enable_camera_script = False
+    #---------------------------------------------------------------------------------------------------------------------------
+    def iter_action_fcurves(action):
+        if action is None:
+            return
 
-            # Acceder al valor de la propiedad
-            if euro_properties.enable_camera_script:
-                printScript = True
+        legacy_fcurves = getattr(action, "fcurves", None)
+        if legacy_fcurves is not None:
+            for fcurve in legacy_fcurves:
+                yield fcurve
+            return
 
-        return printScript
+        slots = list(getattr(action, "slots", []))
+        seen_channelbags = set()
 
-    #-------------------------------------------------------------------------------------------------------------------------------
+        for layer in getattr(action, "layers", []):
+            for strip in getattr(layer, "strips", []):
+                for channelbag in getattr(strip, "channelbags", []):
+                    pointer = channelbag.as_pointer()
+                    if pointer in seen_channelbags:
+                        continue
+                    seen_channelbags.add(pointer)
+                    for fcurve in getattr(channelbag, "fcurves", []):
+                        yield fcurve
+
+                channelbag_for_slot = getattr(strip, "channelbag", None)
+                if callable(channelbag_for_slot):
+                    for slot in slots:
+                        try:
+                            channelbag = channelbag_for_slot(slot)
+                        except TypeError:
+                            continue
+                        if channelbag is None:
+                            continue
+
+                        pointer = channelbag.as_pointer()
+                        if pointer in seen_channelbags:
+                            continue
+                        seen_channelbags.add(pointer)
+                        for fcurve in getattr(channelbag, "fcurves", []):
+                            yield fcurve
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def collect_action_keyframes(action):
+        frames = set()
+        for fcurve in iter_action_fcurves(action):
+            for point in getattr(fcurve, "keyframe_points", []):
+                frames.add(point.co[0])
+
+        return sorted(frames)
+
+    #---------------------------------------------------------------------------------------------------------------------------
     def write_script_camera(out):
-        markers = [m for m in bpy.context.scene.timeline_markers if m.camera is not None]
-        num_cameras = len(markers)
+        markers = [marker for marker in bpy.context.scene.timeline_markers if marker.camera is not None]
 
         out.write('\t*USER_DATA %u {\n' % 0)
         out.write('\t\tCameraScript = %u\n' % 1)
-        out.write('\t\tCameraScript_numCameras = %u\n' % num_cameras)
+        out.write('\t\tCameraScript_numCameras = %u\n' % len(markers))
         out.write('\t\tCameraScript_globalOffset = %u\n' % 0)
 
-        # Recorrer los marcadores y generar la información requerida
-        for idx, marker in enumerate(markers, start=1):
-            name = marker.name
-            position = marker.frame  # Keyframe del marcador
+        for index, marker in enumerate(markers, start=1):
             camera = marker.camera
-
-            # Obtener el primer y último keyframe de la cámara asociada
+            keyframes = []
             if camera.animation_data and camera.animation_data.action:
-                fcurves = camera.animation_data.action.fcurves
-                keyframes = sorted(set(kp.co[0] for fc in fcurves for kp in fc.keyframe_points))
-                first_keyframe = int(keyframes[0]) if keyframes else position
-                last_keyframe = int(keyframes[-1]) if keyframes else position
-                timeline_frame = position + (last_keyframe - first_keyframe)
+                keyframes = collect_action_keyframes(camera.animation_data.action)
 
-                # Imprimir la información en el formato requerido
-                out.write('\t\tCameraScript_camera%u = %s %u %u %u %u\n' % (idx, name, first_keyframe, last_keyframe, position, timeline_frame))
+            first_keyframe = int(keyframes[0]) if keyframes else marker.frame
+            last_keyframe = int(keyframes[-1]) if keyframes else marker.frame
+            timeline_frame = marker.frame + (last_keyframe - first_keyframe)
+            out.write('\t\tCameraScript_camera%u = %s %u %u %u %u\n' % (
+                index, marker.name, first_keyframe, last_keyframe, marker.frame, timeline_frame
+            ))
+
         out.write('\t}\n')
 
-    #-------------------------------------------------------------------------------------------------------------------------------
-    def write_camera_settings(out, camera_object, camera_data, current_frame, tab_level = 1):
+    #---------------------------------------------------------------------------------------------------------------------------
+    def write_camera_settings(out, camera_data, current_frame, tab_level=1):
         tab = get_tabs(tab_level)
 
         out.write(f'{tab}*CAMERA_SETTINGS {{\n')
         out.write(f'{tab}\t*TIMEVALUE %u\n' % current_frame)
-        out.write(f'{tab}\t*CAMERA_NEAR %d\n' % (camera_object.clip_start))
-        out.write(f'{tab}\t*CAMERA_FAR %d\n' % (camera_object.clip_end))
-        out.write(f'{tab}\t*CAMERA_FOV {df}\n' % (camera_object.angle))
-        #out.write(f'{tab}\t*CAMERA_TDIST {df}\n' % (camera_data.location.length))
+        out.write(f'{tab}\t*CAMERA_NEAR {df}\n' % camera_data.clip_start)
+        out.write(f'{tab}\t*CAMERA_FAR {df}\n' % camera_data.clip_end)
+        out.write(f'{tab}\t*CAMERA_FOV {df}\n' % camera_data.angle)
+        out.write(f'{tab}\t*CAMERA_TDIST {df}\n' % camera_data.clip_end)
         out.write(f'{tab}}}\n')
 
-    #-------------------------------------------------------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------------------------------------------------------
     def write_camera_data(out, scene, depsgraph):
-        global FRAMES_COUNT
+        cameras = sorted([obj for obj in scene.objects if obj.type == 'CAMERA'], key=lambda obj: obj.name)
 
-        CamerasList = sorted([obj for obj in bpy.context.scene.objects if obj.type == 'CAMERA'], key=lambda obj: obj.name)
-
-        for ob_main in CamerasList:
-            # Check if the object is a camera source
-            if ob_main.type != 'CAMERA':
-                continue
-
-            obs = [(ob_main, ob_main.matrix_world)]
+        for ob_main in cameras:
+            instances = [(ob_main, ob_main.matrix_world)]
             if ob_main.is_instancer:
-                obs += [(dup.instance_object.original, dup.matrix_world.copy())
-                        for dup in depsgraph.object_instances
-                        if dup.parent and dup.parent.original == ob_main]
-                # ~ print(ob_main.name, 'has', len(obs) - 1, 'dupli children')
-                
-            for ob, ob_mat in obs:
-                ob_for_convert = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
+                instances += [
+                    (dup.instance_object.original, dup.matrix_world.copy())
+                    for dup in depsgraph.object_instances
+                    if dup.parent and dup.parent.original == ob_main
+                ]
 
-                try:
-                    camera_data = ob_for_convert.data
-                except RuntimeError:
-                    camera_data = None
+            for ob, ob_mat in instances:
+                camera_object = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
+                camera_data = camera_object.data
 
-                if camera_data is None:
-                    continue
-                            
-                # Apply transformation matrix to camera object
                 obj_matrix_data = {
-                    "name" : ob.name,
-                    "type" : ob_main.type,
-                    "matrix_original" : ob_mat.copy(),
+                    "name": ob.name,
+                    "type": ob_main.type,
+                    "matrix_original": ob_mat.copy(),
                     "matrix_transformed": ob_mat.copy()
                 }
-        
-            # Imprime el bloque con las propiedades de la cámara
-            out.write("*CAMERAOBJECT {\n")
-            out.write('\t*NODE_NAME "%s"\n' % ob.name)
-            out.write('\t*CAMERA_TYPE %s\n' % "target")
-            write_tm_node(out, obj_matrix_data)
-            write_camera_settings(out, camera_data, ob, EXPORT_STATIC_FRAME)
 
-            #---------------------------------------------[Camera Animation]---------------------------------------------
-            if EXPORT_CAMERA_LIGHT_ANIMS:
-                out.write('\t*CAMERA_ANIMATION {\n')
-                previous_camera_data = None
-                frameIndex = 0
-                
-                for frame in range(START_FRAME, END_FRAME + 1):
-                    scene.frame_set(frame)
+                out.write("*CAMERAOBJECT {\n")
+                out.write('\t*NODE_NAME "%s"\n' % ob.name)
+                write_parent(out, ob)
+                out.write('\t*CAMERA_TYPE target\n')
+                write_tm_node(out, obj_matrix_data)
+                write_camera_settings(out, camera_data, EXPORT_STATIC_FRAME)
 
-                    # current frame data
-                    try:
-                        # Extract the light data
-                        camera_data = ob_for_convert.data
-                    except AttributeError:
-                        camera_data = None
+                if EXPORT_CAMERA_LIGHT_ANIMS:
+                    out.write('\t*CAMERA_ANIMATION {\n')
+                    previous = None
+                    for frame in range(START_FRAME, END_FRAME + 1):
+                        scene.frame_set(frame)
+                        tick = (frame - START_FRAME) * TICKS_PER_FRAME
+                        current = (camera_data.clip_start, camera_data.clip_end, camera_data.angle)
+                        if previous != current:
+                            write_camera_settings(out, camera_data, tick, 2)
+                            previous = current
+                    out.write('\t}\n')
+                    write_animation_node(out, ob_main, obj_matrix_data)
 
-                    if camera_data is None:
-                        continue
+                if ob_main == cameras[-1] and user_wants_camera_script(scene):
+                    write_script_camera(out)
 
-                    if previous_camera_data is None or \
-                    (camera_data.clip_start != previous_camera_data.clip_start or
-                        camera_data.clip_end != previous_camera_data.clip_end or
-                        camera_data.angle != previous_camera_data.angle):
+                out.write("}\n")
 
-                        # Si hay alguna propiedad diferente, escribimos la configuración de la cámara
-                        write_camera_settings(out, camera_data, ob, frameIndex, 2)
+    #---------------------------------------------------------------------------------------------------------------------------
+    def restore_mode(original_mode):
+        if original_mode and original_mode != 'OBJECT' and bpy.ops.object.mode_set.poll():
+            try:
+                bpy.ops.object.mode_set(mode=original_mode)
+            except RuntimeError:
+                pass
 
-                        # Actualizamos los datos anteriores con los datos actuales
-                        previous_camera_data = camera_data
-                        frameIndex += TICKS_PER_FRAME
-                out.write('\t}\n')
-                write_animation_node(out, ob_main, obj_matrix_data)
-                
-                
-            #-------------------------------------------------------------------------------------------------------------------------------
-            # swy: Jmarti856 found that this is needed for the time range of each camera to show up properly in
-            #      the script timeline, without this all of them cover the entire thing from beginning to end
-            #-------------------------------------------------------------------------------------------------------------------------------
-            if ob_main == CamerasList[-1]:
-                if userWantsCameraScript(scene):
-                        write_script_camera(out)            
-            out.write("}\n")
-
-    #-------------------------------------------------------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------------------------------------------------------
     def write_ese_file():
         depsgraph = bpy.context.evaluated_depsgraph_get()
         scene = bpy.context.scene
+        original_frame = scene.frame_current
+        active_object = getattr(context, "object", None)
+        original_mode = active_object.mode if active_object else None
 
-        # Exit edit mode before exporting, so current object states are exported properly.
-        if bpy.ops.object.mode_set.poll():
-            bpy.ops.object.mode_set(mode='OBJECT')
+        try:
+            if bpy.ops.object.mode_set.poll():
+                bpy.ops.object.mode_set(mode='OBJECT')
 
-        # Get current plugin version
-        plugin_version = get_plugin_version()
+            plugin_version = get_plugin_version()
 
-        # Create text file
-        with open(filepath, 'w', encoding="utf8",) as out:
-            # Header data
-            out.write("*3DSMAX_EUROEXPORT	300\n")
-            out.write('*COMMENT "Eurocom Export Version  3.00 - %s\n' % datetime.now().strftime("%A %B %d %Y %H:%M"))
-            out.write('*COMMENT "Version of Blender that output this file: %s"\n' % bpy.app.version_string)
-            out.write('*COMMENT "Version of ESE Plug-in: %d.%d.%d"\n\n' % (plugin_version[0], plugin_version[1], plugin_version[2]))
+            with open(filepath, 'w', encoding="utf8") as out:
+                out.write("*3DSMAX_EUROEXPORT\t300\n")
+                out.write('*COMMENT "Eurocom Export Version  3.00 - %s"\n' % datetime.now().strftime("%A %B %d %Y %H:%M"))
+                out.write('*COMMENT "Version of Blender that output this file: %s"\n' % bpy.app.version_string)
+                out.write('*COMMENT "Version of ESE Plug-in: %d.%d.%d"\n\n' % (
+                    plugin_version[0], plugin_version[1], plugin_version[2]
+                ))
 
-            write_scene_data(out, scene)
-            
-            scene_materials={}
-            if EXPORT_MATERIALS:
-                scene_materials = write_scene_materials(out)
+                write_scene_data(out, scene)
 
-            if 'MESH' in EXPORT_OBJECTS:
-                write_mesh_data(out, scene, depsgraph, scene_materials)
-            if 'CAMERA' in EXPORT_OBJECTS:
-                write_camera_data(out, scene, depsgraph)
-            if 'LIGHT' in EXPORT_OBJECTS:
-                write_light_data(out, scene, depsgraph)
-            if 'ARMATURE' in EXPORT_OBJECTS:
-                write_biped_bones(out, scene, depsgraph)
+                scene_materials = collect_scene_materials(scene) if EXPORT_MATERIALS else {}
+                if EXPORT_MATERIALS:
+                    write_scene_materials(out, scene_materials)
+
+                if 'MESH' in EXPORT_OBJECTS:
+                    write_mesh_data(out, scene, depsgraph, scene_materials)
+                if 'CAMERA' in EXPORT_OBJECTS:
+                    write_camera_data(out, scene, depsgraph)
+                if 'LIGHT' in EXPORT_OBJECTS:
+                    write_light_data(out, scene, depsgraph)
+                if 'ARMATURE' in EXPORT_OBJECTS:
+                    write_biped_bones(out, scene, depsgraph)
+        finally:
+            scene.frame_set(original_frame)
+            restore_mode(original_mode)
+
     write_ese_file()
 
+
 #-------------------------------------------------------------------------------------------------------------------------------
-def save(context, 
-         filepath, 
-         *, 
+def save(context,
+         filepath,
+         *,
          Output_Mesh_Definition,
-         Output_Materials, 
-         Output_Mesh_Anims, 
+         Output_Materials,
+         Output_Mesh_Anims,
          Output_CameraLightAnims,
          Transform_Center,
          Object_Types,
@@ -997,14 +979,24 @@ def save(context,
          Start_From_Frame,
          Enable_End_With_Frame,
          End_With_Frame,
-         Output_First_Only):
+         Output_First_Only,
+         Output_Transform_Animation_Keys=False,
+         Output_Mesh_Keyframes_From_Market=False,
+         Output_Force_Mesh_Keyframes_If_Visible=False,
+         Output_Inverse_Kinematics_Joints=False,
+         Output_Remove_NonUniform_Scale=False,
+         Use_Keys=True,
+         Force_Sample=False,
+         Frames_Per_Sample=1,
+         Controllers_Per_Sample=5,
+         Animated_Objects_Per_Sample=5):
 
     _write(context, filepath,
            EXPORT_MESH_FLAGS=Output_Mesh_Definition,
            EXPORT_MATERIALS=Output_Materials,
-           EXPORT_MESH_ANIMS=Output_Mesh_Anims, 
-           EXPORT_CAMERA_LIGHT_ANIMS=Output_CameraLightAnims, 
-           TRANSFORM_TO_CENTER = Transform_Center,
+           EXPORT_MESH_ANIMS=Output_Mesh_Anims,
+           EXPORT_CAMERA_LIGHT_ANIMS=Output_CameraLightAnims,
+           TRANSFORM_TO_CENTER=Transform_Center,
            EXPORT_OBJECTS=Object_Types,
            EXPORT_MESH_NORMALS=Output_Mesh_Normals,
            EXPORT_MESH_UV=Output_Mesh_UV,
@@ -1019,5 +1011,7 @@ def save(context,
            EXPORT_END_FRAME=End_With_Frame)
 
     return {'FINISHED'}
+
+
 if __name__ == '__main__':
     save({}, str(Path.home()) + '/Desktop/EurocomESE.ese')

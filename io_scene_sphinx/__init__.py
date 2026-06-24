@@ -8,7 +8,7 @@ bl_info = {
         'blender': (4, 3, 2),
        'location': 'File > Import-Export',
     'description': 'Export and import EIF, ESE and RTG files compatible with Euroland.',
-        'warning': 'Importing still doesn\'t work, export in progress. ¯\_(ツ)_/¯',
+        'warning': "Importing still doesn't work, export in progress. ¯\\_(ツ)_/¯",
         'doc_url': 'https://sphinxandthecursedmummy.fandom.com/wiki/Technical',
     'tracker_url': 'https://discord.gg/sphinx',
         'support': 'COMMUNITY',
@@ -88,6 +88,12 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
         default=True,
     ) # type: ignore
 
+    Output_Face_Shaders : BoolProperty(
+        name="Face Shaders",
+        description="Export EIF face shader blend rules",
+        default=True,
+    ) # type: ignore
+
     #-------------------------------------------------------------------------------------------------------------------------------
     # Precision
     #-------------------------------------------------------------------------------------------------------------------------------
@@ -159,6 +165,7 @@ class EIF_EXPORT_PT_Mesh_Options(bpy.types.Panel):
     def draw(self, context):
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_UV')
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Vertex_Colors')
+        self.layout.prop(context.space_data.active_operator, 'Output_Face_Shaders')
 
 #-------------------------------------------------------------------------------------------------------------------------------
 class EIF_EXPORT_PT_Decimals_Precision(bpy.types.Panel):
@@ -232,10 +239,40 @@ class ExportESE(bpy.types.Operator, ExportHelper):
         default=False,
     ) # type: ignore
 
+    Output_Transform_Animation_Keys: BoolProperty(
+        name="Transform Animation Keys",
+        description="Export transform animation keys.",
+        default=False,
+    ) # type: ignore
+
+    Output_Mesh_Keyframes_From_Market: BoolProperty(
+        name='Mesh Keyframes from "MARKET"',
+        description="Compatibility option from the original EuroLand ESE exporter.",
+        default=False,
+    ) # type: ignore
+
+    Output_Force_Mesh_Keyframes_If_Visible: BoolProperty(
+        name="Force Mesh Keyframes if Visible",
+        description="Compatibility option from the original EuroLand ESE exporter.",
+        default=False,
+    ) # type: ignore
+
+    Output_Inverse_Kinematics_Joints: BoolProperty(
+        name="Inverse Kinematics Joints",
+        description="Compatibility option from the original EuroLand ESE exporter.",
+        default=False,
+    ) # type: ignore
+
+    Output_Remove_NonUniform_Scale: BoolProperty(
+        name="Remove Non-Uniform Scale",
+        description="Compatibility option from the original EuroLand ESE exporter.",
+        default=False,
+    ) # type: ignore
+
     Transform_Center: BoolProperty(
-        name="Transform Objects to (0,0,0)", 
-        description="Transform objects location and rotation to (0,0,0).", 
-        default=True,
+        name="Transform Objects to (0,0,0)",
+        description="Transform objects location and rotation to (0,0,0).",
+        default=False,
     ) # type: ignore
 
     #-------------------------------------------------------------------------------------------------------------------------------
@@ -245,9 +282,11 @@ class ExportESE(bpy.types.Operator, ExportHelper):
         name="Output Types",
         options={'ENUM_FLAG'},
         items=(('MESH', "Geometric", ""),
+               ('SHAPE', "Shapes", ""),
                ('CAMERA', "Cameras", ""),
-               ('LIGHT', "Lights", ""),     
-               ('ARMATURE', "Biped Bone", "")         
+               ('LIGHT', "Lights", ""),
+               ('ARMATURE', "Biped Bone", ""),
+               ('HELPER', "Helpers", "")
             ),
         description="Which kind of object to export",
         default={'MESH'}
@@ -340,9 +379,42 @@ class ExportESE(bpy.types.Operator, ExportHelper):
     ) # type: ignore
 
     Output_First_Only : BoolProperty(
-        name="Output Frame 0", 
+        name="Output Frame 0",
         description="",
         default=False,
+    ) # type: ignore
+
+    Use_Keys: BoolProperty(
+        name="Use Keys",
+        description="Output animation from keyframes.",
+        default=True,
+    ) # type: ignore
+
+    Force_Sample: BoolProperty(
+        name="Force Sample",
+        description="Output sampled animation frames.",
+        default=False,
+    ) # type: ignore
+
+    Frames_Per_Sample: IntProperty(
+        name="Frames per Sample",
+        min=1,
+        max=1000,
+        default=1,
+    ) # type: ignore
+
+    Controllers_Per_Sample: IntProperty(
+        name="Controllers",
+        min=1,
+        max=1000,
+        default=5,
+    ) # type: ignore
+
+    Animated_Objects_Per_Sample: IntProperty(
+        name="Animated Objects",
+        min=1,
+        max=1000,
+        default=5,
     ) # type: ignore
 
     #-------------------------------------------------------------------------------------------------------------------------------
@@ -395,8 +467,13 @@ class ESE_EXPORT_PT_Output_Options(bpy.types.Panel):
     def draw(self, context):
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Definition')
         self.layout.prop(context.space_data.active_operator, 'Output_Materials')
+        self.layout.prop(context.space_data.active_operator, 'Output_Transform_Animation_Keys')
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Anims')
+        self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Keyframes_From_Market')
+        self.layout.prop(context.space_data.active_operator, 'Output_Force_Mesh_Keyframes_If_Visible')
         self.layout.prop(context.space_data.active_operator, 'Output_CameraLightAnims')
+        self.layout.prop(context.space_data.active_operator, 'Output_Inverse_Kinematics_Joints')
+        self.layout.prop(context.space_data.active_operator, 'Output_Remove_NonUniform_Scale')
         self.layout.prop(context.space_data.active_operator, 'Transform_Center')
 
 #-------------------------------------------------------------------------------------------------------------------------------
@@ -484,6 +561,11 @@ class ESE_EXPORT_PT_Controller_Output(bpy.types.Panel):
         return context.space_data.active_operator.bl_idname == "EXPORT_SCENE_OT_ese"
 
     def draw(self, context):
+        self.layout.prop(context.space_data.active_operator, 'Use_Keys')
+        self.layout.prop(context.space_data.active_operator, 'Force_Sample')
+        self.layout.prop(context.space_data.active_operator, 'Frames_Per_Sample')
+        self.layout.prop(context.space_data.active_operator, 'Controllers_Per_Sample')
+        self.layout.prop(context.space_data.active_operator, 'Animated_Objects_Per_Sample')
         self.layout.prop(context.space_data.active_operator, 'Enable_Start_From_Frame')
         self.layout.prop(context.space_data.active_operator, 'Start_From_Frame')
         self.layout.prop(context.space_data.active_operator, 'Enable_End_With_Frame')

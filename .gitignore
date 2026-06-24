@@ -127,3 +127,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+io_scene_sphinx/tools/abrir_blender_dev.cmd
+io_scene_sphinx/tools/blender_dev_install.ps1
+io_scene_sphinx/tools/blender_dev_launch.ps1
+io_scene_sphinx/tools/blender_smoke_test.py
+io_scene_sphinx/tools/probar_exportadores.cmd

@@ -44,15 +44,30 @@ def adjust_rgb(r, g, b, a, brightness_scale = 10):
 def create_euroland_matrix(obj_matrix, obj_type):
     
     if obj_type == 'CAMERA':
-        euroland_matrix = MESH_GLOBAL_MATRIX @ obj_matrix
-                
-        # Cameras seems that needs to invert Z axis
-        for i in range(len(euroland_matrix)):
-            euroland_matrix[i][2] *= -1      
-            
-        #Euler stuf
-        rot_yxz = euroland_matrix.to_euler('YXZ')
-        euroland_euler = Euler([-angle for angle in rot_yxz], 'YXZ')          
+        def convert_axis(vector):
+            return Matrix(((1, 0, 0), (0, 0, 1), (0, 1, 0))) @ vector
+
+        obj_rot = obj_matrix.to_3x3().normalized()
+        right = convert_axis(obj_rot.col[0]).normalized()
+        up = convert_axis(obj_rot.col[1]).normalized()
+        forward = right.cross(up).normalized()
+        position = MESH_GLOBAL_MATRIX @ obj_matrix.translation
+
+        euroland_matrix = Matrix.Identity(4)
+        euroland_matrix[0].x = right.x
+        euroland_matrix[0].y = right.y
+        euroland_matrix[0].z = right.z
+        euroland_matrix[1].x = up.x
+        euroland_matrix[1].y = up.y
+        euroland_matrix[1].z = up.z
+        euroland_matrix[2].x = forward.x
+        euroland_matrix[2].y = forward.y
+        euroland_matrix[2].z = forward.z
+        euroland_matrix[0][3] = position.x
+        euroland_matrix[1][3] = position.y
+        euroland_matrix[2][3] = position.z
+
+        euroland_euler = euroland_matrix.to_euler('YXZ')
     else: 
         matrix_scale = Matrix.Diagonal(obj_matrix.to_scale()).to_4x4()
         transformed_matrix = (ROT_GLOBAL_MATRIX @ obj_matrix).normalized()
