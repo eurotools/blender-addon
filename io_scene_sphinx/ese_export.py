@@ -101,6 +101,10 @@ def _write(context, filepath,
         return result, index_map
 
     #---------------------------------------------------------------------------------------------------------------------------
+    def safe_scale_delta(current, base):
+        return current / base if abs(base) > 0.000001 else current
+
+    #---------------------------------------------------------------------------------------------------------------------------
     def color_layer_data(mesh):
         if hasattr(mesh, "color_attributes") and mesh.color_attributes:
             active = mesh.color_attributes.active_color or mesh.color_attributes.active
@@ -378,6 +382,18 @@ def _write(context, filepath,
                 current_eland = create_euroland_matrix(matrix_data, obj_matrix_data["type"])["eland_matrix"].to_3x3()
                 delta_eland = current_eland @ base_eland.inverted()
                 delta_eland.transpose()
+
+                base_scale = obj_matrix_data["matrix_original"].to_scale()
+                current_scale = obj.matrix_world.to_scale()
+                scale_delta = (
+                    safe_scale_delta(current_scale.x, base_scale.x),
+                    safe_scale_delta(current_scale.z, base_scale.z),
+                    safe_scale_delta(current_scale.y, base_scale.y),
+                )
+                for row_index, scale_value in enumerate(scale_delta):
+                    delta_eland[row_index][0] *= scale_value
+                    delta_eland[row_index][1] *= scale_value
+                    delta_eland[row_index][2] *= scale_value
 
                 eland_matrix = delta_eland.to_4x4()
                 eland_position = MESH_GLOBAL_MATRIX @ obj.matrix_world.translation
