@@ -15,7 +15,6 @@ from pathlib import Path
 from math import degrees
 from mathutils import Matrix
 from datetime import datetime
-from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 from .eland_utils import *
 
 #-------------------------------------------------------------------------------------------------------------------------------
@@ -80,33 +79,8 @@ def _write(context, filepath,
         return 'Non'
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def material_has_texture(mat):
-        mat_wrap = PrincipledBSDFWrapper(mat) if mat and mat.use_nodes else None
-        if not mat_wrap:
-            return False
-
-        tex_wrap = getattr(mat_wrap, "base_color_texture", None)
-        return bool(tex_wrap and tex_wrap.image)
-
-    #---------------------------------------------------------------------------------------------------------------------------
     def has_textured_material(materials):
         return any(material_has_texture(mat) for mat in materials)
-
-    #---------------------------------------------------------------------------------------------------------------------------
-    def scaled_color(color, scale):
-        return tuple(max(0.0, min(component * scale, 1.0)) for component in color[:3])
-
-    #---------------------------------------------------------------------------------------------------------------------------
-    def unique_ordered(values):
-        result = []
-        index_map = {}
-
-        for value in values:
-            if value not in index_map:
-                index_map[value] = len(result)
-                result.append(value)
-
-        return result, index_map
 
     #---------------------------------------------------------------------------------------------------------------------------
     def safe_scale_delta(current, base):
@@ -131,25 +105,6 @@ def _write(context, filepath,
         result = matrix.to_3x3().normalized().to_4x4() @ Matrix.Diagonal(uniform_scale).to_4x4()
         result.translation = matrix.translation
         return result
-
-    #---------------------------------------------------------------------------------------------------------------------------
-    def color_layer_data(mesh):
-        if hasattr(mesh, "color_attributes") and mesh.color_attributes:
-            active = mesh.color_attributes.active_color or mesh.color_attributes.active
-            return active.data if active else None
-
-        if mesh.vertex_colors:
-            active = mesh.vertex_colors.active
-            return active.data if active else None
-
-        return None
-
-    #---------------------------------------------------------------------------------------------------------------------------
-    def int_attribute(mesh, name, domain):
-        attr = mesh.attributes.get(name)
-        if attr and attr.data_type == 'INT' and attr.domain == domain:
-            return attr
-        return None
 
     #---------------------------------------------------------------------------------------------------------------------------
     def frame_in_range(frame):
@@ -320,7 +275,7 @@ def _write(context, filepath,
         out.write(f'{tab}*MATERIAL_NAME "%s"\n' % mat_name)
         out.write(f'{tab}*MATERIAL_CLASS "Standard"\n')
 
-        mat_wrap = PrincipledBSDFWrapper(mat) if mat and mat.use_nodes else None
+        mat_wrap = material_wrap(mat)
 
         if mat_wrap:
             use_mirror = mat_wrap.metallic > 0.001

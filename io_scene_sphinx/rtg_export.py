@@ -14,7 +14,6 @@ import bpy
 from pathlib import Path
 from mathutils import Matrix
 from datetime import datetime
-from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 from .eland_utils import *
 
 #-------------------------------------------------------------------------------------------------------------------------------
@@ -48,37 +47,8 @@ def _write(context, filepath,
     df = f'%.{DECIMAL_PRECISION}f'
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def unique_ordered(values):
-        result = []
-        index_map = {}
-        for value in values:
-            if value not in index_map:
-                index_map[value] = len(result)
-                result.append(value)
-        return result, index_map
-
-    #---------------------------------------------------------------------------------------------------------------------------
-    def color_layer_data(mesh):
-        if hasattr(mesh, "color_attributes") and mesh.color_attributes:
-            active = mesh.color_attributes.active_color or mesh.color_attributes.active
-            return active.data if active else None
-        if mesh.vertex_colors:
-            active = mesh.vertex_colors.active
-            return active.data if active else None
-        return None
-
-    #---------------------------------------------------------------------------------------------------------------------------
-    def material_wrap(mat):
-        return PrincipledBSDFWrapper(mat) if mat and mat.use_nodes else None
-
-    #---------------------------------------------------------------------------------------------------------------------------
     def texture_path(mat):
-        mat_wrap = material_wrap(mat)
-        if not mat_wrap:
-            return None
-        tex_wrap = getattr(mat_wrap, "base_color_texture", None)
-        image = tex_wrap.image if tex_wrap else None
-        return bpy.path.abspath(image.filepath) if image else None
+        return material_texture_path(mat)
 
     #---------------------------------------------------------------------------------------------------------------------------
     def material_color(mat):
@@ -97,13 +67,6 @@ def _write(context, filepath,
         rtg_flags = 1 if alpha < 0.999 or blend_method in {'BLEND', 'HASHED', 'CLIP'} else 0
         blend_mode = 0
         return alpha, blend_mode, rtg_flags
-
-    #---------------------------------------------------------------------------------------------------------------------------
-    def int_attribute(mesh, name, domain):
-        attr = mesh.attributes.get(name)
-        if attr and attr.data_type == 'INT' and attr.domain == domain:
-            return attr
-        return None
 
     #---------------------------------------------------------------------------------------------------------------------------
     def scene_frame_range(scene):

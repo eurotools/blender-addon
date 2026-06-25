@@ -1,4 +1,6 @@
+import bpy
 from mathutils import Matrix, Euler
+from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 from . import bl_info
 
 #-------------------------------------------------------------------------------------------------------------------------------
@@ -32,6 +34,69 @@ def mesh_triangulate(me):
 #-------------------------------------------------------------------------------------------------------------------------------
 def get_tabs(level):
     return '\t' * level
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def unique_ordered(values):
+    result = []
+    index_map = {}
+
+    for value in values:
+        if value not in index_map:
+            index_map[value] = len(result)
+            result.append(value)
+
+    return result, index_map
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def scaled_color(color, scale):
+    return tuple(max(0.0, min(component * scale, 1.0)) for component in color[:3])
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def color_layer_data(mesh):
+    if hasattr(mesh, "color_attributes") and mesh.color_attributes:
+        active = mesh.color_attributes.active_color or mesh.color_attributes.active
+        return active.data if active else None
+
+    if mesh.vertex_colors:
+        active = mesh.vertex_colors.active
+        return active.data if active else None
+
+    return None
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def color_layers(mesh):
+    if hasattr(mesh, "color_attributes") and mesh.color_attributes:
+        return [
+            attr for attr in mesh.color_attributes
+            if attr.domain == 'CORNER' and attr.data_type in {'BYTE_COLOR', 'FLOAT_COLOR'}
+        ]
+
+    return list(mesh.vertex_colors)
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def int_attribute(mesh, name, domain):
+    attr = mesh.attributes.get(name)
+    if attr and attr.data_type == 'INT' and attr.domain == domain:
+        return attr
+    return None
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def material_wrap(mat):
+    return PrincipledBSDFWrapper(mat) if mat and mat.use_nodes else None
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def material_texture_path(mat):
+    mat_wrap = material_wrap(mat)
+    if not mat_wrap:
+        return None
+
+    tex_wrap = getattr(mat_wrap, "base_color_texture", None)
+    image = tex_wrap.image if tex_wrap else None
+    return bpy.path.abspath(image.filepath) if image else None
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def material_has_texture(mat):
+    return bool(material_texture_path(mat))
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def adjust_rgb(r, g, b, a, brightness_scale = 10):
