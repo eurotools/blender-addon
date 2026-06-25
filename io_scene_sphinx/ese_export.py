@@ -47,7 +47,15 @@ def _write(context, filepath,
            EXPORT_FROM_FRAME_ENABLED,
            EXPORT_FROM_FRAME,
            EXPORT_END_FRAME_ENABLED,
-           EXPORT_END_FRAME
+           EXPORT_END_FRAME,
+           EXPORT_OUTPUT_FIRST_ONLY,
+           EXPORT_TRANSFORM_ANIMATION_KEYS,
+           EXPORT_MESH_KEYFRAMES_FROM_MARKERS,
+           EXPORT_FORCE_MESH_KEYFRAMES_IF_VISIBLE,
+           EXPORT_REMOVE_NONUNIFORM_SCALE,
+           USE_KEYS,
+           FORCE_SAMPLE,
+           FRAMES_PER_SAMPLE
         ):
 
     df = f'%.{DECIMAL_PRECISION}f'
@@ -105,6 +113,26 @@ def _write(context, filepath,
         return current / base if abs(base) > 0.000001 else current
 
     #---------------------------------------------------------------------------------------------------------------------------
+    def uniformized_scale(scale):
+        uniform = (abs(scale.x) + abs(scale.y) + abs(scale.z)) / 3.0
+        return (
+            uniform if scale.x >= 0 else -uniform,
+            uniform if scale.y >= 0 else -uniform,
+            uniform if scale.z >= 0 else -uniform,
+        )
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def matrix_without_nonuniform_scale(matrix):
+        if not EXPORT_REMOVE_NONUNIFORM_SCALE:
+            return matrix
+
+        scale = matrix.to_scale()
+        uniform_scale = uniformized_scale(scale)
+        result = matrix.to_3x3().normalized().to_4x4() @ Matrix.Diagonal(uniform_scale).to_4x4()
+        result.translation = matrix.translation
+        return result
+
+    #---------------------------------------------------------------------------------------------------------------------------
     def color_layer_data(mesh):
         if hasattr(mesh, "color_attributes") and mesh.color_attributes:
             active = mesh.color_attributes.active_color or mesh.color_attributes.active
@@ -122,6 +150,76 @@ def _write(context, filepath,
         if attr and attr.data_type == 'INT' and attr.domain == domain:
             return attr
         return None
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def frame_in_range(frame):
+        rounded = int(round(frame))
+        return START_FRAME <= rounded <= END_FRAME
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def sorted_frame_set(frames):
+        valid = {START_FRAME, END_FRAME}
+        valid.update(int(round(frame)) for frame in frames if frame_in_range(frame))
+        return sorted(valid)
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def object_keyframes(obj, include_visibility=False):
+        frames = set()
+        if obj.animation_data and obj.animation_data.action:
+            for fcurve in iter_action_fcurves(obj.animation_data.action):
+                if not include_visibility and fcurve.data_path in {'hide_viewport', 'hide_render'}:
+                    continue
+                for point in getattr(fcurve, "keyframe_points", []):
+                    frames.add(point.co[0])
+
+        return frames
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def id_keyframes(data_block):
+        frames = set()
+        if data_block and data_block.animation_data and data_block.animation_data.action:
+            for fcurve in iter_action_fcurves(data_block.animation_data.action):
+                for point in getattr(fcurve, "keyframe_points", []):
+                    frames.add(point.co[0])
+
+        return frames
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def sampled_frames():
+        sample_step = max(1, FRAMES_PER_SAMPLE)
+        frames = list(range(START_FRAME, END_FRAME + 1, sample_step))
+        if frames[-1] != END_FRAME:
+            frames.append(END_FRAME)
+        return frames
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def transform_frames_for(obj):
+        if START_FRAME == END_FRAME:
+            return [START_FRAME]
+
+        if FORCE_SAMPLE:
+            return sampled_frames()
+
+        if USE_KEYS or EXPORT_TRANSFORM_ANIMATION_KEYS:
+            frames = object_keyframes(obj, EXPORT_FORCE_MESH_KEYFRAMES_IF_VISIBLE)
+            if EXPORT_MESH_KEYFRAMES_FROM_MARKERS:
+                frames.update(marker.frame for marker in bpy.context.scene.timeline_markers)
+            return sorted_frame_set(frames)
+
+        return list(range(START_FRAME, END_FRAME + 1))
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def data_frames_for(obj, data_block):
+        if START_FRAME == END_FRAME:
+            return [START_FRAME]
+
+        if FORCE_SAMPLE:
+            return sampled_frames()
+
+        if USE_KEYS or EXPORT_TRANSFORM_ANIMATION_KEYS:
+            return sorted_frame_set(object_keyframes(obj) | id_keyframes(data_block))
+
+        return list(range(START_FRAME, END_FRAME + 1))
 
     #---------------------------------------------------------------------------------------------------------------------------
     def parent_name(obj):
@@ -186,6 +284,9 @@ def _write(context, filepath,
             START_FRAME = max(START_FRAME, EXPORT_FROM_FRAME)
         if EXPORT_END_FRAME_ENABLED:
             END_FRAME = min(END_FRAME, EXPORT_END_FRAME)
+        if EXPORT_OUTPUT_FIRST_ONLY:
+            START_FRAME = scene.frame_start
+            END_FRAME = scene.frame_start
         if END_FRAME < START_FRAME:
             END_FRAME = START_FRAME
 
@@ -336,6 +437,7 @@ def _write(context, filepath,
             if not TRANSFORM_TO_CENTER and obj_matrix_data["type"] == 'MESH':
                 matrix_data = Matrix.Identity(4)
             out.write('\t*NODE_TM {\n')
+        matrix_data = matrix_without_nonuniform_scale(matrix_data)
 
         out.write('\t\t*NODE_NAME "%s"\n' % obj_matrix_data["name"])
         out.write('\t\t*INHERIT_POS %d %d %d\n' % (0, 0, 0))
@@ -368,14 +470,16 @@ def _write(context, filepath,
         out.write('\t\t*TM_ANIMATION "%s"\n' % obj.name)
         out.write('\t\t*TM_ANIM_FRAMES {\n')
 
-        for frame in range(START_FRAME, END_FRAME + 1):
+        for frame in transform_frames_for(obj):
             bpy.context.scene.frame_set(frame)
             tick = (frame - START_FRAME) * TICKS_PER_FRAME
 
-            matrix_data = obj.matrix_world.copy()
+            matrix_data = matrix_without_nonuniform_scale(obj.matrix_world.copy())
             if obj.type == 'MESH':
-                base_rot = obj_matrix_data["matrix_original"].to_3x3().normalized().to_4x4()
-                current_rot = obj.matrix_world.to_3x3().normalized()
+                base_matrix = matrix_without_nonuniform_scale(obj_matrix_data["matrix_original"])
+                current_matrix = matrix_without_nonuniform_scale(obj.matrix_world.copy())
+                base_rot = base_matrix.to_3x3().normalized().to_4x4()
+                current_rot = current_matrix.to_3x3().normalized()
                 matrix_data = current_rot.to_4x4()
 
                 base_eland = create_euroland_matrix(base_rot, obj_matrix_data["type"])["eland_matrix"].to_3x3()
@@ -383,8 +487,8 @@ def _write(context, filepath,
                 delta_eland = current_eland @ base_eland.inverted()
                 delta_eland.transpose()
 
-                base_scale = obj_matrix_data["matrix_original"].to_scale()
-                current_scale = obj.matrix_world.to_scale()
+                base_scale = base_matrix.to_scale()
+                current_scale = current_matrix.to_scale()
                 scale_delta = (
                     safe_scale_delta(current_scale.x, base_scale.x),
                     safe_scale_delta(current_scale.z, base_scale.z),
@@ -433,6 +537,7 @@ def _write(context, filepath,
             matrix_transformed = Matrix.Diagonal(ob_mat.to_scale()).to_4x4()
         else:
             matrix_transformed = ob_mat.copy()
+        matrix_transformed = matrix_without_nonuniform_scale(matrix_transformed)
 
         mesh.transform(Matrix.Scale(GLOBAL_SCALE, 4) @ (MESH_GLOBAL_MATRIX @ matrix_transformed))
 
@@ -779,7 +884,7 @@ def _write(context, filepath,
                 if EXPORT_CAMERA_LIGHT_ANIMS:
                     out.write('\t*LIGHT_ANIMATION {\n')
                     previous = None
-                    for frame in range(START_FRAME, END_FRAME + 1):
+                    for frame in data_frames_for(ob_main, light_data):
                         scene.frame_set(frame)
                         tick = (frame - START_FRAME) * TICKS_PER_FRAME
                         current = (
@@ -920,7 +1025,7 @@ def _write(context, filepath,
                 if EXPORT_CAMERA_LIGHT_ANIMS:
                     out.write('\t*CAMERA_ANIMATION {\n')
                     previous = None
-                    for frame in range(START_FRAME, END_FRAME + 1):
+                    for frame in data_frames_for(ob_main, camera_data):
                         scene.frame_set(frame)
                         tick = (frame - START_FRAME) * TICKS_PER_FRAME
                         current = (camera_data.clip_start, camera_data.clip_end, camera_data.angle)
@@ -934,6 +1039,46 @@ def _write(context, filepath,
                     write_script_camera(out)
 
                 out.write("}\n")
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def write_helper_data(out, scene):
+        for ob in sorted([obj for obj in scene.objects if obj.type == 'EMPTY'], key=lambda obj: obj.name):
+            obj_matrix_data = {
+                "name": ob.name,
+                "type": ob.type,
+                "matrix_original": ob.matrix_world.copy(),
+                "matrix_transformed": ob.matrix_world.copy()
+            }
+
+            out.write("*HELPEROBJECT {\n")
+            out.write('\t*NODE_NAME "%s"\n' % ob.name)
+            write_parent(out, ob)
+            write_tm_node(out, obj_matrix_data)
+
+            if EXPORT_CAMERA_LIGHT_ANIMS or EXPORT_TRANSFORM_ANIMATION_KEYS:
+                write_animation_node(out, ob, obj_matrix_data)
+
+            out.write("}\n")
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def write_shape_data(out, scene):
+        for ob in sorted([obj for obj in scene.objects if obj.type == 'CURVE'], key=lambda obj: obj.name):
+            obj_matrix_data = {
+                "name": ob.name,
+                "type": ob.type,
+                "matrix_original": ob.matrix_world.copy(),
+                "matrix_transformed": ob.matrix_world.copy()
+            }
+
+            out.write("*SHAPEOBJECT {\n")
+            out.write('\t*NODE_NAME "%s"\n' % ob.name)
+            write_parent(out, ob)
+            write_tm_node(out, obj_matrix_data)
+
+            if EXPORT_CAMERA_LIGHT_ANIMS or EXPORT_TRANSFORM_ANIMATION_KEYS:
+                write_animation_node(out, ob, obj_matrix_data)
+
+            out.write("}\n")
 
     #---------------------------------------------------------------------------------------------------------------------------
     def restore_mode(original_mode):
@@ -977,6 +1122,10 @@ def _write(context, filepath,
                     write_camera_data(out, scene, depsgraph)
                 if 'LIGHT' in EXPORT_OBJECTS:
                     write_light_data(out, scene, depsgraph)
+                if 'SHAPE' in EXPORT_OBJECTS:
+                    write_shape_data(out, scene)
+                if 'HELPER' in EXPORT_OBJECTS:
+                    write_helper_data(out, scene)
                 if 'ARMATURE' in EXPORT_OBJECTS:
                     write_biped_bones(out, scene, depsgraph)
         finally:
@@ -1011,13 +1160,10 @@ def save(context,
          Output_Transform_Animation_Keys=False,
          Output_Mesh_Keyframes_From_Market=False,
          Output_Force_Mesh_Keyframes_If_Visible=False,
-         Output_Inverse_Kinematics_Joints=False,
          Output_Remove_NonUniform_Scale=False,
          Use_Keys=True,
          Force_Sample=False,
-         Frames_Per_Sample=1,
-         Controllers_Per_Sample=5,
-         Animated_Objects_Per_Sample=5):
+         Frames_Per_Sample=1):
 
     _write(context, filepath,
            EXPORT_MESH_FLAGS=Output_Mesh_Definition,
@@ -1036,7 +1182,15 @@ def save(context,
            EXPORT_FROM_FRAME_ENABLED=Enable_Start_From_Frame,
            EXPORT_FROM_FRAME=Start_From_Frame,
            EXPORT_END_FRAME_ENABLED=Enable_End_With_Frame,
-           EXPORT_END_FRAME=End_With_Frame)
+           EXPORT_END_FRAME=End_With_Frame,
+           EXPORT_OUTPUT_FIRST_ONLY=Output_First_Only,
+           EXPORT_TRANSFORM_ANIMATION_KEYS=Output_Transform_Animation_Keys,
+           EXPORT_MESH_KEYFRAMES_FROM_MARKERS=Output_Mesh_Keyframes_From_Market,
+           EXPORT_FORCE_MESH_KEYFRAMES_IF_VISIBLE=Output_Force_Mesh_Keyframes_If_Visible,
+           EXPORT_REMOVE_NONUNIFORM_SCALE=Output_Remove_NonUniform_Scale,
+           USE_KEYS=Use_Keys,
+           FORCE_SAMPLE=Force_Sample,
+           FRAMES_PER_SAMPLE=Frames_Per_Sample)
 
     return {'FINISHED'}
 

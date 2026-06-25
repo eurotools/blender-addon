@@ -56,20 +56,20 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
     # Output Options
     #-------------------------------------------------------------------------------------------------------------------------------
     Output_GeomNode: BoolProperty(
-        name="Output GeomNodes", 
-        description="Output scene as a new map for EuroLand.", 
+        name="Output GeomNodes",
+        description="Write GEOMNODE blocks for exported meshes. EuroLand uses these as reusable mesh definitions that can be placed in maps or entities.",
         default=True,
     ) # type: ignore
 
     Output_PlaceNode: BoolProperty(
-        name="Output PlaceNodes", 
-        description="Used to stamp clones of a GEOMNODE in a map.", 
+        name="Output PlaceNodes",
+        description="Write PLACENODE blocks with each object's position, rotation and scale. Keep enabled when EuroLand should place the mesh where it was in Blender.",
         default=True,
     ) # type: ignore
 
     Transform_Center: BoolProperty(
-        name="Transform Objects to (0,0,0)", 
-        description="Transform objects location and rotation to (0,0,0).", 
+        name="Transform Objects to (0,0,0)",
+        description="Bake object transforms into the mesh and export nodes at the origin. Useful for standalone entity meshes; disable when placement should stay separate.",
         default=True,
     ) # type: ignore
 
@@ -78,19 +78,19 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
     #-------------------------------------------------------------------------------------------------------------------------------
     Output_Mesh_UV : BoolProperty(
         name="Mapping Coordinates",
-        description="Export mesh UVs",
+        description="Export UV mapping coordinates. Required for textured EIF meshes to keep the same texture placement as Blender.",
         default=True,
     ) # type: ignore
 
     Output_Mesh_Vertex_Colors : BoolProperty(
         name="Vertex Colors",
-        description="Export mesh vertex colors",
+        description="Export Blender vertex colors. EuroLand uses these as texture brightness/color multipliers; textured meshes get a safe default if no colors exist.",
         default=True,
     ) # type: ignore
 
     Output_Face_Shaders : BoolProperty(
         name="Face Shaders",
-        description="Export EIF face shader blend rules",
+        description="Export per-material face shader rules in FACESHADERS and add S to FACEFORMAT. Needed for EuroLand blend modes such as alpha.",
         default=True,
     ) # type: ignore
 
@@ -98,9 +98,10 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
     # Precision
     #-------------------------------------------------------------------------------------------------------------------------------
     Decimal_Precision: IntProperty(
-        name="Decimals:", 
-        min=1, 
-        max=10, 
+        name="Decimals:",
+        description="Number of decimal places written for positions, UVs, colors and transforms. Higher values are more precise but make larger files.",
+        min=1,
+        max=10,
         default=6,
     ) # type: ignore
 
@@ -108,9 +109,10 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
     # Scale
     #-------------------------------------------------------------------------------------------------------------------------------
     Output_Scale: FloatProperty(
-        name="Scale", 
-        min=0.01, 
-        max=1000.0, 
+        name="Scale Factor",
+        description="Global multiplier applied to exported mesh vertex positions. Same idea as ESE Scale Factor; use it to convert Blender scene size to EuroLand size.",
+        min=0.01,
+        max=1000.0,
         default=1.0,
     ) # type: ignore
 
@@ -217,61 +219,55 @@ class ExportESE(bpy.types.Operator, ExportHelper):
     #-------------------------------------------------------------------------------------------------------------------------------
     Output_Mesh_Definition: BoolProperty(
         name="Mesh Definition",
-        description="Output mesh flags data.",
+        description="Export extra EuroLand mesh data such as face and vertex flags. Keep this enabled for game-ready meshes that use collision, render or gameplay flags.",
         default=True,
     ) # type: ignore
 
     Output_Materials: BoolProperty(
         name="Materials",
-        description="Output scene materials.",
+        description="Export the material list and link each mesh to its Blender materials, textures and EuroLand shader rules. Disable only if you need geometry without material data.",
         default=True,
     ) # type: ignore
 
     Output_Mesh_Anims: BoolProperty(
         name="Animated Mesh",
-        description="Export mesh animations",
+        description="Export animated object transforms for meshes: position, rotation and scale over time. Enable this when a Blender mesh moves, rotates or scales during the scene.",
         default=False,
     ) # type: ignore
 
     Output_CameraLightAnims: BoolProperty(
         name="Animated Camera/Light settings",
-        description="Export animations from Camera and Light object types.",
+        description="Export camera and light animation. Cameras include position, rotation and camera settings such as field of view; lights include transform and basic light settings.",
         default=False,
     ) # type: ignore
 
     Output_Transform_Animation_Keys: BoolProperty(
         name="Transform Animation Keys",
-        description="Export transform animation keys.",
+        description="Use keyed transform frames when exporting animation instead of writing every frame. This keeps files smaller when the animation is driven by Blender keyframes.",
         default=False,
     ) # type: ignore
 
     Output_Mesh_Keyframes_From_Market: BoolProperty(
-        name='Mesh Keyframes from "MARKET"',
-        description="Compatibility option from the original EuroLand ESE exporter.",
+        name="Mesh Keyframes from Markers",
+        description="Also use Blender timeline markers as mesh animation keyframes. Useful when you want to force important frames even if no object key exists there.",
         default=False,
     ) # type: ignore
 
     Output_Force_Mesh_Keyframes_If_Visible: BoolProperty(
         name="Force Mesh Keyframes if Visible",
-        description="Compatibility option from the original EuroLand ESE exporter.",
-        default=False,
-    ) # type: ignore
-
-    Output_Inverse_Kinematics_Joints: BoolProperty(
-        name="Inverse Kinematics Joints",
-        description="Compatibility option from the original EuroLand ESE exporter.",
+        description="Include visibility keyframes when deciding which mesh animation frames to export. Useful if an object appears or disappears during the scene.",
         default=False,
     ) # type: ignore
 
     Output_Remove_NonUniform_Scale: BoolProperty(
         name="Remove Non-Uniform Scale",
-        description="Compatibility option from the original EuroLand ESE exporter.",
+        description="Convert uneven X/Y/Z object scale into one uniform scale before export. Use this if EuroLand distorts animated objects with different scale values per axis.",
         default=False,
     ) # type: ignore
 
     Transform_Center: BoolProperty(
         name="Transform Objects to (0,0,0)",
-        description="Transform objects location and rotation to (0,0,0).",
+        description="Bake object placement into the mesh and export the node at the world origin. Usually leave this off for Blender scenes that should match EuroLand positions.",
         default=False,
     ) # type: ignore
 
@@ -285,10 +281,10 @@ class ExportESE(bpy.types.Operator, ExportHelper):
                ('SHAPE', "Shapes", ""),
                ('CAMERA', "Cameras", ""),
                ('LIGHT', "Lights", ""),
-               ('ARMATURE', "Biped Bone", ""),
+               ('ARMATURE', "Armature Bones", ""),
                ('HELPER', "Helpers", "")
             ),
-        description="Which kind of object to export",
+        description="Choose which Blender object types are written to the ESE file: meshes, curves as shapes, cameras, lights, armatures as bones, and empties as helpers.",
         default={'MESH'}
     ) # type: ignore
 
@@ -297,25 +293,25 @@ class ExportESE(bpy.types.Operator, ExportHelper):
     #-------------------------------------------------------------------------------------------------------------------------------
     Output_Mesh_Normals : BoolProperty(
         name="Mesh Normals",
-        description="Export mesh normals",
+        description="Export face and vertex normals. Keep enabled for most meshes so EuroLand can light and shade the model correctly.",
         default=True,
     ) # type: ignore
 
     Output_Mesh_UV : BoolProperty(
         name="Mapping Coordinates",
-        description="Export mesh UVs",
+        description="Export UV mapping coordinates. Required for textured meshes to use the same texture placement as Blender.",
         default=True,
     ) # type: ignore
 
     Output_Mesh_Vertex_Colors : BoolProperty(
         name="Vertex Colors",
-        description="Export mesh vertex colors",
+        description="Export Blender vertex colors. EuroLand also uses vertex color as a texture brightness multiplier; if none exist, textured meshes get a safe default color automatically.",
         default=False,
     ) # type: ignore
 
     Output_Mesh_Morph : BoolProperty(
         name="Skin Deformation Data",
-        description="Export morphs",
+        description="Export Blender shape keys and basic skin data where available. This is experimental compared with the original 3ds Max skin/morph workflow.",
         default=False,
     ) # type: ignore
 
@@ -323,9 +319,10 @@ class ExportESE(bpy.types.Operator, ExportHelper):
     # Static Output
     #-------------------------------------------------------------------------------------------------------------------------------
     Static_Frame: IntProperty(
-        name="Frame #", 
-        min=0, 
-        max=2147483647, 
+        name="Frame #",
+        description="Frame used for the static mesh pose and non-animated data. If the model looks offset, check that this frame matches the pose you want to export.",
+        min=0,
+        max=2147483647,
         default=1,
     ) # type: ignore
 
@@ -333,9 +330,10 @@ class ExportESE(bpy.types.Operator, ExportHelper):
     # Precision
     #-------------------------------------------------------------------------------------------------------------------------------
     Decimal_Precision: IntProperty(
-        name="Decimals:", 
-        min=1, 
-        max=10, 
+        name="Decimals:",
+        description="Number of decimal places written for positions, rotations, UVs and colors. Higher values are more precise but make larger files.",
+        min=1,
+        max=10,
         default=6,
     ) # type: ignore
 
@@ -344,6 +342,7 @@ class ExportESE(bpy.types.Operator, ExportHelper):
     #-------------------------------------------------------------------------------------------------------------------------------
     Output_Scale: FloatProperty(
         name="Scale Factor",
+        description="Global multiplier applied to exported mesh vertex positions. Use this when Blender scene units need to be converted to EuroLand scale.",
         min=0.01,
         max=1000.0,
         default=1.0,
@@ -354,67 +353,56 @@ class ExportESE(bpy.types.Operator, ExportHelper):
     #-------------------------------------------------------------------------------------------------------------------------------
     Enable_Start_From_Frame : BoolProperty(
         name="Start output from frame",
-        description="",
+        description="Limit animation export so it starts at the frame below. Disabled means use the Blender scene start frame.",
         default=False,
     ) # type: ignore
 
     Start_From_Frame: IntProperty(
-        name="", 
-        min=0, 
-        max=2147483647, 
+        name="",
+        description="First frame to export when Start output from frame is enabled.",
+        min=0,
+        max=2147483647,
         default=1,
     ) # type: ignore
 
     Enable_End_With_Frame : BoolProperty(
-        name="End output with frame:", 
-        description="",
+        name="End output with frame:",
+        description="Limit animation export so it ends at the frame below. Disabled means use the Blender scene end frame.",
         default=False,
     ) # type: ignore
 
     End_With_Frame: IntProperty(
-        name="", 
-        min=1, 
-        max=2147483647, 
+        name="",
+        description="Last frame to export when End output with frame is enabled.",
+        min=1,
+        max=2147483647,
         default=250,
     ) # type: ignore
 
     Output_First_Only : BoolProperty(
         name="Output Frame 0",
-        description="",
+        description="Export only the first animation frame. Useful for testing a pose or creating a static ESE from an animated Blender scene.",
         default=False,
     ) # type: ignore
 
     Use_Keys: BoolProperty(
         name="Use Keys",
-        description="Output animation from keyframes.",
+        description="Export only keyed frames from Blender animations, plus range endpoints. Good for smaller files when objects animate with normal keyframes.",
         default=True,
     ) # type: ignore
 
     Force_Sample: BoolProperty(
         name="Force Sample",
-        description="Output sampled animation frames.",
+        description="Ignore keyframe spacing and export a sampled frame every N frames. Use this for constraints, drivers or IK where the motion between keys matters.",
         default=False,
     ) # type: ignore
 
     Frames_Per_Sample: IntProperty(
         name="Frames per Sample",
+        description="Sampling interval used when Force Sample is enabled. 1 exports every frame; 2 exports every other frame, and so on.",
         min=1,
         max=1000,
         default=1,
-    ) # type: ignore
-
-    Controllers_Per_Sample: IntProperty(
-        name="Controllers",
-        min=1,
-        max=1000,
-        default=5,
-    ) # type: ignore
-
-    Animated_Objects_Per_Sample: IntProperty(
-        name="Animated Objects",
-        min=1,
-        max=1000,
-        default=5,
     ) # type: ignore
 
     #-------------------------------------------------------------------------------------------------------------------------------
@@ -472,7 +460,6 @@ class ESE_EXPORT_PT_Output_Options(bpy.types.Panel):
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Keyframes_From_Market')
         self.layout.prop(context.space_data.active_operator, 'Output_Force_Mesh_Keyframes_If_Visible')
         self.layout.prop(context.space_data.active_operator, 'Output_CameraLightAnims')
-        self.layout.prop(context.space_data.active_operator, 'Output_Inverse_Kinematics_Joints')
         self.layout.prop(context.space_data.active_operator, 'Output_Remove_NonUniform_Scale')
         self.layout.prop(context.space_data.active_operator, 'Transform_Center')
 
@@ -564,8 +551,6 @@ class ESE_EXPORT_PT_Controller_Output(bpy.types.Panel):
         self.layout.prop(context.space_data.active_operator, 'Use_Keys')
         self.layout.prop(context.space_data.active_operator, 'Force_Sample')
         self.layout.prop(context.space_data.active_operator, 'Frames_Per_Sample')
-        self.layout.prop(context.space_data.active_operator, 'Controllers_Per_Sample')
-        self.layout.prop(context.space_data.active_operator, 'Animated_Objects_Per_Sample')
         self.layout.prop(context.space_data.active_operator, 'Enable_Start_From_Frame')
         self.layout.prop(context.space_data.active_operator, 'Start_From_Frame')
         self.layout.prop(context.space_data.active_operator, 'Enable_End_With_Frame')
