@@ -369,11 +369,23 @@ def _write(context, filepath,
             tick = (frame - START_FRAME) * TICKS_PER_FRAME
 
             matrix_data = obj.matrix_world.copy()
-            if not TRANSFORM_TO_CENTER and obj.type == 'MESH':
-                matrix_data = Matrix.Identity(4)
-                matrix_data.translation = obj.matrix_world.translation
+            if obj.type == 'MESH':
+                base_rot = obj_matrix_data["matrix_original"].to_3x3().normalized().to_4x4()
+                current_rot = obj.matrix_world.to_3x3().normalized()
+                matrix_data = current_rot.to_4x4()
 
-            eland_matrix = create_euroland_matrix(matrix_data, obj_matrix_data["type"])["eland_matrix"]
+                base_eland = create_euroland_matrix(base_rot, obj_matrix_data["type"])["eland_matrix"].to_3x3()
+                current_eland = create_euroland_matrix(matrix_data, obj_matrix_data["type"])["eland_matrix"].to_3x3()
+                delta_eland = current_eland @ base_eland.inverted()
+                delta_eland.transpose()
+
+                eland_matrix = delta_eland.to_4x4()
+                eland_position = MESH_GLOBAL_MATRIX @ obj.matrix_world.translation
+                eland_matrix[0][3] = eland_position.x
+                eland_matrix[1][3] = eland_position.y
+                eland_matrix[2][3] = eland_position.z
+            else:
+                eland_matrix = create_euroland_matrix(matrix_data, obj_matrix_data["type"])["eland_matrix"]
 
             out.write('\t\t\t*TM_FRAME  %-5d' % tick)
             out.write(f' {df} {df} {df}' % (eland_matrix[0].x, eland_matrix[0].y, eland_matrix[0].z))
