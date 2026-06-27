@@ -386,18 +386,19 @@ def _write(context, filepath,
 
     #---------------------------------------------------------------------------------------------------------------------------
     def write_tm_node(out, obj_matrix_data, is_pivot=False):
+        mesh_transform_is_baked = (
+            obj_matrix_data["type"] == 'MESH'
+            and obj_matrix_data.get("transform_baked", False)
+        )
+
         if is_pivot:
             matrix_data = obj_matrix_data["matrix_transformed"]
-            if TRANSFORM_TO_CENTER:
+            if obj_matrix_data["type"] == 'MESH' and (TRANSFORM_TO_CENTER or mesh_transform_is_baked):
                 matrix_data = Matrix.Identity(4)
-            out.write('\t*NODE_PIVOT_TM {\n')
+            out.write('\t*PIVOT_TM {\n')
         else:
             matrix_data = obj_matrix_data["matrix_original"]
-            if (
-                not TRANSFORM_TO_CENTER
-                and obj_matrix_data["type"] == 'MESH'
-                and not obj_matrix_data.get("animated_mesh", False)
-            ):
+            if obj_matrix_data["type"] == 'MESH' and (TRANSFORM_TO_CENTER or mesh_transform_is_baked):
                 matrix_data = Matrix.Identity(4)
             out.write('\t*NODE_TM {\n')
         matrix_data = matrix_without_nonuniform_scale(matrix_data)
@@ -433,46 +434,39 @@ def _write(context, filepath,
         out.write('\t\t*TM_ANIMATION "%s"\n' % obj.name)
         out.write('\t\t*TM_ANIM_FRAMES {\n')
 
+        def mesh_tm_frame_matrix(matrix):
+            matrix = matrix_without_nonuniform_scale(matrix.copy())
+            rot_matrix = matrix.to_3x3().normalized().to_4x4()
+            export_eland = create_euroland_matrix(rot_matrix, obj_matrix_data["type"])["eland_matrix"].to_3x3()
+
+            export_eland.transpose()
+            scale = matrix.to_scale()
+            scale_values = (scale.x, scale.z, scale.y)
+            for row_index, scale_value in enumerate(scale_values):
+                export_eland[row_index][0] *= scale_value
+                export_eland[row_index][1] *= scale_value
+                export_eland[row_index][2] *= scale_value
+
+            result = export_eland.to_4x4()
+            position = MESH_GLOBAL_MATRIX @ matrix.translation
+            result[0][3] = position.x
+            result[1][3] = position.y
+            result[2][3] = position.z
+            return result
+
+        base_mesh_matrix = None
+        if obj.type == 'MESH' and obj_matrix_data.get("transform_baked", False):
+            base_mesh_matrix = matrix_without_nonuniform_scale(obj_matrix_data["matrix_original"].copy())
+
         for frame in transform_frames_for(obj):
             bpy.context.scene.frame_set(frame)
             tick = (frame - START_FRAME) * TICKS_PER_FRAME
 
             matrix_data = matrix_without_nonuniform_scale(obj.matrix_world.copy())
             if obj.type == 'MESH':
-                current_matrix = matrix_without_nonuniform_scale(obj.matrix_world.copy())
-                current_rot = current_matrix.to_3x3().normalized()
-                matrix_data = current_rot.to_4x4()
-
-                current_eland = create_euroland_matrix(matrix_data, obj_matrix_data["type"])["eland_matrix"].to_3x3()
-                if obj_matrix_data.get("animated_mesh", False):
-                    export_eland = current_eland
-                    export_scale = current_matrix.to_scale()
-                    scale_values = (export_scale.x, export_scale.z, export_scale.y)
-                else:
-                    base_matrix = matrix_without_nonuniform_scale(obj_matrix_data["matrix_original"])
-                    base_rot = base_matrix.to_3x3().normalized().to_4x4()
-                    base_eland = create_euroland_matrix(base_rot, obj_matrix_data["type"])["eland_matrix"].to_3x3()
-                    export_eland = current_eland @ base_eland.inverted()
-
-                    base_scale = base_matrix.to_scale()
-                    current_scale = current_matrix.to_scale()
-                    scale_values = (
-                        safe_scale_delta(current_scale.x, base_scale.x),
-                        safe_scale_delta(current_scale.z, base_scale.z),
-                        safe_scale_delta(current_scale.y, base_scale.y),
-                    )
-
-                export_eland.transpose()
-                for row_index, scale_value in enumerate(scale_values):
-                    export_eland[row_index][0] *= scale_value
-                    export_eland[row_index][1] *= scale_value
-                    export_eland[row_index][2] *= scale_value
-
-                eland_matrix = export_eland.to_4x4()
-                eland_position = MESH_GLOBAL_MATRIX @ obj.matrix_world.translation
-                eland_matrix[0][3] = eland_position.x
-                eland_matrix[1][3] = eland_position.y
-                eland_matrix[2][3] = eland_position.z
+                if base_mesh_matrix:
+                    matrix_data = matrix_data @ base_mesh_matrix.inverted()
+                eland_matrix = mesh_tm_frame_matrix(matrix_data)
             else:
                 eland_matrix = create_euroland_matrix(matrix_data, obj_matrix_data["type"])["eland_matrix"]
 
@@ -545,21 +539,20 @@ def _write(context, filepath,
             for ob, ob_mat in instances:
                 animated_mesh = mesh_has_transform_animation(ob_main)
                 mesh, ob_eval = transformed_mesh(
-                    ob, ob_mat, depsgraph, bake_object_transform=not animated_mesh
+                    ob, ob_mat, depsgraph, bake_object_transform=not TRANSFORM_TO_CENTER
                 )
                 if mesh is None:
                     continue
 
                 try:
-                    matrix_transformed = Matrix.Identity(4) if animated_mesh else (
-                        Matrix.Diagonal(ob.scale).to_4x4() if TRANSFORM_TO_CENTER else ob_mat.copy()
-                    )
+                    matrix_transformed = Matrix.Identity(4) if TRANSFORM_TO_CENTER else ob_mat.copy()
                     obj_matrix_data = {
                         "name": ob_main.name,
                         "type": ob_main.type,
                         "matrix_original": ob_mat.copy(),
                         "matrix_transformed": matrix_transformed,
-                        "animated_mesh": animated_mesh
+                        "animated_mesh": animated_mesh,
+                        "transform_baked": not TRANSFORM_TO_CENTER
                     }
 
                     vertices = mesh.vertices[:]
