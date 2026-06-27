@@ -59,18 +59,20 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
         name="Output GeomNodes",
         description="Write GEOMNODE blocks for exported meshes. EuroLand uses these as reusable mesh definitions that can be placed in maps or entities.",
         default=True,
+        options={'HIDDEN'},
     ) # type: ignore
 
     Output_PlaceNode: BoolProperty(
         name="Output PlaceNodes",
         description="Write PLACENODE blocks with each object's position, rotation and scale. Keep enabled when EuroLand should place the mesh where it was in Blender.",
         default=True,
+        options={'HIDDEN'},
     ) # type: ignore
 
     Transform_Center: BoolProperty(
         name="Transform Objects to (0,0,0)",
-        description="Bake object transforms into the mesh and export nodes at the origin. Useful for standalone entity meshes; disable when placement should stay separate.",
-        default=True,
+        description="Export every EIF object as a neutral entity at 0,0,0. Leave off to keep the scene layout you see in Blender; the exporter writes the needed GeomNode and PlaceNode blocks automatically.",
+        default=False,
     ) # type: ignore
 
     #-------------------------------------------------------------------------------------------------------------------------------
@@ -150,8 +152,6 @@ class EIF_EXPORT_PT_Output_Settings(bpy.types.Panel):
 
     def draw(self, context):
         self.layout.prop(context.space_data.active_operator, 'Transform_Center')
-        self.layout.prop(context.space_data.active_operator, 'Output_GeomNode')
-        self.layout.prop(context.space_data.active_operator, 'Output_PlaceNode')
 
 #-------------------------------------------------------------------------------------------------------------------------------
 class EIF_EXPORT_PT_Mesh_Options(bpy.types.Panel):

@@ -33,6 +33,9 @@ def _write(context, filepath,
            GLOBAL_SCALE
         ):
 
+    EXPORT_GEOMNODE = True
+    EXPORT_PLACENODE = True
+
     df = f'%.{DECIMAL_PRECISION}f'
     SHADER_RULES = {'Non', 'HPH', 'OPO', 'OMO', 'OPQ', 'Alp'}
     SCENE_LIGHT_SCALE = 1.0
@@ -175,6 +178,43 @@ def _write(context, filepath,
         out.write('}\n\n')
 
     #---------------------------------------------------------------------------------------------------------------------------
+    def mesh_bake_matrix(ob_mat):
+        if TRANSFORM_TO_CENTER:
+            return Matrix.Identity(4)
+
+        return ob_mat.copy()
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def place_node_matrix(ob_mat):
+        if TRANSFORM_TO_CENTER:
+            matrix = ob_mat.copy()
+            matrix.translation = matrix.translation * GLOBAL_SCALE
+            return matrix
+
+        return Matrix.Identity(4)
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def mesh_node_matrix(matrix):
+        matrix = matrix.copy()
+        rot_matrix = matrix.to_3x3().normalized().to_4x4()
+        export_eland = create_euroland_matrix(rot_matrix, 'MESH')["eland_matrix"].to_3x3()
+
+        export_eland.transpose()
+        scale = matrix.to_scale()
+        scale_values = (scale.x, scale.z, scale.y)
+        for row_index, scale_value in enumerate(scale_values):
+            export_eland[row_index][0] *= scale_value
+            export_eland[row_index][1] *= scale_value
+            export_eland[row_index][2] *= scale_value
+
+        result = export_eland.to_4x4()
+        position = MESH_GLOBAL_MATRIX @ matrix.translation
+        result[0][3] = position.x
+        result[1][3] = position.y
+        result[2][3] = position.z
+        return result
+
+    #---------------------------------------------------------------------------------------------------------------------------
     def transformed_mesh(ob, ob_mat, depsgraph):
         ob_eval = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
 
@@ -189,10 +229,7 @@ def _write(context, filepath,
         if EXPORT_TRI:
             mesh_triangulate(mesh)
 
-        if TRANSFORM_TO_CENTER:
-            matrix_transformed = Matrix.Diagonal(ob_mat.to_scale()).to_4x4()
-        else:
-            matrix_transformed = ob_mat.copy()
+        matrix_transformed = mesh_bake_matrix(ob_mat)
 
         mesh.transform(Matrix.Scale(GLOBAL_SCALE, 4) @ (MESH_GLOBAL_MATRIX @ matrix_transformed))
 
@@ -235,11 +272,11 @@ def _write(context, filepath,
                     continue
 
                 try:
-                    matrix_transformed = Matrix.Diagonal(ob_mat.to_scale()).to_4x4() if TRANSFORM_TO_CENTER else ob_mat.copy()
                     matrix_data[ob_main.name] = {
                         "type": ob_main.type,
                         "matrix_original": ob_mat.copy(),
-                        "matrix_transformed": matrix_transformed.copy()
+                        "matrix_transformed": mesh_bake_matrix(ob_mat),
+                        "matrix_placement": place_node_matrix(ob_mat)
                     }
 
                     unique_vertices, vertex_index_map = unique_ordered(tuple(v.co) for v in mesh.vertices)
@@ -373,23 +410,23 @@ def _write(context, filepath,
     def write_geom_and_place_node(out, obj_matrix_data, is_geom_node=False):
         for mesh_name, data in obj_matrix_data.items():
             if is_geom_node:
-                matrix_data = data["matrix_transformed"]
-                if TRANSFORM_TO_CENTER:
-                    matrix_data = Matrix.Identity(4)
+                matrix_data = Matrix.Identity(4)
                 out.write('*GEOMNODE {\n')
             else:
-                matrix_data = data["matrix_original"]
-                if not TRANSFORM_TO_CENTER:
-                    matrix_data = Matrix.Identity(4)
+                matrix_data = data["matrix_placement"]
                 out.write('*PLACENODE {\n')
 
             out.write('\t*NAME "%s"\n' % mesh_name)
             out.write('\t*MESH "%s"\n' % mesh_name)
             out.write('\t*WORLD_TM {\n')
 
-            eland_data = create_euroland_matrix(matrix_data, data["type"])
-            eland_matrix = eland_data["eland_matrix"]
-            eland_euler = eland_data["eland_euler"]
+            if data["type"] == 'MESH':
+                eland_matrix = mesh_node_matrix(matrix_data)
+                eland_euler = eland_matrix.to_euler('ZXY')
+            else:
+                eland_data = create_euroland_matrix(matrix_data, data["type"])
+                eland_matrix = eland_data["eland_matrix"]
+                eland_euler = eland_data["eland_euler"]
 
             out.write(f'\t\t*TMROW0 {df} {df} {df} {df}\n' % (eland_matrix[0].x, eland_matrix[0].y, eland_matrix[0].z, 0))
             out.write(f'\t\t*TMROW1 {df} {df} {df} {df}\n' % (eland_matrix[1].x, eland_matrix[1].y, eland_matrix[1].z, 0))
