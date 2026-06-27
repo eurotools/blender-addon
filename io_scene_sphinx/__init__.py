@@ -267,7 +267,7 @@ class ExportESE(bpy.types.Operator, ExportHelper):
 
     Transform_Center: BoolProperty(
         name="Transform Objects to (0,0,0)",
-        description="Bake object placement into the mesh and export the node at the world origin. Usually leave this off for Blender scenes that should match EuroLand positions.",
+        description="Export mesh entities at position 0,0,0 with rotation 0,0,0. Leave off when entities should open in EuroLand at their Blender position and animation should start from that same scene transform.",
         default=False,
     ) # type: ignore
 
@@ -388,7 +388,7 @@ class ExportESE(bpy.types.Operator, ExportHelper):
     Use_Keys: BoolProperty(
         name="Use Keys",
         description="Export only keyed frames from Blender animations, plus range endpoints. Good for smaller files when objects animate with normal keyframes.",
-        default=True,
+        default=False,
     ) # type: ignore
 
     Force_Sample: BoolProperty(
