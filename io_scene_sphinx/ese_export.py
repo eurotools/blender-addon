@@ -468,6 +468,20 @@ def _write(context, filepath,
             out.write('%s*NODE_PARENT "%s"\n' % (get_tabs(tab_level), parent))
 
     #---------------------------------------------------------------------------------------------------------------------------
+    def camera_script_markers(scene):
+        exported_cameras = {
+            camera for camera in scene.objects
+            if camera.type == 'CAMERA'
+        }
+        return sorted(
+            (
+                marker for marker in scene.timeline_markers
+                if marker.camera in exported_cameras and START_FRAME <= marker.frame <= END_FRAME
+            ),
+            key=lambda marker: (marker.frame, marker.name),
+        )
+
+    #---------------------------------------------------------------------------------------------------------------------------
     def write_scene_custom_properties(out):
         scene = bpy.context.scene
         custom_properties = {key: value for key, value in scene.items() if key != '_RNA_UI'}
@@ -488,10 +502,11 @@ def _write(context, filepath,
             properties_list.append({"name": key, "type": type_name, "value": value})
 
         if user_wants_camera_script(scene):
+            script_camera_count = len(camera_script_markers(scene))
             properties_list.append({
                 "name": "cameraScriptEditor",
                 "type": "Numeric",
-                "value": 1
+                "value": script_camera_count
             })
 
             current_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
@@ -534,8 +549,30 @@ def _write(context, filepath,
         tick_frequency = 4800
         TICKS_PER_FRAME = max(1, tick_frequency // max(1, frame_rate))
 
-        world_amb = scene.world.color if scene.world else (0.8, 0.8, 0.8)
-        export_amb = scaled_color(world_amb, SCENE_LIGHT_SCALE)
+        world_color = scene.world.color if scene.world else (0.8, 0.8, 0.8)
+        world_strength = 1.0
+        if scene.world and scene.world.use_nodes and scene.world.node_tree:
+            nodes = scene.world.node_tree.nodes
+            output = next(
+                (node for node in nodes if node.type == 'OUTPUT_WORLD' and node.is_active_output),
+                None,
+            )
+            surface = output.inputs.get('Surface') if output else None
+            background = (
+                surface.links[0].from_node
+                if surface and surface.is_linked and surface.links[0].from_node.type == 'BACKGROUND'
+                else next((node for node in nodes if node.type == 'BACKGROUND'), None)
+            )
+            if background:
+                color_input = background.inputs.get('Color')
+                strength_input = background.inputs.get('Strength')
+                if color_input and not color_input.is_linked:
+                    world_color = color_input.default_value
+                if strength_input and not strength_input.is_linked:
+                    world_strength = max(0.0, float(strength_input.default_value))
+
+        export_background = scaled_color(world_color, SCENE_LIGHT_SCALE)
+        export_ambient = scaled_color(world_color, SCENE_LIGHT_SCALE * world_strength)
 
         out.write("*SCENE {\n")
         out.write('\t*SCENE_FILENAME "%s"\n' % bpy.data.filepath)
@@ -543,8 +580,8 @@ def _write(context, filepath,
         out.write('\t*SCENE_LASTFRAME %s\n' % (END_FRAME - START_FRAME))
         out.write('\t*SCENE_FRAMESPEED %s\n' % frame_rate)
         out.write('\t*SCENE_TICKSPERFRAME %s\n' % TICKS_PER_FRAME)
-        out.write(f'\t*SCENE_BACKGROUND_STATIC {df} {df} {df}\n' % export_amb)
-        out.write(f'\t*SCENE_AMBIENT_STATIC {df} {df} {df}\n' % export_amb)
+        out.write(f'\t*SCENE_BACKGROUND_STATIC {df} {df} {df}\n' % export_background)
+        out.write(f'\t*SCENE_AMBIENT_STATIC {df} {df} {df}\n' % export_ambient)
         write_scene_custom_properties(out)
         out.write("}\n\n")
 
@@ -1365,14 +1402,81 @@ def _write(context, filepath,
                 out.write('}\n')
 
     #---------------------------------------------------------------------------------------------------------------------------
+    def light_energy_scale(light_data):
+        """Convert Blender light power to the unitless multiplier used by 3ds Max ESE."""
+        if 'ese_intensity' in light_data:
+            return max(0.0, float(light_data['ese_intensity']))
+        energy = max(0.0, float(getattr(light_data, 'energy', 0.0)))
+        return energy if light_data.type == 'SUN' else energy / 1000.0
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def light_attenuation(light_data):
+        """Return (enabled, start, end) for EuroLand's far attenuation model."""
+        if light_data.type == 'SUN':
+            return False, 0.0, 0.0
+
+        end = max(0.001, float(getattr(light_data, 'cutoff_distance', 25.0)))
+        custom_start = light_data.get('ese_attenuation_start')
+        start = max(0.0, float(custom_start)) if custom_start is not None else 0.0
+        return True, min(start, end), end
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def light_settings_signature(light_data):
+        attenuation_enabled, attenuation_start, attenuation_end = light_attenuation(light_data)
+        spot_size = float(getattr(light_data, 'spot_size', 0.0)) if light_data.type == 'SPOT' else 0.0
+        spot_blend = float(getattr(light_data, 'spot_blend', 0.0)) if light_data.type == 'SPOT' else 0.0
+        return (
+            tuple(float(component) for component in light_data.color),
+            light_energy_scale(light_data),
+            attenuation_enabled,
+            attenuation_start,
+            attenuation_end,
+            spot_size,
+            spot_blend,
+        )
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def light_import_flags(light_data):
+        """Map Blender light contribution controls to fields consumed by EuroLand."""
+        decay = 'None' if light_data.type == 'SUN' else 'InvSquare'
+        affects_diffuse = float(getattr(light_data, 'diffuse_factor', 1.0)) > 0.000001
+        affects_specular = float(getattr(light_data, 'specular_factor', 1.0)) > 0.000001
+        ambient_only = bool(light_data.get('ese_ambient_only', False))
+        return decay, affects_diffuse, affects_specular, ambient_only
+
+    #---------------------------------------------------------------------------------------------------------------------------
     def write_light_settings(out, light_data, current_frame, tab_level=1):
         tab = get_tabs(tab_level)
+        attenuation_enabled, attenuation_start, attenuation_end = light_attenuation(light_data)
+        is_spot = light_data.type == 'SPOT'
+        falloff = degrees(float(getattr(light_data, 'spot_size', 0.0))) if is_spot else -1.0
+        spot_blend = max(0.0, min(float(getattr(light_data, 'spot_blend', 0.0)), 1.0))
+        hotspot = falloff * (1.0 - spot_blend) if is_spot else -1.0
+        target_distance = attenuation_end if is_spot else -1.0
 
         out.write(f'{tab}*LIGHT_SETTINGS {{\n')
         out.write(f'{tab}\t*TIMEVALUE %u\n' % current_frame)
-        out.write(f'{tab}\t*COLOR {df} {df} {df}\n' % (light_data.color.r, light_data.color.g, light_data.color.b))
-        out.write(f'{tab}\t*FAR_ATTEN {df} {df}\n' % (light_data.shadow_soft_size, light_data.cutoff_distance))
-        out.write(f'{tab}\t*HOTSPOT {df}\n' % (degrees(light_data.angle) if light_data.type in {'SUN', 'SPOT'} else 0.0))
+        # EuroLand's ESE importer consumes the short field names below. Keep
+        # the standard 3ds Max ESE fields as well for round-trip compatibility.
+        out.write(f'{tab}\t*COLOR {df} {df} {df}\n' % tuple(light_data.color))
+        if attenuation_enabled:
+            out.write(f'{tab}\t*FAR_ATTEN {df} {df}\n' % (attenuation_start, attenuation_end))
+        if is_spot:
+            out.write(f'{tab}\t*HOTSPOT {df}\n' % falloff)
+        out.write(f'{tab}\t*LIGHT_COLOR {df} {df} {df}\n' % tuple(light_data.color))
+        out.write(f'{tab}\t*LIGHT_INTENS {df}\n' % light_energy_scale(light_data))
+        out.write(f'{tab}\t*LIGHT_ASPECT {df}\n' % (1.0 if is_spot else -1.0))
+        if is_spot:
+            out.write(f'{tab}\t*LIGHT_HOTSPOT {df}\n' % hotspot)
+            out.write(f'{tab}\t*LIGHT_FALLOFF {df}\n' % falloff)
+        if attenuation_enabled:
+            out.write(f'{tab}\t*LIGHT_ATTNSTART {df}\n' % attenuation_start)
+            out.write(f'{tab}\t*LIGHT_ATTNEND {df}\n' % attenuation_end)
+        out.write(f'{tab}\t*LIGHT_TDIST {df}\n' % target_distance)
+        out.write(f'{tab}\t*LIGHT_MAPBIAS {df}\n' % 1.0)
+        out.write(f'{tab}\t*LIGHT_MAPRANGE {df}\n' % 4.0)
+        out.write(f'{tab}\t*LIGHT_MAPSIZE 512\n')
+        out.write(f'{tab}\t*LIGHT_RAYBIAS {df}\n' % 0.0)
         out.write(f'{tab}}}\n')
 
     #---------------------------------------------------------------------------------------------------------------------------
@@ -1390,8 +1494,10 @@ def _write(context, filepath,
                 ]
 
             for ob, ob_mat in instances:
-                light_object = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
-                light_data = light_object.data
+                # Light datablocks have no exportable modifiers. Keep the original
+                # RNA object here: evaluated light data can become invalid after a
+                # frame change and has caused access violations in Blender 5.x.
+                light_data = ob.original.data
 
                 obj_matrix_data = {
                     "name": ob_main.name,
@@ -1404,20 +1510,26 @@ def _write(context, filepath,
                 out.write('\t*NODE_NAME "%s"\n' % ob.name)
                 write_parent(out, ob)
 
-                type_lut = {
-                    'POINT': 'Omni',
-                    'SPOT': 'TargetSpot',
-                    'SUN': 'TargetDirect',
-                    'AREA': 'TargetDirect'
-                }
+                type_lut = {'POINT': 'Omni', 'SPOT': 'TargetSpot', 'SUN': 'Omni', 'AREA': 'Omni'}
+                if light_data.type == 'AREA':
+                    emit_warning(
+                        f'Area light {ob.name} is exported as an attenuated Omni light; '
+                        'ESE cannot preserve its area shape.'
+                    )
 
                 out.write('\t*LIGHT_TYPE %s\n' % type_lut.get(light_data.type, 'Omni'))
                 write_tm_node(out, obj_matrix_data)
+                decay, affects_diffuse, affects_specular, ambient_only = light_import_flags(light_data)
+                out.write('\t*LIGHT_DECAY %s\n' % decay)
+                out.write('\t*LIGHT_AFFECT_DIFFUSE %s\n' % ('On' if affects_diffuse else 'Off'))
+                out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % ('On' if affects_specular else 'Off'))
+                out.write('\t*LIGHT_AMBIENT_ONLY %s\n' % ('On' if ambient_only else 'Off'))
                 out.write('\t*LIGHT_SHADOWS %s\n' % ("On" if light_data.use_shadow else "Off"))
-                out.write('\t*LIGHT_DECAY %s\n' % ("None" if light_data.type == 'SUN' else "InvSquare"))
-                out.write('\t*LIGHT_AFFECT_DIFFUSE On\n')
-                out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % ("On" if light_data.specular_factor > 0.001 else "Off"))
-                out.write('\t*LIGHT_AMBIENT_ONLY Off\n')
+                out.write('\t*LIGHT_USELIGHT 1\n')
+                out.write('\t*LIGHT_SPOTSHAPE Circle\n')
+                out.write('\t*LIGHT_USEGLOBAL 0\n')
+                out.write('\t*LIGHT_ABSMAPBIAS 0\n')
+                out.write('\t*LIGHT_OVERSHOOT 0\n')
 
                 static_tick = (EXPORT_STATIC_FRAME - START_FRAME) * TICKS_PER_FRAME
                 write_light_settings(out, light_data, static_tick)
@@ -1425,17 +1537,14 @@ def _write(context, filepath,
                 if EXPORT_CAMERA_LIGHT_ANIMS:
                     out.write('\t*LIGHT_ANIMATION {\n')
                     previous = None
-                    for frame in data_frames_for(ob_main, light_data):
+                    light_frames = data_frames_for(ob_main, light_data)
+                    for frame in light_frames:
                         scene.frame_set(frame)
+                        current_light = ob_main.data
                         tick = (frame - START_FRAME) * TICKS_PER_FRAME
-                        current = (
-                            tuple(light_data.color),
-                            light_data.shadow_soft_size,
-                            light_data.cutoff_distance,
-                            getattr(light_data, "angle", 0.0)
-                        )
+                        current = light_settings_signature(current_light)
                         if previous != current:
-                            write_light_settings(out, light_data, tick, 2)
+                            write_light_settings(out, current_light, tick, 2)
                             previous = current
                     out.write('\t}\n')
                     write_animation_node(out, ob_main, obj_matrix_data)
@@ -1490,17 +1599,7 @@ def _write(context, filepath,
     #---------------------------------------------------------------------------------------------------------------------------
     def write_script_camera(out):
         scene = bpy.context.scene
-        exported_cameras = {
-            camera for camera in scene.objects
-            if camera.type == 'CAMERA'
-        }
-        markers = sorted(
-            (
-                marker for marker in scene.timeline_markers
-                if marker.camera in exported_cameras
-            ),
-            key=lambda marker: (marker.frame, marker.name),
-        )
+        markers = camera_script_markers(scene)
 
         out.write('\t*USER_DATA %u {\n' % (3 + len(markers)))
         out.write('\t\tCameraScript = %u\n' % 1)
@@ -1509,11 +1608,14 @@ def _write(context, filepath,
 
         for index, marker in enumerate(markers, start=1):
             camera = marker.camera
-            keyframes = sorted(object_keyframes(camera))
+            keyframes = sorted(
+                frame for frame in (object_keyframes(camera) | id_keyframes(camera.data))
+                if frame_in_range(frame)
+            )
 
             first_keyframe = int(keyframes[0]) if keyframes else marker.frame
             last_keyframe = int(keyframes[-1]) if keyframes else marker.frame
-            timeline_frame = marker.frame + (last_keyframe - first_keyframe)
+            timeline_frame = min(END_FRAME, marker.frame + (last_keyframe - first_keyframe))
             out.write('\t\tCameraScript_camera%u = %s %u %u %u %u\n' % (
                 # Marker labels are editorial metadata and often match the camera
                 # datablock rather than the object. EuroLand resolves camera scripts
@@ -1524,15 +1626,36 @@ def _write(context, filepath,
         out.write('\t}\n')
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def write_camera_settings(out, camera_data, current_frame, tab_level=1):
+    def camera_target_distance(camera_obj, camera_data):
+        if 'ese_target_distance' in camera_data:
+            return max(0.0, float(camera_data['ese_target_distance'])) * GLOBAL_SCALE
+
+        for constraint in camera_obj.constraints:
+            target = getattr(constraint, 'target', None)
+            if (
+                constraint.type in {'TRACK_TO', 'DAMPED_TRACK', 'LOCKED_TRACK'}
+                and not constraint.mute
+                and target is not None
+            ):
+                return (camera_obj.matrix_world.translation - target.matrix_world.translation).length * GLOBAL_SCALE
+
+        dof = getattr(camera_data, 'dof', None)
+        focus_object = getattr(dof, 'focus_object', None) if dof else None
+        if focus_object is not None:
+            return (camera_obj.matrix_world.translation - focus_object.matrix_world.translation).length * GLOBAL_SCALE
+
+        return max(0.0, float(getattr(dof, 'focus_distance', 10.0))) * GLOBAL_SCALE
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def write_camera_settings(out, camera_obj, camera_data, current_frame, tab_level=1):
         tab = get_tabs(tab_level)
 
         out.write(f'{tab}*CAMERA_SETTINGS {{\n')
         out.write(f'{tab}\t*TIMEVALUE %u\n' % current_frame)
-        out.write(f'{tab}\t*CAMERA_NEAR {df}\n' % camera_data.clip_start)
-        out.write(f'{tab}\t*CAMERA_FAR {df}\n' % camera_data.clip_end)
+        out.write(f'{tab}\t*CAMERA_NEAR {df}\n' % (camera_data.clip_start * GLOBAL_SCALE))
+        out.write(f'{tab}\t*CAMERA_FAR {df}\n' % (camera_data.clip_end * GLOBAL_SCALE))
         out.write(f'{tab}\t*CAMERA_FOV {df}\n' % camera_data.angle)
-        out.write(f'{tab}\t*CAMERA_TDIST {df}\n' % camera_data.clip_end)
+        out.write(f'{tab}\t*CAMERA_TDIST {df}\n' % camera_target_distance(camera_obj, camera_data))
         out.write(f'{tab}}}\n')
 
     #---------------------------------------------------------------------------------------------------------------------------
@@ -1549,8 +1672,10 @@ def _write(context, filepath,
                 ]
 
             for ob, ob_mat in instances:
-                camera_object = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
-                camera_data = camera_object.data
+                # Camera datablocks have no exportable modifiers. Evaluated RNA
+                # can become invalid after frame_set() in Blender 5.x, so always
+                # sample the original datablock at the current scene frame.
+                camera_data = ob.original.data
 
                 obj_matrix_data = {
                     "name": ob.name,
@@ -1562,20 +1687,26 @@ def _write(context, filepath,
                 out.write("*CAMERAOBJECT {\n")
                 out.write('\t*NODE_NAME "%s"\n' % ob.name)
                 write_parent(out, ob)
-                out.write('\t*CAMERA_TYPE target\n')
+                out.write('\t*CAMERA_TYPE Target\n')
                 write_tm_node(out, obj_matrix_data)
                 static_tick = (EXPORT_STATIC_FRAME - START_FRAME) * TICKS_PER_FRAME
-                write_camera_settings(out, camera_data, static_tick)
+                write_camera_settings(out, ob_main, camera_data, static_tick)
 
                 if EXPORT_CAMERA_LIGHT_ANIMS:
                     out.write('\t*CAMERA_ANIMATION {\n')
                     previous = None
                     for frame in data_frames_for(ob_main, camera_data):
                         scene.frame_set(frame)
+                        current_data = ob_main.data
                         tick = (frame - START_FRAME) * TICKS_PER_FRAME
-                        current = (camera_data.clip_start, camera_data.clip_end, camera_data.angle)
+                        current = (
+                            float(current_data.clip_start),
+                            float(current_data.clip_end),
+                            float(current_data.angle),
+                            camera_target_distance(ob_main, current_data),
+                        )
                         if previous != current:
-                            write_camera_settings(out, camera_data, tick, 2)
+                            write_camera_settings(out, ob_main, current_data, tick, 2)
                             previous = current
                     out.write('\t}\n')
                     write_animation_node(out, ob_main, obj_matrix_data)
