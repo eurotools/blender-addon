@@ -291,13 +291,13 @@ class ExportESE(bpy.types.Operator, ExportHelper):
         name="Output Types",
         options={'ENUM_FLAG'},
         items=(('MESH', "Geometric", ""),
-               ('SHAPE', "Shapes", ""),
                ('CAMERA', "Cameras", ""),
                ('LIGHT', "Lights", ""),
+               ('SOUND', "Sounds", "Export Blender Speaker objects as ESE SOUNDOBJECT records"),
                ('ARMATURE', "Armature Bones", ""),
                ('HELPER', "Helpers", "")
             ),
-        description="Choose which Blender object types are written to the ESE file: meshes, curves as shapes, cameras, lights, armatures as bones, and empties as helpers.",
+        description="Choose which Blender object types are written to the ESE file: meshes, cameras, lights, speakers as sounds, armatures as bones, and empties as helpers.",
         default={'MESH'}
     ) # type: ignore
 

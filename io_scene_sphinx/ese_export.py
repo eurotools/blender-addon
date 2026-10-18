@@ -430,8 +430,6 @@ def _write(context, filepath,
             names.update(obj.name for obj in scene.objects if obj.type == 'CAMERA')
         if 'LIGHT' in EXPORT_OBJECTS:
             names.update(obj.name for obj in scene.objects if obj.type == 'LIGHT')
-        if 'SHAPE' in EXPORT_OBJECTS:
-            names.update(obj.name for obj in scene.objects if obj.type == 'CURVE')
         if 'HELPER' in EXPORT_OBJECTS:
             names.update(obj.name for obj in scene.objects if obj.type == 'EMPTY')
 
@@ -1717,6 +1715,110 @@ def _write(context, filepath,
                 out.write("}\n")
 
     #---------------------------------------------------------------------------------------------------------------------------
+    def sound_file_path(sound_obj):
+        custom_path = sound_obj.get('ese_sound_file')
+        if custom_path:
+            return str(Path(bpy.path.abspath(str(custom_path))).resolve())
+
+        sound = getattr(sound_obj.data, 'sound', None)
+        source_path = getattr(sound, 'filepath', '') if sound else ''
+        return str(Path(bpy.path.abspath(source_path)).resolve()) if source_path else ''
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def sound_frame_range(sound_obj):
+        """Return the inclusive source-frame interval represented by a Speaker."""
+        sound_strips = []
+        animation_data = getattr(sound_obj, 'animation_data', None)
+        for track in getattr(animation_data, 'nla_tracks', []) if animation_data else []:
+            if getattr(track, 'mute', False):
+                continue
+            for strip in track.strips:
+                if getattr(strip, 'mute', False) or getattr(strip, 'type', '') != 'SOUND':
+                    continue
+                sound_strips.append(strip)
+
+        if sound_strips:
+            source_start = min(float(strip.frame_start) for strip in sound_strips)
+            source_end = max(float(strip.frame_end) for strip in sound_strips)
+        else:
+            source_start = START_FRAME
+            source_end = END_FRAME
+
+        has_explicit_time = False
+        for property_name, is_start in (('ese_start_time', True), ('ese_end_time', False)):
+            if property_name not in sound_obj:
+                continue
+            try:
+                property_frame = float(sound_obj[property_name])
+            except (TypeError, ValueError):
+                emit_warning(
+                    f'Speaker {sound_obj.name} has an invalid {property_name} value; '
+                    'the automatically detected time was used.'
+                )
+                continue
+            has_explicit_time = True
+            if is_start:
+                source_start = property_frame
+            else:
+                source_end = property_frame
+
+        source_start = int(round(source_start))
+        source_end = int(round(source_end))
+        if source_end < source_start:
+            source_start, source_end = source_end, source_start
+
+        # Explicit SoundObject times describe positions on EuroLand's script
+        # timeline. Unlike object animation keys, they are not relative to the
+        # first exported Blender frame.
+        if has_explicit_time:
+            return max(0, source_start), max(0, source_end)
+
+        if source_end < START_FRAME or source_start > END_FRAME:
+            return None
+
+        source_start = max(START_FRAME, source_start)
+        source_end = min(END_FRAME, source_end)
+        return source_start - START_FRAME, source_end - START_FRAME
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def write_sound_data(out, scene):
+        speakers = sorted(
+            [obj for obj in scene.objects if obj.type == 'SPEAKER'],
+            key=lambda obj: obj.name,
+        )
+
+        for sound_obj in speakers:
+            sound = getattr(sound_obj.data, 'sound', None)
+            if sound is None and not sound_obj.get('ese_sound_file'):
+                emit_warning(f'Speaker {sound_obj.name} has no sound assigned and was skipped.')
+                continue
+
+            sound_path = sound_file_path(sound_obj)
+            if not sound_path:
+                emit_warning(f'Speaker {sound_obj.name} has no sound file path and was skipped.')
+                continue
+
+            frame_range = sound_frame_range(sound_obj)
+            if frame_range is None:
+                emit_warning(f'Speaker {sound_obj.name} is outside the exported frame range and was skipped.')
+                continue
+
+            start_time, end_time = frame_range
+            # EuroLand's importer converts these values using the scene's
+            # ticks-per-frame value, despite the public ESE notes describing
+            # START_TIME and END_TIME as frame numbers.
+            start_time *= TICKS_PER_FRAME
+            end_time *= TICKS_PER_FRAME
+            # Escape the only delimiter used by ESE strings while preserving
+            # Windows backslashes and spaces in the filename.
+            sound_path = sound_path.replace('"', '\\"')
+            out.write('*SOUNDOBJECT {\n')
+            out.write('\t*FILE_NAME "%s"\n' % sound_path)
+            out.write('\t*START_TIME %u\n' % start_time)
+            out.write('\t*END_TIME %u\n' % end_time)
+            out.write('}\n')
+
+    #---------------------------------------------------------------------------------------------------------------------------
     def write_helper_data(out, scene):
         for ob in sorted([obj for obj in scene.objects if obj.type == 'EMPTY'], key=lambda obj: obj.name):
             obj_matrix_data = {
@@ -1727,26 +1829,6 @@ def _write(context, filepath,
             }
 
             out.write("*HELPEROBJECT {\n")
-            out.write('\t*NODE_NAME "%s"\n' % ob.name)
-            write_parent(out, ob)
-            write_tm_node(out, obj_matrix_data)
-
-            if EXPORT_CAMERA_LIGHT_ANIMS or EXPORT_TRANSFORM_ANIMATION_KEYS:
-                write_animation_node(out, ob, obj_matrix_data)
-
-            out.write("}\n")
-
-    #---------------------------------------------------------------------------------------------------------------------------
-    def write_shape_data(out, scene):
-        for ob in sorted([obj for obj in scene.objects if obj.type == 'CURVE'], key=lambda obj: obj.name):
-            obj_matrix_data = {
-                "name": ob.name,
-                "type": ob.type,
-                "matrix_original": ob.matrix_world.copy(),
-                "matrix_transformed": ob.matrix_world.copy()
-            }
-
-            out.write("*SHAPEOBJECT {\n")
             out.write('\t*NODE_NAME "%s"\n' % ob.name)
             write_parent(out, ob)
             write_tm_node(out, obj_matrix_data)
@@ -1844,8 +1926,8 @@ def _write(context, filepath,
                     write_camera_data(out, scene, depsgraph)
                 if 'LIGHT' in EXPORT_OBJECTS:
                     write_light_data(out, scene, depsgraph)
-                if 'SHAPE' in EXPORT_OBJECTS:
-                    write_shape_data(out, scene)
+                if 'SOUND' in EXPORT_OBJECTS:
+                    write_sound_data(out, scene)
                 if 'HELPER' in EXPORT_OBJECTS:
                     write_helper_data(out, scene)
                 if exported_armatures(scene):
