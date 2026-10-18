@@ -40,7 +40,7 @@ For more info about which things each format supports, you can look at the [wiki
   - [x] Mesh skeletal rigging
   - [x] Lights and animated lights
   - [x] Cameras and animated cameras
-  - [ ] Layers
+  - [x] Layers
   - [X] Maps
   - [x] Animations + Skins
   - [X] Scripts
