@@ -139,6 +139,13 @@ def create_euroland_matrix(obj_matrix, obj_type):
         transformed_matrix = transformed_matrix @ matrix_scale
         transformed_pos = MESH_GLOBAL_MATRIX @ transformed_matrix.translation
 
+        # 3ds Max/ESE stores transform axes as row vectors, whereas Blender uses
+        # column-vector transforms.  Mesh data has historically used the legacy
+        # layout below, but biped bones must be transposed after the Blender -> ESE
+        # axis conversion or EuroLand interprets every rotation as its inverse.
+        if obj_type == 'BONE':
+            transformed_matrix = transformed_matrix.transposed()
+
         # Crear una matriz 4x4 vacía (matriz identidad como base)
         euroland_matrix = Matrix.Identity(4)
 

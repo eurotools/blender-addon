@@ -12,8 +12,8 @@ Authors: Swyter and Jmarti856
 import bpy
 import platform
 from pathlib import Path
-from math import degrees
-from mathutils import Matrix
+from math import ceil, degrees
+from mathutils import Matrix, Vector
 from datetime import datetime
 from .eland_utils import *
 
@@ -118,26 +118,69 @@ def _write(context, filepath,
         return sorted(valid)
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def object_keyframes(obj, include_visibility=False):
+    def action_keyframes(action):
         frames = set()
-        if obj.animation_data and obj.animation_data.action:
-            for fcurve in iter_action_fcurves(obj.animation_data.action):
+        for fcurve in iter_action_fcurves(action):
+            for point in getattr(fcurve, "keyframe_points", []):
+                frames.add(float(point.co[0]))
+        return frames
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def nla_strip_keyframes(strip):
+        if not strip.action:
+            return set()
+
+        action_start = float(strip.action_frame_start)
+        action_end = float(strip.action_frame_end)
+        action_length = action_end - action_start
+        strip_start = float(strip.frame_start)
+        strip_end = float(strip.frame_end)
+        scale = float(strip.scale)
+        repeat = max(1, int(ceil(float(strip.repeat))))
+        frames = {strip_start, strip_end}
+
+        if abs(action_length) < 0.000001 or abs(scale) < 0.000001:
+            return frames
+
+        cycle_length = action_length * scale
+        for cycle in range(repeat):
+            cycle_start = strip_start + cycle * cycle_length
+            for action_frame in action_keyframes(strip.action):
+                frame = cycle_start + (action_frame - action_start) * scale
+                if strip_start - 0.000001 <= frame <= strip_end + 0.000001:
+                    frames.add(frame)
+
+        return frames
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def animation_data_keyframes(animation_data, include_visibility=True):
+        frames = set()
+        if not animation_data:
+            return frames
+
+        if animation_data.action:
+            for fcurve in iter_action_fcurves(animation_data.action):
                 if not include_visibility and fcurve.data_path in {'hide_viewport', 'hide_render'}:
                     continue
                 for point in getattr(fcurve, "keyframe_points", []):
                     frames.add(point.co[0])
 
+        for track in animation_data.nla_tracks:
+            if track.mute:
+                continue
+            for strip in track.strips:
+                if not strip.mute:
+                    frames.update(nla_strip_keyframes(strip))
+
         return frames
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def id_keyframes(data_block):
-        frames = set()
-        if data_block and data_block.animation_data and data_block.animation_data.action:
-            for fcurve in iter_action_fcurves(data_block.animation_data.action):
-                for point in getattr(fcurve, "keyframe_points", []):
-                    frames.add(point.co[0])
+    def object_keyframes(obj, include_visibility=False):
+        return animation_data_keyframes(obj.animation_data, include_visibility)
 
-        return frames
+    #---------------------------------------------------------------------------------------------------------------------------
+    def id_keyframes(data_block):
+        return animation_data_keyframes(data_block.animation_data) if data_block else set()
 
     #---------------------------------------------------------------------------------------------------------------------------
     def sampled_frames():
@@ -181,8 +224,118 @@ def _write(context, filepath,
         return list(range(START_FRAME, END_FRAME + 1))
 
     #---------------------------------------------------------------------------------------------------------------------------
+    def armature_for_mesh(obj):
+        if obj.type != 'MESH':
+            return None
+        if obj.parent and obj.parent.type == 'ARMATURE':
+            return obj.parent
+        return obj.find_armature()
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def rigid_bone_parent(obj):
+        if (
+            obj.type == 'MESH'
+            and obj.parent
+            and obj.parent.type == 'ARMATURE'
+            and obj.parent_type == 'BONE'
+            and obj.parent_bone
+            and obj.parent.data.bones.get(obj.parent_bone)
+        ):
+            return obj.parent_bone
+        return None
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def export_node_name(obj):
+        name = obj.name
+        armature = armature_for_mesh(obj)
+        if not rigid_bone_parent(obj) or not armature:
+            return name
+
+        # EuroLand reserves a leading (B)/(b) for GEOMOBJECT nodes that should be
+        # converted into biped body bones. A visible rigid attachment must therefore
+        # keep its normal mesh name. Only disambiguate a real mesh/bone name clash.
+        bone_names = {bone.name.casefold() for bone in armature.data.bones}
+        if name.casefold() in bone_names and name[:3].casefold() != '(b)':
+            return '%s_mesh' % name
+        return name
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def mesh_has_skin(obj):
+        armature = armature_for_mesh(obj)
+        if not armature or not obj.vertex_groups or not armature.data.bones:
+            return False
+
+        bone_names = {bone.name for bone in armature.data.bones}
+        deform_group_indices = {
+            group.index for group in obj.vertex_groups
+            if group.name in bone_names
+        }
+        return any(
+            group.group in deform_group_indices and group.weight > 0
+            for vertex in obj.data.vertices
+            for group in vertex.groups
+        )
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def exported_armatures(scene):
+        if 'ARMATURE' in EXPORT_OBJECTS:
+            return [obj for obj in scene.objects if obj.type == 'ARMATURE']
+
+        if 'MESH' not in EXPORT_OBJECTS:
+            return []
+
+        armatures = []
+        seen = set()
+        for obj in scene.objects:
+            if obj.type != 'MESH' or (not mesh_has_skin(obj) and not rigid_bone_parent(obj)):
+                continue
+
+            armature = armature_for_mesh(obj)
+            if armature and armature.name not in seen:
+                seen.add(armature.name)
+                armatures.append(armature)
+
+        return armatures
+
+    def exported_node_names(scene):
+        names = set()
+
+        if 'MESH' in EXPORT_OBJECTS:
+            names.update(export_node_name(obj) for obj in scene.objects if obj.type == 'MESH')
+        if 'CAMERA' in EXPORT_OBJECTS:
+            names.update(obj.name for obj in scene.objects if obj.type == 'CAMERA')
+        if 'LIGHT' in EXPORT_OBJECTS:
+            names.update(obj.name for obj in scene.objects if obj.type == 'LIGHT')
+        if 'SHAPE' in EXPORT_OBJECTS:
+            names.update(obj.name for obj in scene.objects if obj.type == 'CURVE')
+        if 'HELPER' in EXPORT_OBJECTS:
+            names.update(obj.name for obj in scene.objects if obj.type == 'EMPTY')
+
+        for armature in exported_armatures(scene):
+            names.update(bone.name for bone in armature.data.bones)
+
+        return names
+
+    #---------------------------------------------------------------------------------------------------------------------------
     def parent_name(obj):
-        return obj.parent.name if obj.parent else None
+        if not obj.parent:
+            return None
+
+        bone_parent = rigid_bone_parent(obj)
+        if bone_parent:
+            # Rigid Blender bone parenting is serialized as a one-bone skin. Keeping
+            # NODE_PARENT here makes EuroLand treat the visible mesh as hierarchy
+            # scaffolding instead of as the entity deformed by the imported biped.
+            return None
+
+        if obj.type == 'MESH' and obj.parent.type == 'ARMATURE' and mesh_has_skin(obj):
+            return None
+
+        parent = export_node_name(obj.parent)
+        if parent not in exported_node_names(bpy.context.scene):
+            return None
+
+        return parent
 
     #---------------------------------------------------------------------------------------------------------------------------
     def write_parent(out, obj, tab_level=1):
@@ -262,8 +415,8 @@ def _write(context, filepath,
 
         out.write("*SCENE {\n")
         out.write('\t*SCENE_FILENAME "%s"\n' % bpy.data.filepath)
-        out.write('\t*SCENE_FIRSTFRAME %s\n' % START_FRAME)
-        out.write('\t*SCENE_LASTFRAME %s\n' % END_FRAME)
+        out.write('\t*SCENE_FIRSTFRAME %s\n' % 0)
+        out.write('\t*SCENE_LASTFRAME %s\n' % (END_FRAME - START_FRAME))
         out.write('\t*SCENE_FRAMESPEED %s\n' % frame_rate)
         out.write('\t*SCENE_TICKSPERFRAME %s\n' % TICKS_PER_FRAME)
         out.write(f'\t*SCENE_BACKGROUND_STATIC {df} {df} {df}\n' % export_amb)
@@ -401,11 +554,13 @@ def _write(context, filepath,
             if obj_matrix_data["type"] == 'MESH' and (TRANSFORM_TO_CENTER or mesh_transform_is_baked):
                 matrix_data = Matrix.Identity(4)
             out.write('\t*NODE_TM {\n')
-        matrix_data = matrix_without_nonuniform_scale(matrix_data)
+        matrix_data = matrix_without_nonuniform_scale(matrix_data.copy())
+        matrix_data.translation *= GLOBAL_SCALE
 
         out.write('\t\t*NODE_NAME "%s"\n' % obj_matrix_data["name"])
-        out.write('\t\t*INHERIT_POS %d %d %d\n' % (0, 0, 0))
-        out.write('\t\t*INHERIT_ROT %d %d %d\n' % (0, 0, 0))
+        inherit_transform = 1 if obj_matrix_data.get("inherit_parent", False) else 0
+        out.write('\t\t*INHERIT_POS %d %d %d\n' % ((inherit_transform,) * 3))
+        out.write('\t\t*INHERIT_ROT %d %d %d\n' % ((inherit_transform,) * 3))
         out.write('\t\t*INHERIT_SCL %d %d %d\n' % (1, 1, 1))
 
         eland_data = create_euroland_matrix(matrix_data, obj_matrix_data["type"])
@@ -424,20 +579,23 @@ def _write(context, filepath,
         transformed_scale = eland_matrix.to_scale()
         out.write(f'\t\t*TM_SCALE {df} {df} {df}\n' % (transformed_scale.x, transformed_scale.z, transformed_scale.y))
         out.write(f'\t\t*TM_SCALEANGLE {df} {df} {df}\n' % (0, 0, 0))
+        if matrix_data.to_3x3().determinant() < 0.0:
+            out.write('\t\t*TM_MIRRORED\n')
         out.write('\t}\n')
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def write_animation_node(out, obj, obj_matrix_data):
+    def write_tm_animation(out, name, obj_type, frames, matrix_provider, base_mesh_matrix=None):
         global TICKS_PER_FRAME, START_FRAME, END_FRAME
+        original_frame = bpy.context.scene.frame_current
 
         out.write('\t*TM_ANIMATION {\n')
-        out.write('\t\t*TM_ANIMATION "%s"\n' % obj.name)
+        out.write('\t\t*NODE_NAME "%s"\n' % name)
         out.write('\t\t*TM_ANIM_FRAMES {\n')
 
         def mesh_tm_frame_matrix(matrix):
             matrix = matrix_without_nonuniform_scale(matrix.copy())
             rot_matrix = matrix.to_3x3().normalized().to_4x4()
-            export_eland = create_euroland_matrix(rot_matrix, obj_matrix_data["type"])["eland_matrix"].to_3x3()
+            export_eland = create_euroland_matrix(rot_matrix, obj_type)["eland_matrix"].to_3x3()
 
             export_eland.transpose()
             scale = matrix.to_scale()
@@ -454,44 +612,65 @@ def _write(context, filepath,
             result[2][3] = position.z
             return result
 
-        base_mesh_matrix = None
-        if obj.type == 'MESH' and obj_matrix_data.get("transform_baked", False):
-            base_mesh_matrix = matrix_without_nonuniform_scale(obj_matrix_data["matrix_original"].copy())
+        try:
+            for frame in frames:
+                bpy.context.scene.frame_set(frame)
+                tick = (frame - START_FRAME) * TICKS_PER_FRAME
 
-        for frame in transform_frames_for(obj):
-            bpy.context.scene.frame_set(frame)
-            tick = (frame - START_FRAME) * TICKS_PER_FRAME
+                matrix_data = matrix_without_nonuniform_scale(matrix_provider().copy())
+                if obj_type == 'MESH':
+                    if base_mesh_matrix:
+                        matrix_data = matrix_data @ base_mesh_matrix.inverted()
+                    matrix_data.translation *= GLOBAL_SCALE
+                    eland_matrix = mesh_tm_frame_matrix(matrix_data)
+                else:
+                    matrix_data.translation *= GLOBAL_SCALE
+                    eland_matrix = create_euroland_matrix(matrix_data, obj_type)["eland_matrix"]
 
-            matrix_data = matrix_without_nonuniform_scale(obj.matrix_world.copy())
-            if obj.type == 'MESH':
-                if base_mesh_matrix:
-                    matrix_data = matrix_data @ base_mesh_matrix.inverted()
-                eland_matrix = mesh_tm_frame_matrix(matrix_data)
-            else:
-                eland_matrix = create_euroland_matrix(matrix_data, obj_matrix_data["type"])["eland_matrix"]
+                out.write('\t\t\t*TM_FRAME  %-5d' % tick)
+                out.write(f' {df} {df} {df}' % (eland_matrix[0].x, eland_matrix[0].y, eland_matrix[0].z))
+                out.write(f' {df} {df} {df}' % (eland_matrix[1].x, eland_matrix[1].y, eland_matrix[1].z))
+                out.write(f' {df} {df} {df}' % (eland_matrix[2].x, eland_matrix[2].y, eland_matrix[2].z))
 
-            out.write('\t\t\t*TM_FRAME  %-5d' % tick)
-            out.write(f' {df} {df} {df}' % (eland_matrix[0].x, eland_matrix[0].y, eland_matrix[0].z))
-            out.write(f' {df} {df} {df}' % (eland_matrix[1].x, eland_matrix[1].y, eland_matrix[1].z))
-            out.write(f' {df} {df} {df}' % (eland_matrix[2].x, eland_matrix[2].y, eland_matrix[2].z))
-
-            obj_position = eland_matrix.translation
-            out.write(f' {df} {df} {df}\n' % (obj_position.x, obj_position.y, obj_position.z))
+                obj_position = eland_matrix.translation
+                out.write(f' {df} {df} {df}\n' % (obj_position.x, obj_position.y, obj_position.z))
+        finally:
+            bpy.context.scene.frame_set(original_frame)
 
         out.write('\t\t}\n')
         out.write('\t}\n')
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def transformed_mesh(ob, ob_mat, depsgraph, bake_object_transform=True):
+    def write_animation_node(out, obj, obj_matrix_data):
+        base_mesh_matrix = None
+        if obj.type == 'MESH' and obj_matrix_data.get("transform_baked", False):
+            base_mesh_matrix = matrix_without_nonuniform_scale(obj_matrix_data["matrix_original"].copy())
+
+        write_tm_animation(
+            out,
+            obj.name,
+            obj_matrix_data["type"],
+            transform_frames_for(obj),
+            lambda: obj.matrix_world,
+            base_mesh_matrix
+        )
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def transformed_mesh(ob, ob_mat, depsgraph, bake_object_transform=True, use_bind_mesh=False):
         ob_eval = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
+        mesh_is_copy = False
 
         try:
-            mesh = ob_eval.to_mesh()
+            if use_bind_mesh:
+                mesh = ob.original.data.copy()
+                mesh_is_copy = True
+            else:
+                mesh = ob_eval.to_mesh()
         except RuntimeError:
-            return None, None
+            return None, None, False
 
         if mesh is None:
-            return None, ob_eval
+            return None, ob_eval, mesh_is_copy
 
         if EXPORT_TRI:
             mesh_triangulate(mesh)
@@ -509,7 +688,7 @@ def _write(context, filepath,
         if (MESH_GLOBAL_MATRIX @ matrix_transformed).determinant() > 0.0:
             mesh.flip_normals()
 
-        return mesh, ob_eval
+        return mesh, ob_eval, mesh_is_copy
 
     #---------------------------------------------------------------------------------------------------------------------------
     def material_index_for_poly(poly, materials):
@@ -521,8 +700,14 @@ def _write(context, filepath,
 
     #---------------------------------------------------------------------------------------------------------------------------
     def write_mesh_data(out, scene, depsgraph, scene_materials):
+        animation_armatures = exported_armatures(scene) if EXPORT_MESH_ANIMS else []
         for ob_main in scene.objects:
             if ob_main.type != 'MESH':
+                continue
+
+            # Animation imports turn every ordinary GEOMOBJECT into an Anim Skin.
+            # Keep reference floors and unrelated scene geometry out of a biped ESE.
+            if animation_armatures and armature_for_mesh(ob_main) not in animation_armatures:
                 continue
 
             if ob_main.parent and ob_main.parent.instance_type in {'VERTS', 'FACES'}:
@@ -538,8 +723,18 @@ def _write(context, filepath,
 
             for ob, ob_mat in instances:
                 animated_mesh = mesh_has_transform_animation(ob_main)
-                mesh, ob_eval = transformed_mesh(
-                    ob, ob_mat, depsgraph, bake_object_transform=not TRANSFORM_TO_CENTER
+                skinned_mesh = mesh_has_skin(ob_main)
+                bone_parented_mesh = bool(rigid_bone_parent(ob_main))
+                # Weighted meshes retain their bind/object space. Rigid Blender bone
+                # children are converted to one-bone skins, so bake their static world
+                # transform into the vertices to match EuroLand's bind-pose space.
+                preserve_local_space = skinned_mesh
+                mesh, ob_eval, mesh_is_copy = transformed_mesh(
+                    ob,
+                    ob_mat,
+                    depsgraph,
+                    bake_object_transform=not TRANSFORM_TO_CENTER and not preserve_local_space,
+                    use_bind_mesh=skinned_mesh,
                 )
                 if mesh is None:
                     continue
@@ -547,16 +742,25 @@ def _write(context, filepath,
                 try:
                     matrix_transformed = Matrix.Identity(4) if TRANSFORM_TO_CENTER else ob_mat.copy()
                     obj_matrix_data = {
-                        "name": ob_main.name,
+                        "name": export_node_name(ob_main),
                         "type": ob_main.type,
                         "matrix_original": ob_mat.copy(),
                         "matrix_transformed": matrix_transformed,
                         "animated_mesh": animated_mesh,
-                        "transform_baked": not TRANSFORM_TO_CENTER
+                        "transform_baked": not TRANSFORM_TO_CENTER and not preserve_local_space,
+                        "inherit_parent": False,
                     }
 
                     vertices = mesh.vertices[:]
-                    unique_vertices, vertex_index_map = unique_ordered(tuple(v.co) for v in vertices)
+                    if skinned_mesh:
+                        unique_vertices = [tuple(vertex.co) for vertex in vertices]
+                        source_vertex_index_map = {vertex.index: vertex.index for vertex in vertices}
+                    else:
+                        unique_vertices, vertex_index_map = unique_ordered(tuple(v.co) for v in vertices)
+                        source_vertex_index_map = {
+                            vertex.index: vertex_index_map[tuple(vertex.co)]
+                            for vertex in vertices
+                        }
 
                     unique_uvs = []
                     uv_index_map = {}
@@ -578,13 +782,14 @@ def _write(context, filepath,
                         unique_colors = [(TEXTURE_VERTEX_COLOR_SCALE, TEXTURE_VERTEX_COLOR_SCALE, TEXTURE_VERTEX_COLOR_SCALE, 1.0)]
 
                     out.write("*GEOMOBJECT {\n")
-                    out.write('\t*NODE_NAME "%s"\n' % ob_main.name)
+                    out.write('\t*NODE_NAME "%s"\n' % export_node_name(ob_main))
                     write_parent(out, ob_main)
                     write_tm_node(out, obj_matrix_data)
                     write_tm_node(out, obj_matrix_data, True)
 
                     out.write('\t*MESH {\n')
-                    out.write('\t\t*TIMEVALUE %d\n' % EXPORT_STATIC_FRAME)
+                    static_tick = (EXPORT_STATIC_FRAME - START_FRAME) * TICKS_PER_FRAME
+                    out.write('\t\t*TIMEVALUE %d\n' % static_tick)
                     out.write('\t\t*MESH_NUMVERTEX %u\n' % len(unique_vertices))
                     out.write('\t\t*MESH_NUMFACES %u\n' % len(mesh.polygons))
 
@@ -595,7 +800,7 @@ def _write(context, filepath,
 
                     out.write('\t\t*MESH_FACE_LIST {\n')
                     for poly_index, poly in enumerate(mesh.polygons):
-                        vertex_indices = [vertex_index_map[tuple(vertices[v].co)] for v in poly.vertices]
+                        vertex_indices = [source_vertex_index_map[v] for v in poly.vertices]
                         material_index = material_index_for_poly(poly, mesh_materials)
 
                         out.write('\t\t\t*MESH_FACE    {:>3d}:    A: {:>6d} B: {:>6d} C: {:>6d}'.format(
@@ -667,7 +872,7 @@ def _write(context, filepath,
                                 normal[0], normal[1], normal[2]
                             ))
                             for vertex_index in poly.vertices:
-                                export_vertex_index = vertex_index_map[tuple(vertices[vertex_index].co)]
+                                export_vertex_index = source_vertex_index_map[vertex_index]
                                 out.write(f'\t\t\t\t*MESH_VERTEXNORMAL {export_vertex_index:<3d}\t{df}\t{df}\t{df}\n' % (
                                     normal[0], normal[1], normal[2]
                                 ))
@@ -692,32 +897,41 @@ def _write(context, filepath,
                                 if vertex.index < len(vertex_flags.data):
                                     flag_value = vertex_flags.data[vertex.index].value
                                     if flag_value != 0:
-                                        export_vertex_index = vertex_index_map[tuple(vertex.co)]
+                                        export_vertex_index = source_vertex_index_map[vertex.index]
                                         out.write('\t\t\t*VFLAG %u %u\n' % (export_vertex_index, flag_value))
                         out.write('\t\t}\n')
 
                     out.write('\t}\n')
 
-                    if EXPORT_MESH_ANIMS:
+                    if EXPORT_MESH_ANIMS and animated_mesh and not bone_parented_mesh:
                         write_animation_node(out, ob_main, obj_matrix_data)
 
+                    out.write('\t*PROP_MOTIONBLUR 0\n')
+                    out.write('\t*PROP_CASTSHADOW 1\n')
+                    out.write('\t*PROP_RECVSHADOW 1\n')
                     out.write(f'\t*WIREFRAME_COLOR {df} {df} {df}\n' % (ob.color[0], ob.color[1], ob.color[2]))
 
                     if EXPORT_MATERIALS and ob_main.name in scene_materials:
                         out.write('\t*MATERIAL_REF %d\n' % list(scene_materials.keys()).index(ob_main.name))
 
+                    out.write('\t*MESH_ANIMATION {\n')
+                    out.write('\t}\n')
+
                     if EXPORT_MESH_MORPH and ob.data.shape_keys:
                         write_morph_data(out, ob)
 
-                    if EXPORT_MESH_MORPH:
-                        write_skin_data(out, ob, vertices)
+                    if mesh_has_skin(ob_main) or bone_parented_mesh:
+                        write_skin_data(out, ob_main, vertices, source_vertex_index_map)
 
                     out.write("}\n")
 
                     if EXPORT_MESH_MORPH and ob.data.shape_keys:
                         write_morph_list(out, ob)
                 finally:
-                    ob_eval.to_mesh_clear()
+                    if mesh_is_copy:
+                        bpy.data.meshes.remove(mesh)
+                    else:
+                        ob_eval.to_mesh_clear()
 
     #---------------------------------------------------------------------------------------------------------------------------
     def write_morph_data(out, ob):
@@ -742,57 +956,202 @@ def _write(context, filepath,
         out.write('}\n')
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def write_skin_data(out, ob, vertices):
-        armature = ob.find_armature()
+    def write_skin_data(out, ob, vertices, source_vertex_index_map):
+        armature = armature_for_mesh(ob)
         if not armature:
             return
 
+        rigid_bone = rigid_bone_parent(ob)
+        if rigid_bone:
+            export_vertex_indices = sorted(set(source_vertex_index_map.values()))
+            out.write('\t*SKIN_DATA {\n')
+            out.write('\t\t*NODE_NAME "%s"\n' % export_node_name(ob))
+            out.write('\t\t*BONE_LIST {\n')
+            out.write('\t\t\t*BONE\t0\t"%s"\n' % rigid_bone)
+            out.write('\t\t}\n')
+            out.write('\t\t*SKIN_VERTEX_DATA {\n')
+            for vertex_index in export_vertex_indices:
+                out.write(f'\t\t\t*VERTEX\t{vertex_index}\t1\t0\t{df}\n' % 1.0)
+            out.write('\t\t}\n')
+            out.write('\t}\n')
+            return
+
+        original_vertices = ob.data.vertices
         vertex_groups = {group.index: group.name for group in ob.vertex_groups}
-        bone_names = [bone.name for bone in armature.data.bones]
+        armature_bone_names = {bone.name for bone in armature.data.bones}
+        used_group_names = set()
 
-        out.write('\t*SKIN_DATA {\n')
-        out.write('\t\t*BONE_LIST {\n')
-        for bone_index, bone_name in enumerate(bone_names):
-            out.write('\t\t\t*BONE %u "%s"\n' % (bone_index, bone_name))
-        out.write('\t\t}\n')
-
-        out.write('\t\t*SKIN_VERTEX_DATA {\n')
-        for vertex in vertices:
-            influences = []
+        for vertex in original_vertices:
             for group in vertex.groups:
-                bone_name = vertex_groups.get(group.group)
-                if bone_name in bone_names and group.weight > 0:
-                    influences.append((bone_names.index(bone_name), group.weight))
+                group_name = vertex_groups.get(group.group)
+                if group_name in armature_bone_names and group.weight > 0:
+                    used_group_names.add(group_name)
 
-            if not influences:
+        # 3ds Max writes the Skin modifier's bone table, not hierarchy order. Blender's
+        # vertex-group order is the closest stable equivalent and keeps weight indices deterministic.
+        bone_names = [
+            group.name for group in ob.vertex_groups
+            if group.name in used_group_names
+        ]
+        bone_indices = {bone_name: index for index, bone_name in enumerate(bone_names)}
+        weighted_vertices = {index: [] for index in range(len(vertices))}
+
+        for original_index, vertex in enumerate(vertices):
+            if original_index >= len(original_vertices):
                 continue
 
-            influences.sort(key=lambda item: item[1], reverse=True)
+            export_vertex_index = source_vertex_index_map.get(original_index)
+            if export_vertex_index is None:
+                continue
+
+            influences = []
+            for group in original_vertices[original_index].groups:
+                bone_name = vertex_groups.get(group.group)
+                if bone_name in bone_indices and group.weight > 0:
+                    influences.append((bone_indices[bone_name], group.weight))
+
+            influences.sort(key=lambda item: item[0])
             total_weight = sum(weight for _, weight in influences)
             if total_weight:
                 influences = [(bone_index, weight / total_weight) for bone_index, weight in influences]
 
-            out.write('\t\t\t*VERTEX %5u %u' % (vertex.index, len(influences)))
+            weighted_vertices[export_vertex_index] = influences
+
+        out.write('\t*SKIN_DATA {\n')
+        out.write('\t\t*NODE_NAME "%s"\n' % ob.name)
+        out.write('\t\t*BONE_LIST {\n')
+        for bone_index, bone_name in enumerate(bone_names):
+            out.write('\t\t\t*BONE\t%u\t"%s"\n' % (bone_index, bone_name))
+        out.write('\t\t}\n')
+
+        out.write('\t\t*SKIN_VERTEX_DATA {\n')
+        for vertex_index, influences in sorted(weighted_vertices.items()):
+            out.write('\t\t\t*VERTEX\t%u\t%u' % (vertex_index, len(influences)))
             for bone_index, weight in influences:
-                out.write(f' %2u {df}' % (bone_index, weight))
+                out.write(f'\t%u\t{df}' % (bone_index, weight))
             out.write('\n')
         out.write('\t\t}\n')
         out.write('\t}\n')
 
     #---------------------------------------------------------------------------------------------------------------------------
+    def pose_bone_world_matrix(armature, bone_name):
+        pose_bone = armature.pose.bones.get(bone_name) if armature.pose else None
+        if pose_bone:
+            return armature.matrix_world @ pose_bone.matrix
+
+        return armature.matrix_world @ armature.data.bones[bone_name].matrix_local
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def pose_bone_animation_matrix(armature, bone_name):
+        pose_bone = armature.pose.bones.get(bone_name) if armature.pose else None
+        if not pose_bone:
+            bone = armature.data.bones[bone_name]
+            if bone.parent:
+                return bone.parent.matrix_local.inverted_safe() @ bone.matrix_local
+            return armature.matrix_world @ bone.matrix_local
+
+        if pose_bone.parent:
+            return pose_bone.parent.matrix.inverted_safe() @ pose_bone.matrix
+        return armature.matrix_world @ pose_bone.matrix
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def armature_animation_frames(armature):
+        if START_FRAME == END_FRAME:
+            return [START_FRAME]
+
+        if FORCE_SAMPLE:
+            return sampled_frames()
+
+        if USE_KEYS or EXPORT_TRANSFORM_ANIMATION_KEYS:
+            return sorted_frame_set(object_keyframes(armature) | id_keyframes(armature.data))
+
+        return list(range(START_FRAME, END_FRAME + 1))
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def write_bone_display_mesh(out, bone):
+        radius = max(float(bone.length) * 0.06 * GLOBAL_SCALE, 0.001)
+        vertices = [
+            Vector((0.0, radius, 0.0)),
+            Vector((radius, 0.0, 0.0)),
+            Vector((0.0, 0.0, radius)),
+            Vector((-radius, 0.0, 0.0)),
+            Vector((0.0, 0.0, -radius)),
+            Vector((0.0, -radius, 0.0)),
+        ]
+        faces = [
+            (0, 1, 2), (0, 2, 3), (0, 3, 4), (0, 4, 1),
+            (5, 2, 1), (5, 3, 2), (5, 4, 3), (5, 1, 4),
+        ]
+
+        out.write('\t*MESH {\n')
+        out.write('\t\t*TIMEVALUE 0\n')
+        out.write('\t\t*MESH_NUMVERTEX %u\n' % len(vertices))
+        out.write('\t\t*MESH_NUMFACES %u\n' % len(faces))
+        out.write('\t\t*MESH_VERTEX_LIST {\n')
+        for index, vertex in enumerate(vertices):
+            out.write(f'\t\t\t*MESH_VERTEX  {index:>5d}\t{df}\t{df}\t{df}\n' % tuple(vertex))
+        out.write('\t\t}\n')
+        out.write('\t\t*MESH_FACE_LIST {\n')
+        for index, face in enumerate(faces):
+            out.write('\t\t\t*MESH_FACE    {:>3d}:    A: {:>6d} B: {:>6d} C: {:>6d}'.format(
+                index, face[0], face[1], face[2]
+            ))
+            out.write('    AB: %-6d BC: %-6d CA: %-6d  *MESH_SMOOTHING %u  *MESH_MTLID %-3d\n' % (
+                1, 1, 1, 1, -1
+            ))
+        out.write('\t\t}\n')
+        out.write('\t\t*MESH_NORMALS {\n')
+        for index, face in enumerate(faces):
+            a, b, c = (vertices[vertex_index] for vertex_index in face)
+            normal = (b - a).cross(c - a).normalized()
+            out.write(f'\t\t\t*MESH_FACENORMAL {index}\t{df}\t{df}\t{df}\n' % tuple(normal))
+            for vertex_index in face:
+                vertex_normal = vertices[vertex_index].normalized()
+                out.write(f'\t\t\t\t*MESH_VERTEXNORMAL {vertex_index}\t{df}\t{df}\t{df}\n' % tuple(vertex_normal))
+        out.write('\t\t}\n')
+        out.write('\t}\n')
+
+    #---------------------------------------------------------------------------------------------------------------------------
     def write_biped_bones(out, scene, depsgraph):
-        for ob_main in scene.objects:
+        for ob_main in exported_armatures(scene):
             if ob_main.type != 'ARMATURE':
                 continue
 
             bone_data = ob_main.evaluated_get(depsgraph).data if EXPORT_APPLY_MODIFIERS else ob_main.data
 
             for bone in bone_data.bones:
-                out.write('*BONEOBJECT {\n')
+                is_root = bone.parent is None
+                bone_matrix = pose_bone_world_matrix(ob_main, bone.name)
+                obj_matrix_data = {
+                    "name": bone.name,
+                    "type": 'BONE',
+                    "matrix_original": bone_matrix.copy(),
+                    "matrix_transformed": bone_matrix.copy()
+                }
+
+                out.write('*%s {\n' % ('GEOMOBJECT' if is_root else 'BONEOBJECT'))
                 out.write('\t*NODE_NAME "%s"\n' % bone.name)
                 if bone.parent:
                     out.write('\t*NODE_PARENT "%s"\n' % bone.parent.name)
-                out.write('\t*NODE_BIPED_BODY\n')
+                out.write('\t*%s\n' % ('NODE_BIPED_SLAVE' if is_root else 'NODE_BIPED_BODY'))
+                write_tm_node(out, obj_matrix_data)
+                write_tm_node(out, obj_matrix_data, True)
+                write_bone_display_mesh(out, bone)
+                if is_root:
+                    out.write('\t*PROP_MOTIONBLUR 0\n')
+                    out.write('\t*PROP_CASTSHADOW 1\n')
+                    out.write('\t*PROP_RECVSHADOW 1\n')
+                write_tm_animation(
+                    out,
+                    bone.name,
+                    'BONE',
+                    armature_animation_frames(ob_main),
+                    lambda armature=ob_main, bone_name=bone.name: pose_bone_animation_matrix(armature, bone_name)
+                )
+                if is_root:
+                    out.write(f'\t*WIREFRAME_COLOR {df} {df} {df}\n' % (0.6510, 0.7922, 0.9412))
+                    out.write('\t*MESH_ANIMATION {\n')
+                    out.write('\t}\n')
                 out.write('}\n')
 
     #---------------------------------------------------------------------------------------------------------------------------
@@ -850,7 +1209,8 @@ def _write(context, filepath,
                 out.write('\t*LIGHT_AFFECT_SPECULAR %s\n' % ("On" if light_data.specular_factor > 0.001 else "Off"))
                 out.write('\t*LIGHT_AMBIENT_ONLY Off\n')
 
-                write_light_settings(out, light_data, EXPORT_STATIC_FRAME)
+                static_tick = (EXPORT_STATIC_FRAME - START_FRAME) * TICKS_PER_FRAME
+                write_light_settings(out, light_data, static_tick)
 
                 if EXPORT_CAMERA_LIGHT_ANIMS:
                     out.write('\t*LIGHT_ANIMATION {\n')
@@ -882,7 +1242,7 @@ def _write(context, filepath,
             return
 
         legacy_fcurves = getattr(action, "fcurves", None)
-        if legacy_fcurves is not None:
+        if legacy_fcurves:
             for fcurve in legacy_fcurves:
                 yield fcurve
             return
@@ -918,17 +1278,19 @@ def _write(context, filepath,
                             yield fcurve
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def collect_action_keyframes(action):
-        frames = set()
-        for fcurve in iter_action_fcurves(action):
-            for point in getattr(fcurve, "keyframe_points", []):
-                frames.add(point.co[0])
-
-        return sorted(frames)
-
-    #---------------------------------------------------------------------------------------------------------------------------
     def write_script_camera(out):
-        markers = [marker for marker in bpy.context.scene.timeline_markers if marker.camera is not None]
+        scene = bpy.context.scene
+        exported_cameras = {
+            camera for camera in scene.objects
+            if camera.type == 'CAMERA'
+        }
+        markers = sorted(
+            (
+                marker for marker in scene.timeline_markers
+                if marker.camera in exported_cameras
+            ),
+            key=lambda marker: (marker.frame, marker.name),
+        )
 
         out.write('\t*USER_DATA %u {\n' % 0)
         out.write('\t\tCameraScript = %u\n' % 1)
@@ -937,15 +1299,16 @@ def _write(context, filepath,
 
         for index, marker in enumerate(markers, start=1):
             camera = marker.camera
-            keyframes = []
-            if camera.animation_data and camera.animation_data.action:
-                keyframes = collect_action_keyframes(camera.animation_data.action)
+            keyframes = sorted(object_keyframes(camera))
 
             first_keyframe = int(keyframes[0]) if keyframes else marker.frame
             last_keyframe = int(keyframes[-1]) if keyframes else marker.frame
             timeline_frame = marker.frame + (last_keyframe - first_keyframe)
             out.write('\t\tCameraScript_camera%u = %s %u %u %u %u\n' % (
-                index, marker.name, first_keyframe, last_keyframe, marker.frame, timeline_frame
+                # Marker labels are editorial metadata and often match the camera
+                # datablock rather than the object. EuroLand resolves camera scripts
+                # against exported node names, so always reference the linked object.
+                index, camera.name, first_keyframe, last_keyframe, marker.frame, timeline_frame
             ))
 
         out.write('\t}\n')
@@ -991,7 +1354,8 @@ def _write(context, filepath,
                 write_parent(out, ob)
                 out.write('\t*CAMERA_TYPE target\n')
                 write_tm_node(out, obj_matrix_data)
-                write_camera_settings(out, camera_data, EXPORT_STATIC_FRAME)
+                static_tick = (EXPORT_STATIC_FRAME - START_FRAME) * TICKS_PER_FRAME
+                write_camera_settings(out, camera_data, static_tick)
 
                 if EXPORT_CAMERA_LIGHT_ANIMS:
                     out.write('\t*CAMERA_ANIMATION {\n')
@@ -1061,7 +1425,6 @@ def _write(context, filepath,
 
     #---------------------------------------------------------------------------------------------------------------------------
     def write_ese_file():
-        depsgraph = bpy.context.evaluated_depsgraph_get()
         scene = bpy.context.scene
         original_frame = scene.frame_current
         active_object = getattr(context, "object", None)
@@ -1070,6 +1433,9 @@ def _write(context, filepath,
         try:
             if bpy.ops.object.mode_set.poll():
                 bpy.ops.object.mode_set(mode='OBJECT')
+
+            scene.frame_set(EXPORT_STATIC_FRAME)
+            depsgraph = bpy.context.evaluated_depsgraph_get()
 
             plugin_version = get_plugin_version()
 
@@ -1097,7 +1463,7 @@ def _write(context, filepath,
                     write_shape_data(out, scene)
                 if 'HELPER' in EXPORT_OBJECTS:
                     write_helper_data(out, scene)
-                if 'ARMATURE' in EXPORT_OBJECTS:
+                if exported_armatures(scene):
                     write_biped_bones(out, scene, depsgraph)
         finally:
             scene.frame_set(original_frame)
