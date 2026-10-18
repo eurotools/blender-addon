@@ -1,0 +1,28 @@
+schema_version = "1.0.0"
+
+id = "io_scene_sphinx"
+version = "1.0.1"
+name = "Eurocom 3D Formats"
+tagline = "Export EIF, ESE and RTG files for EuroLand"
+maintainer = "Swyter and contributors"
+type = "add-on"
+
+website = "https://github.com/Swyter/sphinx-euroland"
+tags = ["Import-Export"]
+blender_version_min = "4.2.0"
+license = ["SPDX:Zlib"]
+
+[permissions]
+files = "Read texture files and write exported EIF, ESE and RTG files"
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  "/.git/",
+  "/.agents/",
+  "/_blender_rig_out/",
+  "/_blender_smoke_out/",
+  "/_blender_compat_out/",
+  "/tools/",
+  "*.pyc",
+]

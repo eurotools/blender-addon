@@ -10,6 +10,7 @@ Authors: Swyter and Jmarti856
 """
 
 import bpy
+import re
 from math import degrees
 from pathlib import Path
 from mathutils import Matrix
@@ -29,8 +30,10 @@ def _write(context, filepath,
            EXPORT_UV,
            EXPORT_VERTEX_COLORS,
            EXPORT_FACE_SHADERS,
+           EXTRACT_PACKED_TEXTURES,
            DECIMAL_PRECISION,
-           GLOBAL_SCALE
+           GLOBAL_SCALE,
+           REPORT
         ):
 
     EXPORT_GEOMNODE = True
@@ -41,8 +44,12 @@ def _write(context, filepath,
     SCENE_LIGHT_SCALE = 1.0
     TEXTURED_DIFFUSE_SCALE = 1.0
     SOLID_DIFFUSE_SCALE = 1.0
-    MAP_AMOUNT_SCALE = 1.0
     TEXTURE_VERTEX_COLOR_SCALE = 0.5
+
+    def emit_warning(message):
+        print(f'WARNING EIF: {message}')
+        if REPORT:
+            REPORT({'WARNING'}, message)
 
     #---------------------------------------------------------------------------------------------------------------------------
     def material_diffuse(mat):
@@ -55,44 +62,29 @@ def _write(context, filepath,
 
     #---------------------------------------------------------------------------------------------------------------------------
     def has_textured_material(materials):
-        return any(material_texture_path(mat) for mat in materials)
+        return any(material_diffuse_image(mat) for mat in materials)
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def material_map_amount(mat):
-        mat_wrap = material_wrap(mat)
-        if mat_wrap and mat_wrap.metallic != 0.0:
-            return mat_wrap.metallic
-        return 1.0
+    def material_custom_shader_rule(mat):
+        for property_name in ("eif_shader", "euro_shader"):
+            if mat and property_name in mat:
+                custom_rule = str(mat[property_name])
+                if custom_rule in SHADER_RULES:
+                    return custom_rule
+
+        return None
 
     #---------------------------------------------------------------------------------------------------------------------------
     def material_has_alpha(mat):
-        if mat is None:
-            return False
-
-        mat_wrap = material_wrap(mat)
-        alpha = mat_wrap.alpha if mat_wrap else mat.diffuse_color[3]
-        if alpha < 0.999:
-            return True
-
-        blend_method = getattr(mat, "blend_method", "OPAQUE")
-        if blend_method in {'BLEND', 'HASHED', 'CLIP'}:
-            return True
-
-        texture_path = material_texture_path(mat)
-        return bool(texture_path and texture_path.lower().endswith((".tga", ".png")))
+        return material_custom_shader_rule(mat) == 'Alp' or material_has_transparency(mat)
 
     #---------------------------------------------------------------------------------------------------------------------------
     def material_shader_rule(mat):
-        if mat and "eif_shader" in mat:
-            custom_rule = str(mat["eif_shader"])
-            if custom_rule in SHADER_RULES:
-                return custom_rule
+        custom_rule = material_custom_shader_rule(mat)
+        if custom_rule:
+            return custom_rule
 
-        mat_wrap = material_wrap(mat)
-        alpha = mat_wrap.alpha if mat_wrap else (mat.diffuse_color[3] if mat else 1.0)
-        blend_method = getattr(mat, "blend_method", "OPAQUE") if mat else "OPAQUE"
-
-        return 'Non'
+        return 'Alp' if material_has_alpha(mat) else 'Non'
 
     #---------------------------------------------------------------------------------------------------------------------------
     def material_twosided(mat):
@@ -101,14 +93,31 @@ def _write(context, filepath,
         return not getattr(mat, "use_backface_culling", False)
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def collect_materials(scene):
-        materials = []
-        index_map = {}
+    def collect_mesh_occurrences(scene, depsgraph):
+        occurrences = []
 
         for obj in scene.objects:
             if obj.type != 'MESH':
                 continue
+            if obj.parent and obj.parent.instance_type in {'VERTS', 'FACES'}:
+                continue
+            occurrences.append((obj, obj.matrix_world.copy(), obj.name))
 
+        for instance in depsgraph.object_instances:
+            if not instance.is_instance or instance.object.type != 'MESH':
+                continue
+
+            source = instance.object.original
+            occurrences.append((source, instance.matrix_world.copy(), source.name))
+
+        return occurrences
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def collect_materials(occurrences):
+        materials = []
+        index_map = {}
+
+        for obj, _matrix, _name in occurrences:
             for slot in obj.material_slots:
                 mat = slot.material
                 key = mat.name if mat else "Default"
@@ -152,7 +161,7 @@ def _write(context, filepath,
         for index, mat in enumerate(materials):
             name = mat.name if mat else "Default"
             diffuse = material_diffuse(mat)
-            texture_path = material_texture_path(mat)
+            texture_path = export_material_texture_path(mat, filepath, EXTRACT_PACKED_TEXTURES, emit_warning)
             export_diffuse = (
                 (TEXTURED_DIFFUSE_SCALE, TEXTURED_DIFFUSE_SCALE, TEXTURED_DIFFUSE_SCALE)
                 if texture_path
@@ -165,7 +174,7 @@ def _write(context, filepath,
 
             if texture_path:
                 out.write('\t\t*MAP_DIFFUSE "%s"\n' % texture_path)
-                out.write('\t\t*MAP_DIFFUSE_AMOUNT %.2f\n' % (material_map_amount(mat) * MAP_AMOUNT_SCALE))
+                out.write('\t\t*MAP_DIFFUSE_AMOUNT 1.00\n')
 
             if material_has_alpha(mat):
                 out.write('\t\t*MAP_HASALPHA\n')
@@ -239,45 +248,86 @@ def _write(context, filepath,
         return mesh, ob_eval
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def face_layer_count(mesh, uv_layers, mesh_color_layers, has_materials):
+    def material_layer_attributes(mesh):
+        result = {}
+        for attr in mesh.attributes:
+            match = re.fullmatch(r'euro_material_layer_(\d+)', attr.name)
+            if not match or attr.data_type != 'INT' or attr.domain != 'FACE':
+                continue
+            layer_index = int(match.group(1))
+            if layer_index > 0:
+                result[layer_index] = attr
+        return result
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def face_layer_count(uv_layers, mesh_color_layers, has_materials, material_layers):
         layer_count = max(
             len(uv_layers) if EXPORT_UV else 0,
             len(mesh_color_layers) if EXPORT_VERTEX_COLORS else 0,
+            max(material_layers, default=-1) + 1,
             1 if has_materials or EXPORT_FACE_SHADERS else 0
         )
         return max(1, layer_count)
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def write_mesh_data(out, scene, depsgraph, global_material_indices):
-        matrix_data = {}
+    def parse_user_flag(value):
+        try:
+            return int(value, 0) if isinstance(value, str) else int(value)
+        except (TypeError, ValueError):
+            return 0
 
-        for ob_main in scene.objects:
-            if ob_main.type != 'MESH':
-                continue
+    #---------------------------------------------------------------------------------------------------------------------------
+    def object_user_flags(obj):
+        flags = {}
+        if obj and "euro_user_flags" in obj:
+            value = obj["euro_user_flags"]
+            if hasattr(value, '__iter__') and not isinstance(value, str):
+                flags.update((index, parse_user_flag(item)) for index, item in enumerate(value))
+            else:
+                flags[0] = parse_user_flag(value)
 
-            if ob_main.parent and ob_main.parent.instance_type in {'VERTS', 'FACES'}:
-                continue
+        if obj:
+            for property_name in obj.keys():
+                match = re.fullmatch(r'euro_user_flags?_(\d+)', property_name)
+                if match:
+                    flags[int(match.group(1))] = parse_user_flag(obj[property_name])
 
-            instances = [(ob_main, ob_main.matrix_world)]
-            if ob_main.is_instancer:
-                instances += [
-                    (dup.instance_object.original, dup.matrix_world.copy())
-                    for dup in depsgraph.object_instances
-                    if dup.parent and dup.parent.original == ob_main
-                ]
+        return sorted(flags.items()) if flags else [(0, 0)]
 
-            for ob, ob_mat in instances:
+    #---------------------------------------------------------------------------------------------------------------------------
+    def unique_export_name(base_name, used_names):
+        if base_name not in used_names:
+            used_names.add(base_name)
+            return base_name
+
+        suffix = 1
+        while True:
+            candidate = f"{base_name}.{suffix:03d}"
+            if candidate not in used_names:
+                used_names.add(candidate)
+                return candidate
+            suffix += 1
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def write_mesh_data(out, occurrences, depsgraph, global_material_indices):
+        node_data = []
+        used_names = set()
+
+        for ob, ob_mat, base_name in occurrences:
+                export_name = unique_export_name(base_name, used_names)
                 mesh, ob_eval = transformed_mesh(ob, ob_mat, depsgraph)
                 if mesh is None:
                     continue
 
                 try:
-                    matrix_data[ob_main.name] = {
-                        "type": ob_main.type,
+                    node_data.append({
+                        "name": export_name,
+                        "type": ob.type,
+                        "object": ob,
                         "matrix_original": ob_mat.copy(),
                         "matrix_transformed": mesh_bake_matrix(ob_mat),
                         "matrix_placement": place_node_matrix(ob_mat)
-                    }
+                    })
 
                     unique_vertices, vertex_index_map = unique_ordered(tuple(v.co) for v in mesh.vertices)
 
@@ -290,18 +340,19 @@ def _write(context, filepath,
 
                     mesh_color_layers = color_layers(mesh) if EXPORT_VERTEX_COLORS else []
                     unique_colors, color_index_map = unique_ordered(
-                        tuple(color_data.color)
+                        color_for_loop(mesh, color_layer, loop_index)
                         for color_layer in mesh_color_layers
-                        for color_data in color_layer.data
+                        for loop_index in range(len(mesh.loops))
                     ) if mesh_color_layers else ([], {})
 
                     mesh_material_list, mesh_material_indices = mesh_materials(mesh, global_material_indices)
                     has_materials = bool(mesh_material_list)
+                    material_layers = material_layer_attributes(mesh) if has_materials else {}
                     synthesize_texture_color = not unique_colors and has_textured_material(mesh_material_list)
                     if synthesize_texture_color:
                         unique_colors = [(TEXTURE_VERTEX_COLOR_SCALE, TEXTURE_VERTEX_COLOR_SCALE, TEXTURE_VERTEX_COLOR_SCALE, 1.0)]
                     has_face_shaders = EXPORT_FACE_SHADERS and has_materials
-                    layer_count = face_layer_count(mesh, uv_layers, mesh_color_layers, has_materials)
+                    layer_count = face_layer_count(uv_layers, mesh_color_layers, has_materials, material_layers)
                     if synthesize_texture_color:
                         layer_count = max(layer_count, 1)
 
@@ -319,7 +370,7 @@ def _write(context, filepath,
                     faceformat += 'F'
 
                     out.write("*MESH {\n")
-                    out.write('\t*NAME "%s"\n' % ob_main.name)
+                    out.write('\t*NAME "%s"\n' % export_name)
                     out.write('\t*VERTCOUNT %d\n' % len(unique_vertices))
                     out.write('\t*UVCOUNT %d\n' % len(unique_uvs))
                     out.write('\t*VERTCOLCOUNT %d\n' % len(unique_colors))
@@ -381,16 +432,27 @@ def _write(context, filepath,
                                 elif layer_index < len(mesh_color_layers):
                                     color_indices = []
                                     for loop_index in poly.loop_indices:
-                                        color = tuple(mesh_color_layers[layer_index].data[loop_index].color)
+                                        color = color_for_loop(mesh, mesh_color_layers[layer_index], loop_index)
                                         color_indices.append(color_index_map.get(color, -1))
                                     out.write("%s " % " ".join(map(str, color_indices)))
                                 else:
                                     out.write("%s " % " ".join(["-1"] * len(poly.vertices)))
 
                         if has_materials:
-                            material_index = mesh_material_indices[poly.material_index] if poly.material_index < len(mesh_material_indices) else mesh_material_indices[0]
                             for layer_index in range(layer_count):
-                                out.write("%d " % (material_index if layer_index == 0 else -1))
+                                if layer_index == 0:
+                                    local_material_index = poly.material_index
+                                elif layer_index in material_layers:
+                                    local_material_index = material_layers[layer_index].data[poly.index].value
+                                else:
+                                    local_material_index = -1
+
+                                material_index = (
+                                    mesh_material_indices[local_material_index]
+                                    if 0 <= local_material_index < len(mesh_material_indices)
+                                    else -1
+                                )
+                                out.write("%d " % material_index)
 
                         if has_face_shaders:
                             shader_index = poly.material_index if poly.material_index < len(mesh_material_list) else 0
@@ -404,11 +466,12 @@ def _write(context, filepath,
                 finally:
                     ob_eval.to_mesh_clear()
 
-        return matrix_data
+        return node_data
 
     #---------------------------------------------------------------------------------------------------------------------------
     def write_geom_and_place_node(out, obj_matrix_data, is_geom_node=False):
-        for mesh_name, data in obj_matrix_data.items():
+        for data in obj_matrix_data:
+            mesh_name = data["name"]
             if is_geom_node:
                 matrix_data = Matrix.Identity(4)
                 out.write('*GEOMNODE {\n')
@@ -442,9 +505,11 @@ def _write(context, filepath,
             out.write('\t}\n')
 
             if is_geom_node:
-                out.write('\t*USER_FLAGS_COUNT %u\n' % 1)
+                user_flags = object_user_flags(data["object"])
+                out.write('\t*USER_FLAGS_COUNT %u\n' % len(user_flags))
                 out.write('\t*USER_FLAGS {\n')
-                out.write('\t\t*SET 0 0x00000000\n')
+                for flag_index, flag_value in user_flags:
+                    out.write('\t\t*SET %u 0x%08X\n' % (flag_index, flag_value & 0xFFFFFFFF))
                 out.write('\t}\n')
 
             out.write("}\n")
@@ -456,6 +521,35 @@ def _write(context, filepath,
                 bpy.ops.object.mode_set(mode=original_mode)
             except RuntimeError:
                 pass
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def validate_export(occurrences):
+        warnings = set()
+        checked_objects = set()
+
+        for obj, _matrix, _name in occurrences:
+            pointer = obj.as_pointer()
+            if pointer in checked_objects:
+                continue
+            checked_objects.add(pointer)
+
+            materials = [slot.material for slot in obj.material_slots if slot.material]
+            images = [material_diffuse_image(mat) for mat in materials]
+            images = [image for image in images if image]
+            if images and (not EXPORT_UV or not obj.data.uv_layers):
+                warnings.add(f'Textured mesh {obj.name} has no exported UV coordinates.')
+            for image in images:
+                if not image.filepath and not (image.packed_file and EXTRACT_PACKED_TEXTURES):
+                    warnings.add(f'Image {image.name} has no file path and cannot be referenced by EuroLand.')
+
+            for mat in materials:
+                principled = material_principled_node(mat)
+                base_color = principled.inputs.get('Base Color') if principled else None
+                if base_color and base_color.is_linked and not material_diffuse_image(mat):
+                    warnings.add(f'Material {mat.name} uses a procedural Base Color and must be baked to an image.')
+
+        for warning in sorted(warnings):
+            emit_warning(warning)
 
     #---------------------------------------------------------------------------------------------------------------------------
     def write_eif_file():
@@ -470,7 +564,9 @@ def _write(context, filepath,
                 bpy.ops.object.mode_set(mode='OBJECT')
 
             plugin_version = get_plugin_version()
-            materials, material_indices = collect_materials(scene)
+            occurrences = collect_mesh_occurrences(scene, depsgraph)
+            validate_export(occurrences)
+            materials, material_indices = collect_materials(occurrences)
 
             with open(filepath, 'w', encoding="utf8") as out:
                 out.write("*EUROCOM_INTERCHANGE_FILE 100\n")
@@ -483,7 +579,7 @@ def _write(context, filepath,
 
                 write_scene_data(out, scene)
                 write_materials(out, materials)
-                mesh_position_data = write_mesh_data(out, scene, depsgraph, material_indices)
+                mesh_position_data = write_mesh_data(out, occurrences, depsgraph, material_indices)
 
                 if EXPORT_GEOMNODE:
                     write_geom_and_place_node(out, mesh_position_data, True)
@@ -508,7 +604,9 @@ def save(context,
          Output_Mesh_Vertex_Colors,
          Output_Face_Shaders,
          Decimal_Precision,
-         Output_Scale):
+         Output_Scale,
+         Extract_Packed_Textures=True,
+         report=None):
 
     _write(context, filepath,
            EXPORT_GEOMNODE=Output_GeomNode,
@@ -517,8 +615,10 @@ def save(context,
            EXPORT_UV=Output_Mesh_UV,
            EXPORT_VERTEX_COLORS=Output_Mesh_Vertex_Colors,
            EXPORT_FACE_SHADERS=Output_Face_Shaders,
+           EXTRACT_PACKED_TEXTURES=Extract_Packed_Textures,
            DECIMAL_PRECISION=Decimal_Precision,
-           GLOBAL_SCALE=Output_Scale)
+           GLOBAL_SCALE=Output_Scale,
+           REPORT=report)
 
     return {'FINISHED'}
 
@@ -532,5 +632,6 @@ if __name__ == '__main__':
          Output_Mesh_UV=True,
          Output_Mesh_Vertex_Colors=True,
          Output_Face_Shaders=True,
+         Extract_Packed_Textures=True,
          Decimal_Precision=6,
          Output_Scale=1.0)

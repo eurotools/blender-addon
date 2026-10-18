@@ -32,6 +32,7 @@ TICKS_PER_FRAME = 0
 def _write(context, filepath,
            EXPORT_MESH_FLAGS,
            EXPORT_MATERIALS,
+           EXTRACT_PACKED_TEXTURES,
            EXPORT_MESH_ANIMS,
            EXPORT_CAMERA_LIGHT_ANIMS,
            TRANSFORM_TO_CENTER,
@@ -54,7 +55,8 @@ def _write(context, filepath,
            EXPORT_REMOVE_NONUNIFORM_SCALE,
            USE_KEYS,
            FORCE_SAMPLE,
-           FRAMES_PER_SAMPLE
+           FRAMES_PER_SAMPLE,
+           REPORT
         ):
 
     df = f'%.{DECIMAL_PRECISION}f'
@@ -63,6 +65,11 @@ def _write(context, filepath,
     SOLID_DIFFUSE_SCALE = 1.0
     MAP_AMOUNT_SCALE = 1.0
     TEXTURE_VERTEX_COLOR_SCALE = 0.5
+
+    def emit_warning(message):
+        print(f'WARNING ESE: {message}')
+        if REPORT:
+            REPORT({'WARNING'}, message)
 
     #---------------------------------------------------------------------------------------------------------------------------
     def material_shader_rule(mat):
@@ -76,11 +83,14 @@ def _write(context, filepath,
             if custom_rule in {'Non', 'HPH', 'OPO', 'OMO', 'OPQ', 'Alp'}:
                 return custom_rule
 
+        if material_has_transparency(mat):
+            return 'Alp'
+
         return 'Non'
 
     #---------------------------------------------------------------------------------------------------------------------------
     def has_textured_material(materials):
-        return any(material_has_texture(mat) for mat in materials)
+        return any(material_diffuse_image(mat) for mat in materials)
 
     #---------------------------------------------------------------------------------------------------------------------------
     def safe_scale_delta(current, base):
@@ -440,7 +450,8 @@ def _write(context, filepath,
             emission_color = getattr(mat_wrap, "emission_color", (0.0, 0.0, 0.0))
             emission_level = max(emission_color[:3]) if emission_color else 0.0
             self_illum = max(0.0, min(mat_wrap.emission_strength * emission_level, 1.0))
-            textured = include_texture and getattr(mat_wrap, "base_color_texture", None) and mat_wrap.base_color_texture.image
+            image = material_diffuse_image(mat) if include_texture else None
+            textured = bool(image)
             diffuse = (
                 (TEXTURED_DIFFUSE_SCALE, TEXTURED_DIFFUSE_SCALE, TEXTURED_DIFFUSE_SCALE)
                 if textured
@@ -461,16 +472,14 @@ def _write(context, filepath,
             out.write(f'{tab}*MATERIAL_XP_TYPE Filter\n')
 
             if include_texture:
-                tex_wrap = getattr(mat_wrap, "base_color_texture", None)
-                image = tex_wrap.image if tex_wrap else None
-
                 if image:
+                    texture_path = export_material_texture_path(mat, filepath, EXTRACT_PACKED_TEXTURES, emit_warning)
                     out.write(f'{tab}*MAP_DIFFUSE {{\n')
                     out.write(f'{tab}\t*MAP_NAME "%s"\n' % image.name)
                     out.write(f'{tab}\t*MAP_CLASS "Bitmap"\n')
                     out.write(f'{tab}\t*MAP_SUBNO 1\n')
                     out.write(f'{tab}\t*MAP_AMOUNT %.2f\n' % (mat_wrap.metallic if use_mirror else MAP_AMOUNT_SCALE))
-                    out.write(f'{tab}\t*BITMAP "%s"\n' % bpy.path.abspath(image.filepath))
+                    out.write(f'{tab}\t*BITMAP "%s"\n' % (texture_path or ''))
                     out.write(f'{tab}\t*MAP_TYPE Screen\n')
                     out.write(f'{tab}\t*UVW_U_OFFSET %.1f\n' % 0.0)
                     out.write(f'{tab}\t*UVW_V_OFFSET %.1f\n' % 0.0)
@@ -501,15 +510,60 @@ def _write(context, filepath,
             out.write(f'{tab}*MATERIAL_XP_TYPE Filter\n')
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def collect_scene_materials(scene):
-        scene_materials = {}
+    def unique_export_name(base_name, used_names):
+        if base_name not in used_names:
+            used_names.add(base_name)
+            return base_name
+
+        suffix = 1
+        while True:
+            candidate = f"{base_name}.{suffix:03d}"
+            if candidate not in used_names:
+                used_names.add(candidate)
+                return candidate
+            suffix += 1
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def collect_mesh_occurrences(scene, depsgraph):
+        occurrences = []
+        used_names = set()
 
         for obj in scene.objects:
             if obj.type != 'MESH':
                 continue
+            if obj.parent and obj.parent.instance_type in {'VERTS', 'FACES'}:
+                continue
+            occurrences.append({
+                "object": obj,
+                "matrix": obj.matrix_world.copy(),
+                "name": unique_export_name(export_node_name(obj), used_names),
+                "is_instance": False,
+            })
 
-            materials = [slot.material for slot in obj.material_slots if slot.material]
-            scene_materials[obj.name] = materials if materials else [None]
+        for instance in depsgraph.object_instances:
+            if not instance.is_instance or instance.object.type != 'MESH':
+                continue
+            source = instance.object.original
+            if mesh_has_skin(source) or rigid_bone_parent(source):
+                emit_warning(f'Skipping instanced rigged mesh {source.name}; export the rig as a normal object.')
+                continue
+            occurrences.append({
+                "object": source,
+                "matrix": instance.matrix_world.copy(),
+                "name": unique_export_name(export_node_name(source), used_names),
+                "is_instance": True,
+            })
+
+        return occurrences
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def collect_scene_materials(occurrences):
+        scene_materials = {}
+
+        for occurrence in occurrences:
+            obj = occurrence["object"]
+            materials = [slot.material for slot in obj.material_slots]
+            scene_materials[occurrence["name"]] = materials if materials else [None]
 
         return scene_materials
 
@@ -546,12 +600,12 @@ def _write(context, filepath,
 
         if is_pivot:
             matrix_data = obj_matrix_data["matrix_transformed"]
-            if obj_matrix_data["type"] == 'MESH' and (TRANSFORM_TO_CENTER or mesh_transform_is_baked):
+            if obj_matrix_data["type"] == 'MESH' and (obj_matrix_data.get("transform_centered", False) or mesh_transform_is_baked):
                 matrix_data = Matrix.Identity(4)
             out.write('\t*PIVOT_TM {\n')
         else:
             matrix_data = obj_matrix_data["matrix_original"]
-            if obj_matrix_data["type"] == 'MESH' and (TRANSFORM_TO_CENTER or mesh_transform_is_baked):
+            if obj_matrix_data["type"] == 'MESH' and (obj_matrix_data.get("transform_centered", False) or mesh_transform_is_baked):
                 matrix_data = Matrix.Identity(4)
             out.write('\t*NODE_TM {\n')
         matrix_data = matrix_without_nonuniform_scale(matrix_data.copy())
@@ -656,7 +710,7 @@ def _write(context, filepath,
         )
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def transformed_mesh(ob, ob_mat, depsgraph, bake_object_transform=True, use_bind_mesh=False):
+    def transformed_mesh(ob, ob_mat, depsgraph, bake_object_transform=True, use_bind_mesh=False, center_transform=False):
         ob_eval = ob.evaluated_get(depsgraph) if EXPORT_APPLY_MODIFIERS else ob.original
         mesh_is_copy = False
 
@@ -667,28 +721,29 @@ def _write(context, filepath,
             else:
                 mesh = ob_eval.to_mesh()
         except RuntimeError:
-            return None, None, False
+            return None, None, False, None
 
         if mesh is None:
-            return None, ob_eval, mesh_is_copy
+            return None, ob_eval, mesh_is_copy, None
 
         if EXPORT_TRI:
             mesh_triangulate(mesh)
 
         if not bake_object_transform:
             matrix_transformed = Matrix.Identity(4)
-        elif TRANSFORM_TO_CENTER:
+        elif center_transform:
             matrix_transformed = Matrix.Diagonal(ob_mat.to_scale()).to_4x4()
         else:
             matrix_transformed = ob_mat.copy()
         matrix_transformed = matrix_without_nonuniform_scale(matrix_transformed)
 
-        mesh.transform(Matrix.Scale(GLOBAL_SCALE, 4) @ (MESH_GLOBAL_MATRIX @ matrix_transformed))
+        export_matrix = Matrix.Scale(GLOBAL_SCALE, 4) @ (MESH_GLOBAL_MATRIX @ matrix_transformed)
+        mesh.transform(export_matrix)
 
         if (MESH_GLOBAL_MATRIX @ matrix_transformed).determinant() > 0.0:
             mesh.flip_normals()
 
-        return mesh, ob_eval, mesh_is_copy
+        return mesh, ob_eval, mesh_is_copy, export_matrix
 
     #---------------------------------------------------------------------------------------------------------------------------
     def material_index_for_poly(poly, materials):
@@ -699,55 +754,55 @@ def _write(context, filepath,
         return 0
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def write_mesh_data(out, scene, depsgraph, scene_materials):
+    def write_mesh_data(out, scene, depsgraph, scene_materials, occurrences):
         animation_armatures = exported_armatures(scene) if EXPORT_MESH_ANIMS else []
-        for ob_main in scene.objects:
-            if ob_main.type != 'MESH':
-                continue
+        for occurrence in occurrences:
+            ob_main = occurrence["object"]
+            node_name = occurrence["name"]
+            is_instance = occurrence["is_instance"]
 
             # Animation imports turn every ordinary GEOMOBJECT into an Anim Skin.
             # Keep reference floors and unrelated scene geometry out of a biped ESE.
             if animation_armatures and armature_for_mesh(ob_main) not in animation_armatures:
                 continue
 
-            if ob_main.parent and ob_main.parent.instance_type in {'VERTS', 'FACES'}:
-                continue
-
-            instances = [(ob_main, ob_main.matrix_world)]
-            if ob_main.is_instancer:
-                instances += [
-                    (dup.instance_object.original, dup.matrix_world.copy())
-                    for dup in depsgraph.object_instances
-                    if dup.parent and dup.parent.original == ob_main
-                ]
+            instances = [(ob_main, occurrence["matrix"])]
 
             for ob, ob_mat in instances:
-                animated_mesh = mesh_has_transform_animation(ob_main)
+                animated_mesh = mesh_has_transform_animation(ob_main) and not is_instance
                 skinned_mesh = mesh_has_skin(ob_main)
                 bone_parented_mesh = bool(rigid_bone_parent(ob_main))
+                morph_mesh = bool(EXPORT_MESH_MORPH and ob_main.data.shape_keys)
+                center_transform = TRANSFORM_TO_CENTER and not (animated_mesh or skinned_mesh or bone_parented_mesh)
+                if TRANSFORM_TO_CENTER and not center_transform:
+                    emit_warning(f'Transform to 0,0,0 is ignored for animated or rigged mesh {ob_main.name}.')
                 # Weighted meshes retain their bind/object space. Rigid Blender bone
                 # children are converted to one-bone skins, so bake their static world
                 # transform into the vertices to match EuroLand's bind-pose space.
                 preserve_local_space = skinned_mesh
-                mesh, ob_eval, mesh_is_copy = transformed_mesh(
+                if morph_mesh and ob_main.modifiers:
+                    emit_warning(f'Modifiers are ignored for morph mesh {ob_main.name} to preserve vertex topology.')
+                mesh, ob_eval, mesh_is_copy, mesh_export_matrix = transformed_mesh(
                     ob,
                     ob_mat,
                     depsgraph,
-                    bake_object_transform=not TRANSFORM_TO_CENTER and not preserve_local_space,
-                    use_bind_mesh=skinned_mesh,
+                    bake_object_transform=not center_transform and not preserve_local_space,
+                    use_bind_mesh=skinned_mesh or morph_mesh,
+                    center_transform=center_transform,
                 )
                 if mesh is None:
                     continue
 
                 try:
-                    matrix_transformed = Matrix.Identity(4) if TRANSFORM_TO_CENTER else ob_mat.copy()
+                    matrix_transformed = Matrix.Identity(4) if center_transform else ob_mat.copy()
                     obj_matrix_data = {
-                        "name": export_node_name(ob_main),
+                        "name": node_name,
                         "type": ob_main.type,
                         "matrix_original": ob_mat.copy(),
                         "matrix_transformed": matrix_transformed,
                         "animated_mesh": animated_mesh,
-                        "transform_baked": not TRANSFORM_TO_CENTER and not preserve_local_space,
+                        "transform_baked": not center_transform and not preserve_local_space,
+                        "transform_centered": center_transform,
                         "inherit_parent": False,
                     }
 
@@ -770,20 +825,24 @@ def _write(context, filepath,
                             for uv in mesh.uv_layers.active.data
                         )
 
-                    mesh_materials = scene_materials.get(ob_main.name, [])
-                    colors = color_layer_data(mesh)
+                    mesh_materials = scene_materials.get(node_name, [])
+                    color_layer = active_color_layer(mesh)
                     unique_colors = []
                     color_index_map = {}
                     synthesize_texture_color = False
-                    if EXPORT_MESH_VCOLORS and colors:
-                        unique_colors, color_index_map = unique_ordered(tuple(col.color) for col in colors)
+                    if EXPORT_MESH_VCOLORS and color_layer:
+                        unique_colors, color_index_map = unique_ordered(
+                            color_for_loop(mesh, color_layer, loop_index)
+                            for loop_index in range(len(mesh.loops))
+                        )
                     elif has_textured_material(mesh_materials):
                         synthesize_texture_color = True
                         unique_colors = [(TEXTURE_VERTEX_COLOR_SCALE, TEXTURE_VERTEX_COLOR_SCALE, TEXTURE_VERTEX_COLOR_SCALE, 1.0)]
 
                     out.write("*GEOMOBJECT {\n")
-                    out.write('\t*NODE_NAME "%s"\n' % export_node_name(ob_main))
-                    write_parent(out, ob_main)
+                    out.write('\t*NODE_NAME "%s"\n' % node_name)
+                    if not is_instance:
+                        write_parent(out, ob_main)
                     write_tm_node(out, obj_matrix_data)
                     write_tm_node(out, obj_matrix_data, True)
 
@@ -858,7 +917,8 @@ def _write(context, filepath,
                                 else:
                                     color_indices = []
                                     for loop_index in poly.loop_indices:
-                                        color_indices.append(color_index_map.get(tuple(colors[loop_index].color), -1))
+                                        color = color_for_loop(mesh, color_layer, loop_index)
+                                        color_indices.append(color_index_map.get(color, -1))
                                 out.write('\t\t\t*MESH_CFACE %-3d\t%d\t%d\t%d\n' % (
                                     poly_index, color_indices[0], color_indices[1], color_indices[2]
                                 ))
@@ -911,8 +971,8 @@ def _write(context, filepath,
                     out.write('\t*PROP_RECVSHADOW 1\n')
                     out.write(f'\t*WIREFRAME_COLOR {df} {df} {df}\n' % (ob.color[0], ob.color[1], ob.color[2]))
 
-                    if EXPORT_MATERIALS and ob_main.name in scene_materials:
-                        out.write('\t*MATERIAL_REF %d\n' % list(scene_materials.keys()).index(ob_main.name))
+                    if EXPORT_MATERIALS and node_name in scene_materials:
+                        out.write('\t*MATERIAL_REF %d\n' % list(scene_materials.keys()).index(node_name))
 
                     out.write('\t*MESH_ANIMATION {\n')
                     out.write('\t}\n')
@@ -926,7 +986,7 @@ def _write(context, filepath,
                     out.write("}\n")
 
                     if EXPORT_MESH_MORPH and ob.data.shape_keys:
-                        write_morph_list(out, ob)
+                        write_morph_list(out, ob, mesh_export_matrix)
                 finally:
                     if mesh_is_copy:
                         bpy.data.meshes.remove(mesh)
@@ -945,13 +1005,14 @@ def _write(context, filepath,
         out.write('\t}\n')
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def write_morph_list(out, ob):
+    def write_morph_list(out, ob, export_matrix):
         out.write('*MORPH_LIST {\n')
         for shape_key in ob.data.shape_keys.key_blocks:
             if shape_key.relative_key != shape_key:
                 out.write('\t*MORPH_TARGET "%s" %u {\n' % (shape_key.name.replace(' ', '_'), len(shape_key.data)))
                 for vert in shape_key.data:
-                    out.write('\t\t%s\t%s\t%s\n' % (df % vert.co.x, df % vert.co.y, df % vert.co.z))
+                    co = export_matrix @ vert.co
+                    out.write('\t\t%s\t%s\t%s\n' % (df % co.x, df % co.y, df % co.z))
                 out.write('\t}\n')
         out.write('}\n')
 
@@ -1424,6 +1485,48 @@ def _write(context, filepath,
                 pass
 
     #---------------------------------------------------------------------------------------------------------------------------
+    def validate_export(occurrences):
+        warnings = set()
+        checked_objects = set()
+
+        for occurrence in occurrences:
+            obj = occurrence["object"]
+            pointer = obj.as_pointer()
+            if pointer in checked_objects:
+                continue
+            checked_objects.add(pointer)
+
+            materials = [slot.material for slot in obj.material_slots if slot.material]
+            images = [material_diffuse_image(mat) for mat in materials]
+            images = [image for image in images if image]
+            if images and (not EXPORT_MESH_UV or not obj.data.uv_layers):
+                warnings.add(f'Textured mesh {obj.name} has no exported UV coordinates.')
+            for image in images:
+                if not image.filepath and not (image.packed_file and EXTRACT_PACKED_TEXTURES):
+                    warnings.add(f'Image {image.name} has no file path and cannot be referenced by EuroLand.')
+
+            for mat in materials:
+                principled = material_principled_node(mat)
+                base_color = principled.inputs.get('Base Color') if principled else None
+                if base_color and base_color.is_linked and not material_diffuse_image(mat):
+                    warnings.add(f'Material {mat.name} uses a procedural Base Color and must be baked to an image.')
+
+            if EXPORT_MESH_ANIMS and USE_KEYS and not FORCE_SAMPLE:
+                has_drivers = bool(obj.animation_data and obj.animation_data.drivers)
+                if obj.constraints or has_drivers:
+                    warnings.add(f'Animated mesh {obj.name} uses constraints or drivers; enable Force Sample.')
+
+            armature = armature_for_mesh(obj)
+            if armature:
+                bone_names = {bone.name for bone in armature.data.bones}
+                unused_groups = sorted(group.name for group in obj.vertex_groups if group.name not in bone_names)
+                if unused_groups:
+                    warnings.add(f'Mesh {obj.name} has vertex groups that are not bones: {", ".join(unused_groups)}.')
+
+        for warning in sorted(warnings):
+            emit_warning(warning)
+
+    #---------------------------------------------------------------------------------------------------------------------------
     def write_ese_file():
         scene = bpy.context.scene
         original_frame = scene.frame_current
@@ -1436,6 +1539,8 @@ def _write(context, filepath,
 
             scene.frame_set(EXPORT_STATIC_FRAME)
             depsgraph = bpy.context.evaluated_depsgraph_get()
+            mesh_occurrences = collect_mesh_occurrences(scene, depsgraph)
+            validate_export(mesh_occurrences)
 
             plugin_version = get_plugin_version()
 
@@ -1449,12 +1554,12 @@ def _write(context, filepath,
 
                 write_scene_data(out, scene)
 
-                scene_materials = collect_scene_materials(scene) if EXPORT_MATERIALS else {}
+                scene_materials = collect_scene_materials(mesh_occurrences) if EXPORT_MATERIALS else {}
                 if EXPORT_MATERIALS:
                     write_scene_materials(out, scene_materials)
 
                 if 'MESH' in EXPORT_OBJECTS:
-                    write_mesh_data(out, scene, depsgraph, scene_materials)
+                    write_mesh_data(out, scene, depsgraph, scene_materials, mesh_occurrences)
                 if 'CAMERA' in EXPORT_OBJECTS:
                     write_camera_data(out, scene, depsgraph)
                 if 'LIGHT' in EXPORT_OBJECTS:
@@ -1500,11 +1605,14 @@ def save(context,
          Output_Remove_NonUniform_Scale=False,
          Use_Keys=True,
          Force_Sample=False,
-         Frames_Per_Sample=1):
+         Frames_Per_Sample=1,
+         Extract_Packed_Textures=True,
+         report=None):
 
     _write(context, filepath,
            EXPORT_MESH_FLAGS=Output_Mesh_Definition,
            EXPORT_MATERIALS=Output_Materials,
+           EXTRACT_PACKED_TEXTURES=Extract_Packed_Textures,
            EXPORT_MESH_ANIMS=Output_Mesh_Anims,
            EXPORT_CAMERA_LIGHT_ANIMS=Output_CameraLightAnims,
            TRANSFORM_TO_CENTER=Transform_Center,
@@ -1527,7 +1635,8 @@ def save(context,
            EXPORT_REMOVE_NONUNIFORM_SCALE=Output_Remove_NonUniform_Scale,
            USE_KEYS=Use_Keys,
            FORCE_SAMPLE=Force_Sample,
-           FRAMES_PER_SAMPLE=Frames_Per_Sample)
+           FRAMES_PER_SAMPLE=Frames_Per_Sample,
+           REPORT=report)
 
     return {'FINISHED'}
 

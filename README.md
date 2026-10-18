@@ -29,7 +29,7 @@ For more info about which things each format supports, you can look at the [wiki
 * EIF (_Eurocom Interchange Format_)
   - [x] Arbitrary polygons
   - [x] Vertex colors
-  - [ ] Layers
+  - [x] Layers
   - [X] Maps
 
 * ESE (_Eurocom Export Scene_)
@@ -42,7 +42,7 @@ For more info about which things each format supports, you can look at the [wiki
   - [x] Cameras and animated cameras
   - [ ] Layers
   - [X] Maps
-  - [ ] Animations + Skins
+  - [x] Animations + Skins
   - [X] Scripts
 
 * RTG (_Real Time Game_)

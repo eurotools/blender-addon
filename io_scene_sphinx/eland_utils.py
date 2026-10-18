@@ -1,4 +1,6 @@
 import bpy
+import re
+from pathlib import Path
 from mathutils import Matrix, Euler
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 from . import bl_info
@@ -64,14 +66,37 @@ def color_layer_data(mesh):
     return None
 
 #-------------------------------------------------------------------------------------------------------------------------------
+def active_color_layer(mesh):
+    if hasattr(mesh, "color_attributes") and mesh.color_attributes:
+        return mesh.color_attributes.active_color or mesh.color_attributes.active
+
+    if mesh.vertex_colors:
+        return mesh.vertex_colors.active
+
+    return None
+
+#-------------------------------------------------------------------------------------------------------------------------------
 def color_layers(mesh):
     if hasattr(mesh, "color_attributes") and mesh.color_attributes:
         return [
             attr for attr in mesh.color_attributes
-            if attr.domain == 'CORNER' and attr.data_type in {'BYTE_COLOR', 'FLOAT_COLOR'}
+            if attr.domain in {'CORNER', 'POINT'} and attr.data_type in {'BYTE_COLOR', 'FLOAT_COLOR'}
         ]
 
     return list(mesh.vertex_colors)
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def color_for_loop(mesh, color_layer, loop_index):
+    if not color_layer:
+        return None
+
+    data_index = loop_index
+    if getattr(color_layer, 'domain', 'CORNER') == 'POINT':
+        data_index = mesh.loops[loop_index].vertex_index
+
+    if data_index < 0 or data_index >= len(color_layer.data):
+        return None
+    return tuple(color_layer.data[data_index].color)
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def int_attribute(mesh, name, domain):
@@ -85,14 +110,227 @@ def material_wrap(mat):
     return PrincipledBSDFWrapper(mat) if mat and mat.use_nodes else None
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def material_texture_path(mat):
-    mat_wrap = material_wrap(mat)
-    if not mat_wrap:
+def _node_input(node, *names):
+    if not node:
+        return None
+    for name in names:
+        socket = node.inputs.get(name)
+        if socket:
+            return socket
+    return None
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def _upstream_nodes(socket):
+    if not socket:
+        return []
+
+    pending = [(link.from_node, 0) for link in socket.links]
+    visited = set()
+    result = []
+
+    while pending:
+        node, distance = pending.pop(0)
+        pointer = node.as_pointer()
+        if pointer in visited:
+            continue
+        visited.add(pointer)
+        result.append((node, distance))
+
+        for input_socket in node.inputs:
+            pending.extend((link.from_node, distance + 1) for link in input_socket.links)
+
+    return result
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def material_surface_nodes(mat):
+    if not mat or not mat.use_nodes or not mat.node_tree:
+        return []
+
+    outputs = [
+        node for node in mat.node_tree.nodes
+        if node.bl_idname == 'ShaderNodeOutputMaterial'
+    ]
+    outputs.sort(key=lambda node: not getattr(node, "is_active_output", False))
+    for output in outputs:
+        nodes = _upstream_nodes(_node_input(output, 'Surface'))
+        if nodes:
+            return nodes
+    return []
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def material_principled_node(mat):
+    if not mat or not mat.use_nodes or not mat.node_tree:
         return None
 
-    tex_wrap = getattr(mat_wrap, "base_color_texture", None)
-    image = tex_wrap.image if tex_wrap else None
+    for node, _distance in material_surface_nodes(mat):
+        if node.bl_idname == 'ShaderNodeBsdfPrincipled':
+            return node
+
+    return next(
+        (node for node in mat.node_tree.nodes if node.bl_idname == 'ShaderNodeBsdfPrincipled'),
+        None,
+    )
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def _diffuse_image_score(node, distance):
+    image = getattr(node, "image", None)
+    text = ' '.join(filter(None, (
+        node.name,
+        node.label,
+        getattr(image, "name", None),
+        getattr(image, "filepath", None),
+    ))).casefold().replace('-', '_').replace(' ', '_')
+
+    score = max(0, 20 - distance)
+    positive_tokens = {
+        'base_color': 140,
+        'basecolour': 140,
+        'base_colour': 140,
+        'albedo': 120,
+        'diffuse': 110,
+        'color': 45,
+        'colour': 45,
+    }
+    negative_tokens = {
+        'ambient_occlusion': -160,
+        'occlusion': -140,
+        '_ao': -120,
+        'normal': -160,
+        'roughness': -160,
+        'metallic': -160,
+        'metalness': -160,
+        'opacity': -150,
+        'alpha': -120,
+        'height': -140,
+        'displace': -140,
+        'emission': -100,
+    }
+
+    for token, value in positive_tokens.items():
+        if token in text:
+            score += value
+    for token, value in negative_tokens.items():
+        if token in text:
+            score += value
+    return score
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def material_diffuse_image(mat):
+    if not mat or not mat.use_nodes or not mat.node_tree:
+        return None
+
+    mat_wrap = material_wrap(mat)
+    direct_texture = getattr(mat_wrap, "base_color_texture", None) if mat_wrap else None
+    direct_image = getattr(direct_texture, "image", None) if direct_texture else None
+    if direct_image:
+        return direct_image
+
+    principled = material_principled_node(mat)
+    base_color = _node_input(principled, 'Base Color', 'Base Colour')
+    candidates = [
+        (node, distance) for node, distance in _upstream_nodes(base_color)
+        if node.bl_idname == 'ShaderNodeTexImage' and getattr(node, "image", None)
+    ]
+
+    if not candidates:
+        candidates = [
+            (node, 100) for node in mat.node_tree.nodes
+            if node.bl_idname == 'ShaderNodeTexImage' and getattr(node, "image", None)
+        ]
+
+    if not candidates:
+        return None
+
+    ranked = sorted(
+        candidates,
+        key=lambda item: (_diffuse_image_score(item[0], item[1]), -item[1], item[0].name),
+        reverse=True,
+    )
+    best_node, best_distance = ranked[0]
+    best_score = _diffuse_image_score(best_node, best_distance)
+    if best_distance >= 100 and len(ranked) > 1 and best_score <= 20:
+        return None
+    return best_node.image
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def material_has_transparency(mat):
+    if not mat:
+        return False
+    if mat.diffuse_color[3] < 0.999:
+        return True
+    if not mat.use_nodes or not mat.node_tree:
+        return False
+
+    principled = material_principled_node(mat)
+    alpha = _node_input(principled, 'Alpha')
+    if alpha:
+        if alpha.is_linked or float(alpha.default_value) < 0.999:
+            return True
+
+    return any(
+        node.bl_idname == 'ShaderNodeBsdfTransparent'
+        for node, _distance in material_surface_nodes(mat)
+    )
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def material_alpha_value(mat):
+    if not mat:
+        return 1.0
+
+    diffuse_alpha = float(mat.diffuse_color[3])
+    principled = material_principled_node(mat)
+    alpha = _node_input(principled, 'Alpha')
+    if alpha and not alpha.is_linked:
+        node_alpha = float(alpha.default_value)
+        # Blender 3.6 and 5.x expose different synchronization behavior between
+        # Material.diffuse_color and the Principled alpha socket. Preserve an
+        # explicitly translucent material color, otherwise use the node value.
+        if diffuse_alpha < 0.999 or node_alpha >= 0.999:
+            return diffuse_alpha
+        return node_alpha
+
+    return diffuse_alpha
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def material_texture_path(mat):
+    image = material_diffuse_image(mat)
     return bpy.path.abspath(image.filepath) if image else None
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def export_material_texture_path(mat, export_filepath=None, extract_packed=False, warning=None):
+    image = material_diffuse_image(mat)
+    if not image:
+        return None
+
+    source_path = bpy.path.abspath(image.filepath) if image.filepath else ''
+    if not extract_packed or not image.packed_file or not export_filepath:
+        return source_path or None
+
+    source_name = image.name or (Path(source_path).name if source_path else 'texture')
+    safe_name = re.sub(r'[<>:"/\\|?*]+', '_', source_name).strip('. ') or 'texture.png'
+    known_extensions = {'.bmp', '.dds', '.gif', '.jpg', '.jpeg', '.png', '.tga', '.tif', '.tiff', '.webp'}
+    if Path(safe_name).suffix.lower() not in known_extensions:
+        format_extension = {
+            'BMP': '.bmp', 'IRIS': '.rgb', 'JPEG': '.jpg', 'JPEG2000': '.jp2',
+            'PNG': '.png', 'TARGA': '.tga', 'TARGA_RAW': '.tga', 'TIFF': '.tif',
+            'WEBP': '.webp',
+        }.get(getattr(image, 'file_format', ''), Path(source_path).suffix or '.png')
+        safe_name += format_extension
+
+    output_dir = Path(export_filepath).resolve().parent / 'textures'
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / safe_name
+
+    try:
+        output_path.write_bytes(image.packed_file.data)
+        return str(output_path)
+    except (OSError, RuntimeError) as exc:
+        message = f'Could not extract packed image {image.name}: {exc}'
+        if warning:
+            warning(message)
+        else:
+            print(f'WARNING: {message}')
+        return source_path or None
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def material_has_texture(mat):

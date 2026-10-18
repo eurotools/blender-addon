@@ -5,7 +5,7 @@ bl_info = {
            'name': 'Eurocom 3D formats for Sphinx and the Cursed Mummy™',
          'author': 'Swyter, for THQ Nordic GmbH',
         'version': (1, 0, 1),
-        'blender': (4, 3, 2),
+        'blender': (3, 6, 0),
        'location': 'File > Import-Export',
     'description': 'Export and import EIF, ESE and RTG files compatible with Euroland.',
         'warning': "Importing still doesn't work, export in progress. ¯\\_(ツ)_/¯",
@@ -67,6 +67,12 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
         description="Write PLACENODE blocks with each object's position, rotation and scale. Keep enabled when EuroLand should place the mesh where it was in Blender.",
         default=True,
         options={'HIDDEN'},
+    ) # type: ignore
+
+    Extract_Packed_Textures: BoolProperty(
+        name="Extract Packed Textures",
+        description="Extract packed Blender images into a textures folder next to the EIF and reference those files from EuroLand.",
+        default=True,
     ) # type: ignore
 
     Transform_Center: BoolProperty(
@@ -134,7 +140,7 @@ class ExportEIF(bpy.types.Operator, ExportHelper):
                                             "path_mode",
                                         ))
 
-        return eif_export.save(context, **keywords)
+        return eif_export.save(context, report=self.report, **keywords)
 
     def draw(self, context):
         pass
@@ -152,6 +158,7 @@ class EIF_EXPORT_PT_Output_Settings(bpy.types.Panel):
 
     def draw(self, context):
         self.layout.prop(context.space_data.active_operator, 'Transform_Center')
+        self.layout.prop(context.space_data.active_operator, 'Extract_Packed_Textures')
 
 #-------------------------------------------------------------------------------------------------------------------------------
 class EIF_EXPORT_PT_Mesh_Options(bpy.types.Panel):
@@ -226,6 +233,12 @@ class ExportESE(bpy.types.Operator, ExportHelper):
     Output_Materials: BoolProperty(
         name="Materials",
         description="Export the material list and link each mesh to its Blender materials, textures and EuroLand shader rules. Disable only if you need geometry without material data.",
+        default=True,
+    ) # type: ignore
+
+    Extract_Packed_Textures: BoolProperty(
+        name="Extract Packed Textures",
+        description="Extract packed Blender images into a textures folder next to the ESE and reference those files from EuroLand.",
         default=True,
     ) # type: ignore
 
@@ -436,7 +449,7 @@ class ExportESE(bpy.types.Operator, ExportHelper):
                                             "path_mode",
                                             ))
 
-        return ese_export.save(context, **keywords)
+        return ese_export.save(context, report=self.report, **keywords)
 
     def draw(self, context):
         pass
@@ -455,6 +468,7 @@ class ESE_EXPORT_PT_Output_Options(bpy.types.Panel):
     def draw(self, context):
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Definition')
         self.layout.prop(context.space_data.active_operator, 'Output_Materials')
+        self.layout.prop(context.space_data.active_operator, 'Extract_Packed_Textures')
         self.layout.prop(context.space_data.active_operator, 'Output_Transform_Animation_Keys')
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Anims')
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Keyframes_From_Market')
@@ -589,6 +603,12 @@ class ExportRTG(bpy.types.Operator, ExportHelper):
         default=True,
     ) # type: ignore
 
+    Extract_Packed_Textures: BoolProperty(
+        name="Extract Packed Textures",
+        description="Extract packed Blender images into a textures folder next to the RTG and reference those files from EuroLand.",
+        default=True,
+    ) # type: ignore
+
     Output_Mesh_Anims: BoolProperty(
         name="Animated Mesh",
         description="Export mesh animations",
@@ -597,7 +617,7 @@ class ExportRTG(bpy.types.Operator, ExportHelper):
 
     Output_CameraLightAnims: BoolProperty(
         name="Animated Camera/Light settings",
-        description="Export animations from Camera and Light object types.",
+        description="Export animated camera/light settings such as focal length. RTG camera transforms are sampled over the selected frame range automatically.",
         default=False,
     ) # type: ignore
 
@@ -644,8 +664,8 @@ class ExportRTG(bpy.types.Operator, ExportHelper):
     ) # type: ignore
 
     Output_Mesh_Morph : BoolProperty(
-        name="Skin Deformation Data",
-        description="Export morphs",
+        name="Morph Targets",
+        description="Export Blender shape keys and their animated weights as RTG morph data. Armature skin weights are exported automatically.",
         default=False,
     ) # type: ignore
 
@@ -709,8 +729,8 @@ class ExportRTG(bpy.types.Operator, ExportHelper):
     ) # type: ignore
 
     Output_First_Only : BoolProperty(
-        name="Output Frame 0", 
-        description="",
+        name="Output First Frame Only",
+        description="Export only the Blender scene start frame. Enable this to make an otherwise animated RTG camera static.",
         default=False,
     ) # type: ignore
 
@@ -745,7 +765,7 @@ class ExportRTG(bpy.types.Operator, ExportHelper):
                                             "path_mode",
                                             ))
 
-        return rtg_export.save(context, **keywords)
+        return rtg_export.save(context, report=self.report, **keywords)
 
     #-------------------------------------------------------------------------------------------------------------------------------
     def draw(self, context):
@@ -765,6 +785,7 @@ class RTG_EXPORT_PT_Output_Options(bpy.types.Panel):
     def draw(self, context):
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Definition')
         self.layout.prop(context.space_data.active_operator, 'Output_Materials')
+        self.layout.prop(context.space_data.active_operator, 'Extract_Packed_Textures')
         self.layout.prop(context.space_data.active_operator, 'Output_Mesh_Anims')
         self.layout.prop(context.space_data.active_operator, 'Output_CameraLightAnims')
         self.layout.prop(context.space_data.active_operator, 'Transform_Center')
