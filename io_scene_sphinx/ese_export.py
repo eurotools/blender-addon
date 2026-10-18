@@ -1353,7 +1353,7 @@ def _write(context, filepath,
             key=lambda marker: (marker.frame, marker.name),
         )
 
-        out.write('\t*USER_DATA %u {\n' % 0)
+        out.write('\t*USER_DATA %u {\n' % (3 + len(markers)))
         out.write('\t\tCameraScript = %u\n' % 1)
         out.write('\t\tCameraScript_numCameras = %u\n' % len(markers))
         out.write('\t\tCameraScript_globalOffset = %u\n' % 0)
