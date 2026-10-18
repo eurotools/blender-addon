@@ -74,11 +74,43 @@ def _write(context, filepath,
     MAP_AMOUNT_SCALE = 1.0
     TEXTURE_VERTEX_COLOR_SCALE = 0.5
     skin_bone_plan_cache = {}
+    texture_warnings = set()
 
     def emit_warning(message):
         print(f'WARNING ESE: {message}')
         if REPORT:
             REPORT({'WARNING'}, message)
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def warn_texture_compatibility(mat, diffuse_image, opacity_image):
+        def image_size(image):
+            size = getattr(image, "size", ()) if image else ()
+            return tuple(int(value) for value in size[:2]) if len(size) >= 2 else (0, 0)
+
+        for role, image in (("diffuse", diffuse_image), ("opacity", opacity_image)):
+            width, height = image_size(image)
+            if width <= 0 or height <= 0:
+                continue
+            if (width & (width - 1)) or (height & (height - 1)):
+                warning = (
+                    f'Material {mat.name} uses a non-power-of-two {role} texture '
+                    f'{image.name} ({width}x{height}); EuroLand may require power-of-two dimensions.'
+                )
+                if warning not in texture_warnings:
+                    texture_warnings.add(warning)
+                    emit_warning(warning)
+
+        diffuse_size = image_size(diffuse_image)
+        opacity_size = image_size(opacity_image)
+        if diffuse_image and opacity_image and diffuse_size != opacity_size:
+            warning = (
+                f'Material {mat.name} uses different diffuse and opacity dimensions '
+                f'({diffuse_size[0]}x{diffuse_size[1]} vs '
+                f'{opacity_size[0]}x{opacity_size[1]}); matching dimensions are safer in EuroLand.'
+            )
+            if warning not in texture_warnings:
+                texture_warnings.add(warning)
+                emit_warning(warning)
 
     #---------------------------------------------------------------------------------------------------------------------------
     def material_shader_rule(mat):
@@ -618,6 +650,34 @@ def _write(context, filepath,
         tab = get_tabs(tab_level)
         mat_name = mat.name if mat else "Default"
 
+        def write_bitmap_map(map_type, image, sub_number, amount=1.0):
+            texture_path = export_image_texture_path(
+                image,
+                filepath,
+                EXTRACT_PACKED_TEXTURES,
+                emit_warning,
+            )
+            out.write(f'{tab}*{map_type} {{\n')
+            out.write(f'{tab}\t*MAP_NAME "%s"\n' % image.name)
+            out.write(f'{tab}\t*MAP_CLASS "Bitmap"\n')
+            out.write(f'{tab}\t*MAP_SUBNO %d\n' % sub_number)
+            out.write(f'{tab}\t*MAP_AMOUNT %.2f\n' % amount)
+            out.write(f'{tab}\t*BITMAP "%s"\n' % (texture_path or ''))
+            out.write(f'{tab}\t*MAP_TYPE Screen\n')
+            out.write(f'{tab}\t*UVW_U_OFFSET %.1f\n' % 0.0)
+            out.write(f'{tab}\t*UVW_V_OFFSET %.1f\n' % 0.0)
+            out.write(f'{tab}\t*UVW_U_TILING %.1f\n' % 1.0)
+            out.write(f'{tab}\t*UVW_V_TILING %.1f\n' % 1.0)
+            out.write(f'{tab}\t*UVW_ANGLE %.1f\n' % 0.0)
+            out.write(f'{tab}\t*UVW_BLUR %.1f\n' % 1.0)
+            out.write(f'{tab}\t*UVW_BLUR_OFFSET %.1f\n' % 0.0)
+            out.write(f'{tab}\t*UVW_NOUSE_AMT %.1f\n' % 1.0)
+            out.write(f'{tab}\t*UVW_NOISE_SIZE %.1f\n' % 1.0)
+            out.write(f'{tab}\t*UVW_NOISE_LEVEL 1\n')
+            out.write(f'{tab}\t*UVW_NOISE_PHASE %.1f\n' % 0.0)
+            out.write(f'{tab}\t*BITMAP_FILTER Pyramidal\n')
+            out.write(f'{tab}}}\n')
+
         out.write(f'{tab}*MATERIAL_NAME "%s"\n' % mat_name)
         out.write(f'{tab}*MATERIAL_CLASS "%s"\n' % material_class)
 
@@ -630,6 +690,9 @@ def _write(context, filepath,
             emission_level = max(emission_color[:3]) if emission_color else 0.0
             self_illum = max(0.0, min(mat_wrap.emission_strength * emission_level, 1.0))
             image = material_diffuse_image(mat) if include_texture else None
+            opacity_image = material_opacity_image(mat) if include_texture else None
+            if include_texture:
+                warn_texture_compatibility(mat, image, opacity_image)
             textured = bool(image)
             diffuse = (
                 (TEXTURED_DIFFUSE_SCALE, TEXTURED_DIFFUSE_SCALE, TEXTURED_DIFFUSE_SCALE)
@@ -647,32 +710,17 @@ def _write(context, filepath,
             out.write(f'{tab}*MATERIAL_SHADING Blinn\n')
             out.write(f'{tab}*MATERIAL_XP_FALLOFF %.1f\n' % 0.0)
             out.write(f'{tab}*MATERIAL_SELFILLUM %.1f\n' % self_illum)
+            if material_has_transparency(mat) and not getattr(mat, "use_backface_culling", False):
+                out.write(f'{tab}*MATERIAL_TWOSIDED\n')
             out.write(f'{tab}*MATERIAL_FALLOFF In\n')
             out.write(f'{tab}*MATERIAL_XP_TYPE Filter\n')
 
             if include_texture:
                 if image:
-                    texture_path = export_material_texture_path(mat, filepath, EXTRACT_PACKED_TEXTURES, emit_warning)
-                    out.write(f'{tab}*MAP_DIFFUSE {{\n')
-                    out.write(f'{tab}\t*MAP_NAME "%s"\n' % image.name)
-                    out.write(f'{tab}\t*MAP_CLASS "Bitmap"\n')
-                    out.write(f'{tab}\t*MAP_SUBNO 1\n')
-                    out.write(f'{tab}\t*MAP_AMOUNT %.2f\n' % (mat_wrap.metallic if use_mirror else MAP_AMOUNT_SCALE))
-                    out.write(f'{tab}\t*BITMAP "%s"\n' % (texture_path or ''))
-                    out.write(f'{tab}\t*MAP_TYPE Screen\n')
-                    out.write(f'{tab}\t*UVW_U_OFFSET %.1f\n' % 0.0)
-                    out.write(f'{tab}\t*UVW_V_OFFSET %.1f\n' % 0.0)
-                    out.write(f'{tab}\t*UVW_U_TILING %.1f\n' % 1.0)
-                    out.write(f'{tab}\t*UVW_V_TILING %.1f\n' % 1.0)
-                    out.write(f'{tab}\t*UVW_ANGLE %.1f\n' % 0.0)
-                    out.write(f'{tab}\t*UVW_BLUR %.1f\n' % 1.0)
-                    out.write(f'{tab}\t*UVW_BLUR_OFFSET %.1f\n' % 0.0)
-                    out.write(f'{tab}\t*UVW_NOUSE_AMT %.1f\n' % 1.0)
-                    out.write(f'{tab}\t*UVW_NOISE_SIZE %.1f\n' % 1.0)
-                    out.write(f'{tab}\t*UVW_NOISE_LEVEL 1\n')
-                    out.write(f'{tab}\t*UVW_NOISE_PHASE %.1f\n' % 0.0)
-                    out.write(f'{tab}\t*BITMAP_FILTER Pyramidal\n')
-                    out.write(f'{tab}}}\n')
+                    diffuse_amount = mat_wrap.metallic if use_mirror else MAP_AMOUNT_SCALE
+                    write_bitmap_map("MAP_DIFFUSE", image, 1, diffuse_amount)
+                if opacity_image:
+                    write_bitmap_map("MAP_OPACITY", opacity_image, 6, 1.0)
         else:
             diffuse = mat.diffuse_color if mat else (0.8, 0.8, 0.8, 1.0)
             out.write(f'{tab}*MATERIAL_AMBIENT {df} {df} {df}\n' % (0.0, 0.0, 0.0))
@@ -685,6 +733,8 @@ def _write(context, filepath,
             out.write(f'{tab}*MATERIAL_SHADING Blinn\n')
             out.write(f'{tab}*MATERIAL_XP_FALLOFF %.1f\n' % 0.0)
             out.write(f'{tab}*MATERIAL_SELFILLUM %.1f\n' % 0.0)
+            if material_has_transparency(mat) and not getattr(mat, "use_backface_culling", False):
+                out.write(f'{tab}*MATERIAL_TWOSIDED\n')
             out.write(f'{tab}*MATERIAL_FALLOFF In\n')
             out.write(f'{tab}*MATERIAL_XP_TYPE Filter\n')
 

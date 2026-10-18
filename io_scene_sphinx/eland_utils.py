@@ -253,6 +253,37 @@ def material_diffuse_image(mat):
     return best_node.image
 
 #-------------------------------------------------------------------------------------------------------------------------------
+def material_opacity_image(mat):
+    """Return the image which supplies the material's alpha/opacity input."""
+    if not mat or not mat.use_nodes or not mat.node_tree:
+        return None
+
+    principled = material_principled_node(mat)
+    alpha = _node_input(principled, 'Alpha')
+    candidates = [
+        (node, distance) for node, distance in _upstream_nodes(alpha)
+        if node.bl_idname == 'ShaderNodeTexImage' and getattr(node, "image", None)
+    ]
+    if not candidates:
+        return None
+
+    # Prefer the nearest image.  Names containing alpha/opacity break ties for
+    # node groups where several images feed a small alpha-processing chain.
+    def opacity_rank(item):
+        node, distance = item
+        image = node.image
+        text = ' '.join(filter(None, (
+            node.name,
+            node.label,
+            getattr(image, "name", None),
+            getattr(image, "filepath", None),
+        ))).casefold()
+        semantic_score = int('alpha' in text) + int('opacity' in text)
+        return (-distance, semantic_score, node.name)
+
+    return max(candidates, key=opacity_rank)[0].image
+
+#-------------------------------------------------------------------------------------------------------------------------------
 def material_has_transparency(mat):
     if not mat:
         return False
@@ -297,8 +328,7 @@ def material_texture_path(mat):
     return bpy.path.abspath(image.filepath) if image else None
 
 #-------------------------------------------------------------------------------------------------------------------------------
-def export_material_texture_path(mat, export_filepath=None, extract_packed=False, warning=None):
-    image = material_diffuse_image(mat)
+def export_image_texture_path(image, export_filepath=None, extract_packed=False, warning=None):
     if not image:
         return None
 
@@ -331,6 +361,15 @@ def export_material_texture_path(mat, export_filepath=None, extract_packed=False
         else:
             print(f'WARNING: {message}')
         return source_path or None
+
+#-------------------------------------------------------------------------------------------------------------------------------
+def export_material_texture_path(mat, export_filepath=None, extract_packed=False, warning=None):
+    return export_image_texture_path(
+        material_diffuse_image(mat),
+        export_filepath,
+        extract_packed,
+        warning,
+    )
 
 #-------------------------------------------------------------------------------------------------------------------------------
 def material_has_texture(mat):
