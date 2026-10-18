@@ -65,6 +65,7 @@ def _write(context, filepath,
     SOLID_DIFFUSE_SCALE = 1.0
     MAP_AMOUNT_SCALE = 1.0
     TEXTURE_VERTEX_COLOR_SCALE = 0.5
+    skin_bone_plan_cache = {}
 
     def emit_warning(message):
         print(f'WARNING ESE: {message}')
@@ -115,6 +116,54 @@ def _write(context, filepath,
         result = matrix.to_3x3().normalized().to_4x4() @ Matrix.Diagonal(uniform_scale).to_4x4()
         result.translation = matrix.translation
         return result
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def positive_uniform_matrix_scale(matrix, tolerance=0.0001):
+        """Return a positive uniform matrix scale, or None for mirrored/non-uniform transforms."""
+        if matrix.to_3x3().determinant() <= 0.0:
+            return None
+
+        scale = matrix.to_scale()
+        values = (abs(scale.x), abs(scale.y), abs(scale.z))
+        average = sum(values) / 3.0
+        if average <= 0.000001:
+            return None
+        if max(abs(value - average) for value in values) > max(tolerance, average * tolerance):
+            return None
+        return average
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def remove_uniform_scale_factor(matrix, scale):
+        if abs(scale - 1.0) <= 0.000001:
+            return matrix.copy()
+        return matrix @ Matrix.Scale(1.0 / scale, 4)
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def skin_normalization_scale(scene, armature):
+        """Find the inherited unit conversion shared by an armature and its weighted meshes.
+
+        EuroLand biped nodes do not reliably handle a unit conversion stored as hierarchy
+        scale (the common Blender import case is 0.01). Normalize only when every weighted
+        mesh driven by the armature has the same positive uniform world scale. Ambiguous,
+        mirrored and non-uniform rigs retain the legacy export path.
+        """
+        armature_scale = positive_uniform_matrix_scale(armature.matrix_world)
+        if armature_scale is None or abs(armature_scale - 1.0) <= 0.000001:
+            return 1.0
+
+        weighted_meshes = [
+            obj for obj in scene.objects
+            if obj.type == 'MESH' and armature_for_mesh(obj) == armature and mesh_has_skin(obj)
+        ]
+        if not weighted_meshes:
+            return 1.0
+
+        for mesh_obj in weighted_meshes:
+            mesh_scale = positive_uniform_matrix_scale(mesh_obj.matrix_world)
+            if mesh_scale is None or abs(mesh_scale - armature_scale) > max(0.0001, armature_scale * 0.0001):
+                return 1.0
+
+        return armature_scale
 
     #---------------------------------------------------------------------------------------------------------------------------
     def frame_in_range(frame):
@@ -285,6 +334,71 @@ def _write(context, filepath,
             for vertex in obj.data.vertices
             for group in vertex.groups
         )
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def armature_has_weighted_skin(scene, armature):
+        return any(
+            obj.type == 'MESH'
+            and armature_for_mesh(obj) == armature
+            and mesh_has_skin(obj)
+            for obj in scene.objects
+        )
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def skin_bone_plan(scene, armature):
+        """Return every weighted skin bone and the ancestors needed by its hierarchy."""
+        cache_key = armature.as_pointer()
+        cached = skin_bone_plan_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        armature_bones = armature.data.bones
+        weighted_totals = {}
+        rigid_bones = set()
+
+        for obj in scene.objects:
+            if obj.type != 'MESH' or armature_for_mesh(obj) != armature:
+                continue
+
+            rigid_bone = rigid_bone_parent(obj)
+            if rigid_bone:
+                rigid_bones.add(rigid_bone)
+
+            if mesh_has_skin(obj):
+                group_names = {group.index: group.name for group in obj.vertex_groups}
+                for vertex in obj.data.vertices:
+                    for assignment in vertex.groups:
+                        bone_name = group_names.get(assignment.group)
+                        if assignment.weight > 0.0 and bone_name in armature_bones:
+                            weighted_totals[bone_name] = weighted_totals.get(bone_name, 0.0) + assignment.weight
+
+        def ancestor_chain(bone_name):
+            chain = []
+            bone = armature_bones.get(bone_name)
+            while bone:
+                chain.append(bone.name)
+                bone = bone.parent
+            return chain
+
+        required_all = set()
+        for bone_name in set(weighted_totals) | rigid_bones:
+            required_all.update(ancestor_chain(bone_name))
+
+        if not required_all:
+            required_all = {bone.name for bone in armature_bones}
+
+        selected = required_all
+        remap = {bone_name: bone_name for bone_name in weighted_totals}
+
+        result = (selected, remap)
+        skin_bone_plan_cache[cache_key] = result
+        return result
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def required_bones_for_armature(scene, armature):
+        """Return the complete weighted hierarchy used by EuroLand animation nodes."""
+        required, _remap = skin_bone_plan(scene, armature)
+        return required
 
     #---------------------------------------------------------------------------------------------------------------------------
     def exported_armatures(scene):
@@ -771,15 +885,19 @@ def _write(context, filepath,
             for ob, ob_mat in instances:
                 animated_mesh = mesh_has_transform_animation(ob_main) and not is_instance
                 skinned_mesh = mesh_has_skin(ob_main)
+                armature = armature_for_mesh(ob_main) if skinned_mesh else None
+                bind_uniform_scale = skin_normalization_scale(scene, armature) if armature else 1.0
                 bone_parented_mesh = bool(rigid_bone_parent(ob_main))
                 morph_mesh = bool(EXPORT_MESH_MORPH and ob_main.data.shape_keys)
                 center_transform = TRANSFORM_TO_CENTER and not (animated_mesh or skinned_mesh or bone_parented_mesh)
                 if TRANSFORM_TO_CENTER and not center_transform:
                     emit_warning(f'Transform to 0,0,0 is ignored for animated or rigged mesh {ob_main.name}.')
-                # Weighted meshes retain their bind/object space. Rigid Blender bone
-                # children are converted to one-bone skins, so bake their static world
-                # transform into the vertices to match EuroLand's bind-pose space.
-                preserve_local_space = skinned_mesh
+                # The 3ds Max exporter snapshots a Skin modifier at the selected
+                # static frame.  Export the evaluated (posed) mesh together with
+                # bone NODE_TM values from that same frame; mixing Blender's edit
+                # rest mesh with an animated static pose produces an invalid ESE
+                # skin reference and can send old EuroLand rasterizers out of range.
+                preserve_local_space = False
                 if morph_mesh and ob_main.modifiers:
                     emit_warning(f'Modifiers are ignored for morph mesh {ob_main.name} to preserve vertex topology.')
                 mesh, ob_eval, mesh_is_copy, mesh_export_matrix = transformed_mesh(
@@ -787,18 +905,19 @@ def _write(context, filepath,
                     ob_mat,
                     depsgraph,
                     bake_object_transform=not center_transform and not preserve_local_space,
-                    use_bind_mesh=skinned_mesh or morph_mesh,
+                    use_bind_mesh=morph_mesh,
                     center_transform=center_transform,
                 )
                 if mesh is None:
                     continue
 
                 try:
-                    matrix_transformed = Matrix.Identity(4) if center_transform else ob_mat.copy()
+                    node_matrix = remove_uniform_scale_factor(ob_mat, bind_uniform_scale)
+                    matrix_transformed = Matrix.Identity(4) if center_transform else node_matrix.copy()
                     obj_matrix_data = {
                         "name": node_name,
                         "type": ob_main.type,
-                        "matrix_original": ob_mat.copy(),
+                        "matrix_original": node_matrix.copy(),
                         "matrix_transformed": matrix_transformed,
                         "animated_mesh": animated_mesh,
                         "transform_baked": not center_transform and not preserve_local_space,
@@ -981,7 +1100,7 @@ def _write(context, filepath,
                         write_morph_data(out, ob)
 
                     if mesh_has_skin(ob_main) or bone_parented_mesh:
-                        write_skin_data(out, ob_main, vertices, source_vertex_index_map)
+                        write_skin_data(out, scene, ob_main, vertices, source_vertex_index_map)
 
                     out.write("}\n")
 
@@ -1017,7 +1136,7 @@ def _write(context, filepath,
         out.write('}\n')
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def write_skin_data(out, ob, vertices, source_vertex_index_map):
+    def write_skin_data(out, scene, ob, vertices, source_vertex_index_map):
         armature = armature_for_mesh(ob)
         if not armature:
             return
@@ -1048,12 +1167,17 @@ def _write(context, filepath,
                 if group_name in armature_bone_names and group.weight > 0:
                     used_group_names.add(group_name)
 
+        _selected_bones, bone_remap = skin_bone_plan(scene, armature)
+
         # 3ds Max writes the Skin modifier's bone table, not hierarchy order. Blender's
-        # vertex-group order is the closest stable equivalent and keeps weight indices deterministic.
-        bone_names = [
-            group.name for group in ob.vertex_groups
-            if group.name in used_group_names
-        ]
+        # vertex-group order is the closest stable equivalent; deduplicate defensively.
+        bone_names = []
+        for group in ob.vertex_groups:
+            if group.name not in used_group_names:
+                continue
+            mapped_name = bone_remap.get(group.name, group.name)
+            if mapped_name and mapped_name not in bone_names:
+                bone_names.append(mapped_name)
         bone_indices = {bone_name: index for index, bone_name in enumerate(bone_names)}
         weighted_vertices = {index: [] for index in range(len(vertices))}
 
@@ -1065,16 +1189,24 @@ def _write(context, filepath,
             if export_vertex_index is None:
                 continue
 
-            influences = []
+            influence_weights = {}
             for group in original_vertices[original_index].groups:
                 bone_name = vertex_groups.get(group.group)
-                if bone_name in bone_indices and group.weight > 0:
-                    influences.append((bone_indices[bone_name], group.weight))
+                mapped_name = bone_remap.get(bone_name, bone_name)
+                if mapped_name in bone_indices and group.weight > 0:
+                    bone_index = bone_indices[mapped_name]
+                    influence_weights[bone_index] = influence_weights.get(bone_index, 0.0) + group.weight
 
-            influences.sort(key=lambda item: item[0])
+            influences = list(influence_weights.items())
+
+            # EuroLand's runtime skin formats support at most four influences per
+            # vertex. Keep the strongest four and normalize after truncation.
+            influences.sort(key=lambda item: (-item[1], item[0]))
+            influences = influences[:4]
             total_weight = sum(weight for _, weight in influences)
             if total_weight:
                 influences = [(bone_index, weight / total_weight) for bone_index, weight in influences]
+            influences.sort(key=lambda item: item[0])
 
             weighted_vertices[export_vertex_index] = influences
 
@@ -1103,17 +1235,21 @@ def _write(context, filepath,
         return armature.matrix_world @ armature.data.bones[bone_name].matrix_local
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def pose_bone_animation_matrix(armature, bone_name):
+    def pose_bone_animation_matrix(armature, bone_name, normalization_scale=1.0):
         pose_bone = armature.pose.bones.get(bone_name) if armature.pose else None
         if not pose_bone:
             bone = armature.data.bones[bone_name]
             if bone.parent:
-                return bone.parent.matrix_local.inverted_safe() @ bone.matrix_local
-            return armature.matrix_world @ bone.matrix_local
+                matrix = bone.parent.matrix_local.inverted_safe() @ bone.matrix_local
+                matrix.translation *= normalization_scale
+                return matrix
+            return remove_uniform_scale_factor(armature.matrix_world @ bone.matrix_local, normalization_scale)
 
         if pose_bone.parent:
-            return pose_bone.parent.matrix.inverted_safe() @ pose_bone.matrix
-        return armature.matrix_world @ pose_bone.matrix
+            matrix = pose_bone.parent.matrix.inverted_safe() @ pose_bone.matrix
+            matrix.translation *= normalization_scale
+            return matrix
+        return remove_uniform_scale_factor(armature.matrix_world @ pose_bone.matrix, normalization_scale)
 
     #---------------------------------------------------------------------------------------------------------------------------
     def armature_animation_frames(armature):
@@ -1129,8 +1265,8 @@ def _write(context, filepath,
         return list(range(START_FRAME, END_FRAME + 1))
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def write_bone_display_mesh(out, bone):
-        radius = max(float(bone.length) * 0.06 * GLOBAL_SCALE, 0.001)
+    def write_bone_display_mesh(out, bone, normalization_scale=1.0):
+        radius = max(float(bone.length) * normalization_scale * 0.06 * GLOBAL_SCALE, 0.001)
         vertices = [
             Vector((0.0, radius, 0.0)),
             Vector((radius, 0.0, 0.0)),
@@ -1179,10 +1315,22 @@ def _write(context, filepath,
                 continue
 
             bone_data = ob_main.evaluated_get(depsgraph).data if EXPORT_APPLY_MODIFIERS else ob_main.data
+            normalization_scale = skin_normalization_scale(scene, ob_main)
+            weighted_skin = armature_has_weighted_skin(scene, ob_main)
+            required_bones = required_bones_for_armature(scene, ob_main) if weighted_skin else None
 
             for bone in bone_data.bones:
+                if required_bones is not None and bone.name not in required_bones:
+                    continue
                 is_root = bone.parent is None
+                # ESE NODE_TM is the transform at the selected static output frame.
+                # Weighted meshes above are evaluated at this same frame, matching
+                # the reference pose emitted by Eurocom's original 3ds Max plug-in.
                 bone_matrix = pose_bone_world_matrix(ob_main, bone.name)
+                bone_matrix = remove_uniform_scale_factor(
+                    bone_matrix,
+                    normalization_scale,
+                )
                 obj_matrix_data = {
                     "name": bone.name,
                     "type": 'BONE',
@@ -1197,7 +1345,7 @@ def _write(context, filepath,
                 out.write('\t*%s\n' % ('NODE_BIPED_SLAVE' if is_root else 'NODE_BIPED_BODY'))
                 write_tm_node(out, obj_matrix_data)
                 write_tm_node(out, obj_matrix_data, True)
-                write_bone_display_mesh(out, bone)
+                write_bone_display_mesh(out, bone, normalization_scale)
                 if is_root:
                     out.write('\t*PROP_MOTIONBLUR 0\n')
                     out.write('\t*PROP_CASTSHADOW 1\n')
@@ -1207,7 +1355,8 @@ def _write(context, filepath,
                     bone.name,
                     'BONE',
                     armature_animation_frames(ob_main),
-                    lambda armature=ob_main, bone_name=bone.name: pose_bone_animation_matrix(armature, bone_name)
+                    lambda armature=ob_main, bone_name=bone.name, scale=normalization_scale:
+                        pose_bone_animation_matrix(armature, bone_name, scale)
                 )
                 if is_root:
                     out.write(f'\t*WIREFRAME_COLOR {df} {df} {df}\n' % (0.6510, 0.7922, 0.9412))
