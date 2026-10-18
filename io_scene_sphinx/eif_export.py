@@ -16,6 +16,15 @@ from pathlib import Path
 from mathutils import Matrix
 from datetime import datetime
 from .eland_utils import *
+from .face_layers import (
+    color_layers as mapped_color_layers,
+    enabled_layer_attributes,
+    face_layer_count as configured_face_layer_count,
+    face_layer_enabled,
+    face_material_index,
+    material_layer_attributes,
+    uv_layers as mapped_uv_layers,
+)
 
 #-------------------------------------------------------------------------------------------------------------------------------
 EXPORT_TRI = False
@@ -76,7 +85,24 @@ def _write(context, filepath,
 
     #---------------------------------------------------------------------------------------------------------------------------
     def material_has_alpha(mat):
-        return material_custom_shader_rule(mat) == 'Alp' or material_has_transparency(mat)
+        # EIF has no scalar material-opacity field.  Its Alp rule consumes the
+        # alpha channel of MAP_DIFFUSE, so inferring Alp from a solid Blender
+        # material's Principled Alpha creates a shader with no alpha source and
+        # EuroLand falls back to the first surface in a layered face.  Preserve
+        # explicit overrides, otherwise only infer alpha for an actual RGBA
+        # diffuse image.
+        if material_custom_shader_rule(mat) == 'Alp':
+            return True
+        image = material_diffuse_image(mat)
+        # Blender commonly exposes RGB images through a four-component pixel
+        # buffer too, so channels alone is not proof of a stored alpha channel.
+        # Image.depth reflects the source file: 24-bit BMP is RGB, while 32-bit
+        # images and 64/128-bit RGBA images can supply alpha.
+        return bool(
+            image
+            and getattr(image, 'channels', 0) >= 4
+            and getattr(image, 'depth', 0) in {32, 64, 128}
+        )
 
     #---------------------------------------------------------------------------------------------------------------------------
     def material_shader_rule(mat):
@@ -248,28 +274,6 @@ def _write(context, filepath,
         return mesh, ob_eval
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def material_layer_attributes(mesh):
-        result = {}
-        for attr in mesh.attributes:
-            match = re.fullmatch(r'euro_material_layer_(\d+)', attr.name)
-            if not match or attr.data_type != 'INT' or attr.domain != 'FACE':
-                continue
-            layer_index = int(match.group(1))
-            if layer_index > 0:
-                result[layer_index] = attr
-        return result
-
-    #---------------------------------------------------------------------------------------------------------------------------
-    def face_layer_count(uv_layers, mesh_color_layers, has_materials, material_layers):
-        layer_count = max(
-            len(uv_layers) if EXPORT_UV else 0,
-            len(mesh_color_layers) if EXPORT_VERTEX_COLORS else 0,
-            max(material_layers, default=-1) + 1,
-            1 if has_materials or EXPORT_FACE_SHADERS else 0
-        )
-        return max(1, layer_count)
-
-    #---------------------------------------------------------------------------------------------------------------------------
     def parse_user_flag(value):
         try:
             return int(value, 0) if isinstance(value, str) else int(value)
@@ -331,37 +335,78 @@ def _write(context, filepath,
 
                     unique_vertices, vertex_index_map = unique_ordered(tuple(v.co) for v in mesh.vertices)
 
-                    uv_layers = list(mesh.uv_layers) if EXPORT_UV else []
+                    uv_layers = mapped_uv_layers(mesh, EXPORT_UV)
+                    present_uv_layers = [layer for layer in uv_layers if layer is not None]
                     unique_uvs, uv_index_map = unique_ordered(
                         tuple(uv_data.uv)
-                        for uv_layer in uv_layers
+                        for uv_layer in present_uv_layers
                         for uv_data in uv_layer.data
-                    ) if uv_layers else ([], {})
+                    ) if present_uv_layers else ([], {})
 
-                    mesh_color_layers = color_layers(mesh) if EXPORT_VERTEX_COLORS else []
+                    mesh_color_layers = mapped_color_layers(
+                        mesh,
+                        color_layers(mesh),
+                        EXPORT_VERTEX_COLORS,
+                    )
+                    present_color_layers = [layer for layer in mesh_color_layers if layer is not None]
                     unique_colors, color_index_map = unique_ordered(
                         color_for_loop(mesh, color_layer, loop_index)
-                        for color_layer in mesh_color_layers
+                        for color_layer in present_color_layers
                         for loop_index in range(len(mesh.loops))
-                    ) if mesh_color_layers else ([], {})
+                    ) if present_color_layers else ([], {})
 
                     mesh_material_list, mesh_material_indices = mesh_materials(mesh, global_material_indices)
                     has_materials = bool(mesh_material_list)
                     material_layers = material_layer_attributes(mesh) if has_materials else {}
+                    enabled_layers = enabled_layer_attributes(mesh)
                     synthesize_texture_color = not unique_colors and has_textured_material(mesh_material_list)
                     if synthesize_texture_color:
                         unique_colors = [(TEXTURE_VERTEX_COLOR_SCALE, TEXTURE_VERTEX_COLOR_SCALE, TEXTURE_VERTEX_COLOR_SCALE, 1.0)]
                     has_face_shaders = EXPORT_FACE_SHADERS and has_materials
-                    layer_count = face_layer_count(uv_layers, mesh_color_layers, has_materials, material_layers)
+                    layer_count = configured_face_layer_count(
+                        mesh,
+                        uv_layers,
+                        mesh_color_layers,
+                        has_materials or EXPORT_FACE_SHADERS,
+                    )
                     if synthesize_texture_color:
                         layer_count = max(layer_count, 1)
+
+                    def shader_stack_for(poly):
+                        stack = []
+                        for layer_index in range(layer_count):
+                            local_index = face_material_index(
+                                mesh, poly, layer_index, material_layers, enabled_layers
+                            )
+                            if not (0 <= local_index < len(mesh_material_list)):
+                                continue
+                            stack.append((
+                                mesh_material_indices[local_index],
+                                material_shader_rule(mesh_material_list[local_index]),
+                            ))
+                        return tuple(stack)
+
+                    face_shader_stacks = []
+                    if has_face_shaders:
+                        for poly in mesh.polygons:
+                            shader_stack = shader_stack_for(poly)
+                            if shader_stack not in face_shader_stacks:
+                                face_shader_stacks.append(shader_stack)
+                    face_shader_indices = {
+                        shader_stack: index
+                        for index, shader_stack in enumerate(face_shader_stacks)
+                    }
 
                     face_flags = int_attribute(mesh, 'euro_fac_flags', 'FACE')
 
                     faceformat = 'V'
-                    if uv_layers and unique_uvs:
+                    # EuroLand's own colour-only face-layer EIFs keep the T
+                    # component in FACEFORMAT when mapping output is enabled,
+                    # even with UVCOUNT 0.  Each missing layer is represented
+                    # by -1 indices in the face record.
+                    if EXPORT_UV:
                         faceformat += 'T'
-                    if (mesh_color_layers or synthesize_texture_color) and unique_colors:
+                    if (present_color_layers or synthesize_texture_color) and unique_colors:
                         faceformat += 'C'
                     if has_materials:
                         faceformat += 'M'
@@ -378,7 +423,7 @@ def _write(context, filepath,
                     out.write('\t*TRIFACECOUNT %d\n' % (sum(len(face.loop_indices) - 2 for face in mesh.polygons)))
                     out.write('\t*FACELAYERSCOUNT %d\n' % layer_count)
                     if has_face_shaders:
-                        out.write('\t*FACESHADERCOUNT %d\n' % len(mesh_material_list))
+                        out.write('\t*FACESHADERCOUNT %d\n' % len(face_shader_stacks))
 
                     out.write('\t*VERTEX_LIST {\n')
                     for vertex in unique_vertices:
@@ -400,10 +445,10 @@ def _write(context, filepath,
 
                     if has_face_shaders:
                         out.write('\t*FACESHADERS {\n')
-                        for shader_index, mat in enumerate(mesh_material_list):
-                            material_global_index = mesh_material_indices[shader_index]
+                        for shader_index, shader_stack in enumerate(face_shader_stacks):
                             out.write('\t\t*SHADER %d {\n' % shader_index)
-                            out.write('\t\t\t%d\t%s\n' % (material_global_index, material_shader_rule(mat)))
+                            for material_global_index, shader_rule in shader_stack:
+                                out.write('\t\t\t%d\t%s\n' % (material_global_index, shader_rule))
                             out.write('\t\t}\n')
                         out.write('\t}\n')
 
@@ -414,22 +459,32 @@ def _write(context, filepath,
                         vertex_indices = [vertex_index_map[tuple(mesh.vertices[v].co)] for v in poly.vertices]
                         out.write("\t\t%d %s " % (len(poly.vertices), " ".join(map(str, vertex_indices))))
 
-                        if uv_layers and unique_uvs:
+                        if EXPORT_UV:
                             for layer_index in range(layer_count):
-                                if layer_index < len(uv_layers):
+                                uv_layer = (
+                                    uv_layers[layer_index]
+                                    if layer_index < len(uv_layers)
+                                    else None
+                                )
+                                if uv_layer is not None and face_layer_enabled(
+                                    mesh, poly.index, layer_index, material_layers, enabled_layers
+                                ):
                                     uv_indices = []
                                     for loop_index in poly.loop_indices:
-                                        uv = tuple(uv_layers[layer_index].data[loop_index].uv)
+                                        uv = tuple(uv_layer.data[loop_index].uv)
                                         uv_indices.append(uv_index_map.get(uv, -1))
                                     out.write("%s " % " ".join(map(str, uv_indices)))
                                 else:
                                     out.write("%s " % " ".join(["-1"] * len(poly.vertices)))
 
-                        if (mesh_color_layers or synthesize_texture_color) and unique_colors:
+                        if (present_color_layers or synthesize_texture_color) and unique_colors:
                             for layer_index in range(layer_count):
-                                if synthesize_texture_color:
+                                layer_is_enabled = face_layer_enabled(
+                                    mesh, poly.index, layer_index, material_layers, enabled_layers
+                                )
+                                if synthesize_texture_color and layer_is_enabled:
                                     out.write("%s " % " ".join(["0"] * len(poly.vertices)))
-                                elif layer_index < len(mesh_color_layers):
+                                elif mesh_color_layers[layer_index] is not None and layer_is_enabled:
                                     color_indices = []
                                     for loop_index in poly.loop_indices:
                                         color = color_for_loop(mesh, mesh_color_layers[layer_index], loop_index)
@@ -440,12 +495,9 @@ def _write(context, filepath,
 
                         if has_materials:
                             for layer_index in range(layer_count):
-                                if layer_index == 0:
-                                    local_material_index = poly.material_index
-                                elif layer_index in material_layers:
-                                    local_material_index = material_layers[layer_index].data[poly.index].value
-                                else:
-                                    local_material_index = -1
+                                local_material_index = face_material_index(
+                                    mesh, poly, layer_index, material_layers, enabled_layers
+                                )
 
                                 material_index = (
                                     mesh_material_indices[local_material_index]
@@ -455,7 +507,7 @@ def _write(context, filepath,
                                 out.write("%d " % material_index)
 
                         if has_face_shaders:
-                            shader_index = poly.material_index if poly.material_index < len(mesh_material_list) else 0
+                            shader_index = face_shader_indices.get(shader_stack_for(poly), 0)
                             out.write("%d " % shader_index)
 
                         flag_value = face_flags.data[poly.index].value if face_flags else 0

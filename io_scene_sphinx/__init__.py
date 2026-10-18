@@ -884,6 +884,9 @@ class RTG_EXPORT_PT_Controller_Output(bpy.types.Panel):
 #-------------------------------------------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------------------------------------------------------
+last_sel_object = None
+last_sel_indexes = None
+
 def scene_update_post_handler(scene):
     context = bpy.context
 
@@ -945,6 +948,13 @@ def update_after_enum(self, context):
 
 #-------------------------------------------------------------------------------------------------------------------------------
 class EuroProperties(bpy.types.PropertyGroup):
+    face_layer_index: bpy.props.IntProperty(
+        name="Face Layer",
+        description="EuroLand face layer (Layer 1 is Blender's normal/base material layer)",
+        default=0,
+        min=0,
+        max=7,
+    )
     
     enable_camera_script: bpy.props.BoolProperty(
         name="Enable Camera Script",
@@ -1131,6 +1141,171 @@ class ESelectNoFlags(bpy.types.Operator):
     def draw(self, context):
         pass
 
+#-------------------------------------------------------------------------------------------------------------------------------
+def face_layer_bmesh_layers(mesh, bm, layer_index, create=False):
+    if layer_index == 0:
+        return None, None
+
+    material_name = f'euro_material_layer_{layer_index}'
+    enabled_name = f'euro_layer_enabled_{layer_index}'
+    material_layer = bm.faces.layers.int.get(material_name)
+    enabled_layer = bm.faces.layers.int.get(enabled_name)
+
+    if create and material_layer is None:
+        material_layer = bm.faces.layers.int.new(material_name)
+        for face in bm.faces:
+            face[material_layer] = -1
+    if create and enabled_layer is None:
+        enabled_layer = bm.faces.layers.int.new(enabled_name)
+        for face in bm.faces:
+            face[enabled_layer] = 0
+
+    return material_layer, enabled_layer
+
+#-------------------------------------------------------------------------------------------------------------------------------
+class ESetActiveFaceLayer(bpy.types.Operator):
+    """Choose the EuroLand face layer edited by this panel"""
+    bl_idname = "mesh.euro_set_face_layer"
+    bl_label = "Set EuroLand face layer"
+    bl_options = {'INTERNAL'}
+
+    layer_index: bpy.props.IntProperty(min=0, max=7)
+
+    def execute(self, context):
+        context.object.data.euroland.face_layer_index = self.layer_index
+        return {'FINISHED'}
+
+#-------------------------------------------------------------------------------------------------------------------------------
+class EAssignFaceLayer(bpy.types.Operator):
+    """Assign the active Blender material to this EuroLand layer on selected faces"""
+    bl_idname = "mesh.euro_assign_face_layer"
+    bl_label = "Assign active material"
+    bl_options = {'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == 'MESH' and context.mode == 'EDIT_MESH'
+
+    def execute(self, context):
+        obj = context.object
+        mesh = obj.data
+        bm = bmesh.from_edit_mesh(mesh)
+        layer_index = mesh.euroland.face_layer_index
+        material_index = obj.active_material_index if len(mesh.materials) else -1
+
+        if material_index < 0:
+            self.report({'WARNING'}, "Add a material slot before assigning a face layer")
+            return {'CANCELLED'}
+
+        if layer_index == 0:
+            for face in bm.faces:
+                if face.select:
+                    face.material_index = material_index
+        else:
+            material_layer, enabled_layer = face_layer_bmesh_layers(mesh, bm, layer_index, True)
+            for face in bm.faces:
+                if face.select:
+                    face[material_layer] = material_index
+                    face[enabled_layer] = 1
+
+        bmesh.update_edit_mesh(mesh)
+        return {'FINISHED'}
+
+#-------------------------------------------------------------------------------------------------------------------------------
+class ERemoveFaceLayer(bpy.types.Operator):
+    """Disable this additional EuroLand layer on selected faces"""
+    bl_idname = "mesh.euro_remove_face_layer"
+    bl_label = "Disable on selected faces"
+    bl_options = {'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == 'MESH' and context.mode == 'EDIT_MESH'
+
+    def execute(self, context):
+        mesh = context.object.data
+        layer_index = mesh.euroland.face_layer_index
+        if layer_index == 0:
+            self.report({'WARNING'}, "Layer 1 is the mandatory base layer and cannot be disabled")
+            return {'CANCELLED'}
+
+        bm = bmesh.from_edit_mesh(mesh)
+        material_layer, enabled_layer = face_layer_bmesh_layers(mesh, bm, layer_index, False)
+        if material_layer or enabled_layer:
+            for face in bm.faces:
+                if not face.select:
+                    continue
+                if material_layer:
+                    face[material_layer] = -1
+                if enabled_layer:
+                    face[enabled_layer] = 0
+        bmesh.update_edit_mesh(mesh)
+        return {'FINISHED'}
+
+#-------------------------------------------------------------------------------------------------------------------------------
+class ESelectFaceLayer(bpy.types.Operator):
+    """Select faces on which this EuroLand layer is enabled"""
+    bl_idname = "mesh.euro_select_face_layer"
+    bl_label = "Select enabled faces"
+    bl_options = {'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == 'MESH' and context.mode == 'EDIT_MESH'
+
+    def execute(self, context):
+        mesh = context.object.data
+        bm = bmesh.from_edit_mesh(mesh)
+        layer_index = mesh.euroland.face_layer_index
+        material_layer, enabled_layer = face_layer_bmesh_layers(mesh, bm, layer_index, False)
+        for face in bm.faces:
+            if layer_index == 0:
+                face.select = True
+            elif enabled_layer:
+                face.select = bool(face[enabled_layer])
+            elif material_layer:
+                face.select = face[material_layer] >= 0
+            else:
+                face.select = False
+        bm.select_flush_mode()
+        bmesh.update_edit_mesh(mesh)
+        return {'FINISHED'}
+
+#-------------------------------------------------------------------------------------------------------------------------------
+class ESetFaceLayerMapping(bpy.types.Operator):
+    """Use Blender's active UV map or color attribute for the selected EuroLand layer"""
+    bl_idname = "mesh.euro_set_face_layer_mapping"
+    bl_label = "Set face-layer mapping"
+    bl_options = {'UNDO'}
+
+    mapping_type: bpy.props.EnumProperty(items=(('UV', "UV", ""), ('COLOR', "Color", "")))
+    clear: bpy.props.BoolProperty(default=False)
+
+    def execute(self, context):
+        mesh = context.object.data
+        layer_index = mesh.euroland.face_layer_index
+        prefix = 'euro_uv_layer_' if self.mapping_type == 'UV' else 'euro_color_layer_'
+        property_name = f'{prefix}{layer_index}'
+
+        if self.clear:
+            if property_name in mesh:
+                del mesh[property_name]
+            return {'FINISHED'}
+
+        if self.mapping_type == 'UV':
+            active = mesh.uv_layers.active
+        else:
+            color_attributes = getattr(mesh, 'color_attributes', None)
+            active = getattr(color_attributes, 'active_color', None) if color_attributes else None
+            if active is None and color_attributes:
+                active = getattr(color_attributes, 'active', None)
+
+        if active is None:
+            self.report({'WARNING'}, f"No active {self.mapping_type.lower()} layer")
+            return {'CANCELLED'}
+        mesh[property_name] = active.name
+        return {'FINISHED'}
+
 import textwrap
 
 @classmethod
@@ -1249,6 +1424,80 @@ class TOOLS_PANEL_PT_eurocom(bpy.types.Panel):
             )
             for line in text_list:
                 text_row.label(text=(' ' * 6) + line)
+
+#-------------------------------------------------------------------------------------------------------------------------------
+class TOOLS_PANEL_PT_eurocom_face_layers(bpy.types.Panel):
+    bl_label = 'EuroLand Face Layers'
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = 'data'
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == 'MESH'
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+        mesh = obj.data
+        props = mesh.euroland
+        active_layer = props.face_layer_index
+
+        box = layout.box()
+        box.label(text="Enabled layers (maximum 8)")
+        grid = box.grid_flow(columns=4, align=True)
+        for index in range(8):
+            operator = grid.operator(
+                ESetActiveFaceLayer.bl_idname,
+                text=f"Layer {index + 1}",
+                depress=(active_layer == index),
+            )
+            operator.layer_index = index
+
+        info = layout.box()
+        info.label(text=f"Editing Layer {active_layer + 1}")
+        if active_layer == 0:
+            info.label(text="Base layer: Blender face material", icon='INFO')
+        else:
+            info.label(text="Additional material layer", icon='MATERIAL')
+
+        material_name = obj.active_material.name if obj.active_material else "None"
+        info.label(text=f"Active material: {material_name}")
+        info.template_list(
+            "MATERIAL_UL_matslots", "euro_face_layer_materials",
+            obj, "material_slots", obj, "active_material_index",
+            rows=2,
+        )
+
+        uv_property = f'euro_uv_layer_{active_layer}'
+        color_property = f'euro_color_layer_{active_layer}'
+        default_uv = mesh.uv_layers[active_layer].name if active_layer < len(mesh.uv_layers) else "None"
+        available_colors = getattr(mesh, 'color_attributes', [])
+        default_color = available_colors[active_layer].name if active_layer < len(available_colors) else "None"
+        info.label(text=f"UV: {mesh.get(uv_property, default_uv)}")
+        info.label(text=f"Color: {mesh.get(color_property, default_color)}")
+
+        mapping_row = info.row(align=True)
+        op = mapping_row.operator(ESetFaceLayerMapping.bl_idname, text="Use active UV", icon='GROUP_UVS')
+        op.mapping_type = 'UV'
+        op = mapping_row.operator(ESetFaceLayerMapping.bl_idname, text="Use active color", icon='GROUP_VCOL')
+        op.mapping_type = 'COLOR'
+
+        clear_row = info.row(align=True)
+        op = clear_row.operator(ESetFaceLayerMapping.bl_idname, text="Auto UV")
+        op.mapping_type = 'UV'
+        op.clear = True
+        op = clear_row.operator(ESetFaceLayerMapping.bl_idname, text="Auto color")
+        op.mapping_type = 'COLOR'
+        op.clear = True
+
+        edit_box = layout.box()
+        edit_box.enabled = context.mode == 'EDIT_MESH'
+        edit_box.label(text="Face assignment (Edit Mode)")
+        edit_box.operator(EAssignFaceLayer.bl_idname, icon='ADD')
+        if active_layer > 0:
+            edit_box.operator(ERemoveFaceLayer.bl_idname, icon='REMOVE')
+        edit_box.operator(ESelectFaceLayer.bl_idname, icon='RESTRICT_SELECT_OFF')
         
 #-------------------------------------------------------------------------------------------------------------------------------
 # swy: global variable to store icons in
@@ -1307,9 +1556,15 @@ classes = (
 
     # swy: mesh flags panel stuff
     TOOLS_PANEL_PT_eurocom,
+    TOOLS_PANEL_PT_eurocom_face_layers,
     EApplyFlags,
     ESelectChFlags,
     ESelectNoFlags,
+    ESetActiveFaceLayer,
+    EAssignFaceLayer,
+    ERemoveFaceLayer,
+    ESelectFaceLayer,
+    ESetFaceLayerMapping,
 
     EuroProperties
 )
@@ -1351,6 +1606,11 @@ def unregister():
 
     for m in reversed(menu_export):
         bpy.types.TOPBAR_MT_file_export.remove(m)
+
+    if hasattr(bpy.types.Mesh, 'euroland'):
+        del bpy.types.Mesh.euroland
+    if hasattr(bpy.types.Scene, 'euro_properties'):
+        del bpy.types.Scene.euro_properties
 
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)

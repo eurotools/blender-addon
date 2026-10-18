@@ -16,6 +16,14 @@ from math import ceil, degrees
 from mathutils import Matrix, Vector
 from datetime import datetime
 from .eland_utils import *
+from .face_layers import (
+    color_layers as mapped_color_layers,
+    enabled_layer_attributes,
+    face_layer_count as configured_face_layer_count,
+    material_layer_attributes,
+    material_stack,
+    uv_layers as mapped_uv_layers,
+)
 
 #-------------------------------------------------------------------------------------------------------------------------------
 EXPORT_TRI = True
@@ -494,8 +502,30 @@ def _write(context, filepath,
             bool: "Boolean"
         }
 
-        properties_list = []
+        # EuroLand's ESE 300 scene metadata describes the eight global face-layer
+        # slots independently from the per-face T/C/material layer records.  The
+        # original exporter writes these properties even for scenes which do not
+        # currently use every slot, so keep the same stable layout here.
+        layer_properties = {}
+        for layer_number in range(1, 9):
+            layer_properties[f"layer{layer_number}state"] = "on"
+        for layer_number in range(1, 9):
+            layer_properties[f"layerName{layer_number}"] = str(layer_number)
+
+        # Explicit Blender scene properties are authoritative.  Updating rather
+        # than appending prevents duplicate names while allowing users to rename
+        # or disable individual EuroLand layer slots.
+        for key in tuple(layer_properties):
+            if key in visible_properties:
+                layer_properties[key] = visible_properties[key]
+
+        properties_list = [
+            {"name": key, "type": "String", "value": value}
+            for key, value in layer_properties.items()
+        ]
         for key, value in visible_properties.items():
+            if key in layer_properties:
+                continue
             type_name = type_mapping.get(type(value), type(value).__name__)
             properties_list.append({"name": key, "type": type_name, "value": value})
 
@@ -584,12 +614,12 @@ def _write(context, filepath,
         out.write("}\n\n")
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def write_material_data(out, mat, tab_level, include_texture):
+    def write_material_data(out, mat, tab_level, include_texture, material_class="Standard"):
         tab = get_tabs(tab_level)
         mat_name = mat.name if mat else "Default"
 
         out.write(f'{tab}*MATERIAL_NAME "%s"\n' % mat_name)
-        out.write(f'{tab}*MATERIAL_CLASS "Standard"\n')
+        out.write(f'{tab}*MATERIAL_CLASS "%s"\n' % material_class)
 
         mat_wrap = material_wrap(mat)
 
@@ -712,7 +742,37 @@ def _write(context, filepath,
         for occurrence in occurrences:
             obj = occurrence["object"]
             materials = [slot.material for slot in obj.material_slots]
-            scene_materials[occurrence["name"]] = materials if materials else [None]
+            materials = materials if materials else [None]
+            mesh = obj.data
+            uv_layers = mapped_uv_layers(mesh, EXPORT_MESH_UV)
+            mesh_color_layers = mapped_color_layers(
+                mesh,
+                color_layers(mesh),
+                EXPORT_MESH_VCOLORS,
+            )
+            layer_count = configured_face_layer_count(
+                mesh,
+                uv_layers,
+                mesh_color_layers,
+                bool(materials),
+            )
+            material_attrs = material_layer_attributes(mesh)
+            enabled_attrs = enabled_layer_attributes(mesh)
+            stacks = []
+            for polygon in mesh.polygons:
+                stack = material_stack(mesh, polygon, layer_count, material_attrs, enabled_attrs)
+                stack = tuple(index if 0 <= index < len(materials) else -1 for index in stack)
+                if stack not in stacks:
+                    stacks.append(stack)
+            if not stacks:
+                stacks = [tuple([0] + [-1] * (layer_count - 1))]
+
+            scene_materials[occurrence["name"]] = {
+                "materials": materials,
+                "layer_count": layer_count,
+                "stacks": stacks,
+                "stack_indices": {stack: index for index, stack in enumerate(stacks)},
+            }
 
         return scene_materials
 
@@ -721,19 +781,44 @@ def _write(context, filepath,
         out.write("*MATERIAL_LIST {\n")
         out.write("\t*MATERIAL_COUNT %d\n" % len(scene_materials))
 
-        for index, materials in enumerate(scene_materials.values()):
+        for index, material_info in enumerate(scene_materials.values()):
+            materials = material_info["materials"]
+            layer_count = material_info["layer_count"]
+            stacks = material_info["stacks"]
             out.write("\t*MATERIAL %d {\n" % index)
 
-            if len(materials) == 1:
+            if layer_count == 1 and len(materials) == 1:
                 write_material_data(out, materials[0], 2, True)
-            else:
-                write_material_data(out, materials[0], 2, False)
+            elif layer_count == 1:
+                write_material_data(out, materials[0], 2, False, "Multi\\Sub-Object")
                 out.write("\t\t*MATERIAL_MULTIMAT\n")
                 out.write("\t\t*NUMSUBMTLS %d\n" % len(materials))
 
                 for submat_index, mat in enumerate(materials):
                     out.write("\t\t*SUBMATERIAL %d {\n" % submat_index)
                     write_material_data(out, mat, 3, True)
+                    out.write("\t\t}\n")
+            else:
+                write_material_data(out, materials[0], 2, False, "Multi\\Sub-Object")
+                out.write("\t\t*MATERIAL_MULTIMAT\n")
+                out.write("\t\t*NUMSUBMTLS %d\n" % len(stacks))
+
+                for stack_index, stack in enumerate(stacks):
+                    base_index = stack[0] if stack and stack[0] >= 0 else 0
+                    base_material = materials[base_index] if base_index < len(materials) else None
+                    last_enabled = max((i for i, value in enumerate(stack) if value >= 0), default=0)
+                    out.write("\t\t*SUBMATERIAL %d {\n" % stack_index)
+                    write_material_data(out, base_material, 3, False, "Layered Mtl")
+                    out.write("\t\t\t*NUMSUBMTLS %d\n" % 8)
+                    for layer_index in range(8):
+                        material_index = stack[layer_index] if layer_index < len(stack) else -1
+                        out.write("\t\t\t*SUBMATERIAL %d {\n" % layer_index)
+                        if layer_index <= last_enabled and 0 <= material_index < len(materials):
+                            write_material_data(out, materials[material_index], 4, True)
+                        else:
+                            out.write("\t\t\t\t*MATERIAL_NAME \"\"\n")
+                            out.write("\t\t\t\t*MATERIAL_CLASS \"Null Material\"\n")
+                        out.write("\t\t\t}\n")
                     out.write("\t\t}\n")
 
             out.write("\t}\n")
@@ -971,22 +1056,40 @@ def _write(context, filepath,
                             for vertex in vertices
                         }
 
+                    uv_layers = mapped_uv_layers(mesh, EXPORT_MESH_UV)
+                    present_uv_layers = [layer for layer in uv_layers if layer is not None]
                     unique_uvs = []
                     uv_index_map = {}
-                    if EXPORT_MESH_UV and mesh.uv_layers.active:
+                    if present_uv_layers:
                         unique_uvs, uv_index_map = unique_ordered(
                             (uv.uv.x, uv.uv.y)
-                            for uv in mesh.uv_layers.active.data
+                            for uv_layer in present_uv_layers
+                            for uv in uv_layer.data
                         )
 
-                    mesh_materials = scene_materials.get(node_name, [])
-                    color_layer = active_color_layer(mesh)
+                    material_info = scene_materials.get(node_name, {
+                        "materials": [],
+                        "layer_count": 1,
+                        "stacks": [(0,)],
+                        "stack_indices": {(0,): 0},
+                    })
+                    mesh_materials = material_info["materials"]
+                    layer_count = material_info["layer_count"]
+                    material_attrs = material_layer_attributes(mesh)
+                    enabled_attrs = enabled_layer_attributes(mesh)
+                    mesh_color_layers = mapped_color_layers(
+                        mesh,
+                        color_layers(mesh),
+                        EXPORT_MESH_VCOLORS,
+                    )
+                    present_color_layers = [layer for layer in mesh_color_layers if layer is not None]
                     unique_colors = []
                     color_index_map = {}
                     synthesize_texture_color = False
-                    if EXPORT_MESH_VCOLORS and color_layer:
+                    if present_color_layers:
                         unique_colors, color_index_map = unique_ordered(
                             color_for_loop(mesh, color_layer, loop_index)
+                            for color_layer in present_color_layers
                             for loop_index in range(len(mesh.loops))
                         )
                     elif has_textured_material(mesh_materials):
@@ -1014,7 +1117,12 @@ def _write(context, filepath,
                     out.write('\t\t*MESH_FACE_LIST {\n')
                     for poly_index, poly in enumerate(mesh.polygons):
                         vertex_indices = [source_vertex_index_map[v] for v in poly.vertices]
-                        material_index = material_index_for_poly(poly, mesh_materials)
+                        if layer_count > 1:
+                            stack = material_stack(mesh, poly, layer_count, material_attrs, enabled_attrs)
+                            stack = tuple(index if 0 <= index < len(mesh_materials) else -1 for index in stack)
+                            material_index = material_info["stack_indices"].get(stack, 0)
+                        else:
+                            material_index = material_index_for_poly(poly, mesh_materials)
 
                         out.write('\t\t\t*MESH_FACE    {:>3d}:    A: {:>6d} B: {:>6d} C: {:>6d}'.format(
                             poly_index, vertex_indices[0], vertex_indices[1], vertex_indices[2]
@@ -1025,9 +1133,15 @@ def _write(context, filepath,
                     out.write('\t\t}\n')
 
                     if EXPORT_MATERIALS and mesh_materials:
-                        out.write('\t\t*SHADER_COUNT\t%d\n' % len(mesh_materials))
+                        shader_materials = mesh_materials
+                        if layer_count > 1:
+                            shader_materials = []
+                            for stack in material_info["stacks"]:
+                                base_index = stack[0] if stack and stack[0] >= 0 else 0
+                                shader_materials.append(mesh_materials[base_index] if base_index < len(mesh_materials) else None)
+                        out.write('\t\t*SHADER_COUNT\t%d\n' % len(shader_materials))
                         out.write('\t\t*SHADER_LIST {\n')
-                        for material_index, mat in enumerate(mesh_materials):
+                        for material_index, mat in enumerate(shader_materials):
                             out.write('\t\t\t*SHADER\t%d {\n' % material_index)
                             out.write('\t\t\t\t%d\t%s\n' % (material_index, material_shader_rule(mat)))
                             out.write('\t\t\t}\n')
@@ -1041,17 +1155,28 @@ def _write(context, filepath,
                                 out.write(f'\t\t\t*MESH_TVERT {uv_index:>5d}\t{df}\t{df}\t{df}\n' % (uv[0], uv[1], 0.0))
                             out.write('\t\t}\n')
 
-                            out.write('\t\t*MESH_NUMTVFACES %d\n' % len(mesh.polygons))
-                            out.write('\t\t*MESH_TFACELIST {\n')
-                            for poly_index, poly in enumerate(mesh.polygons):
-                                uv_indices = []
-                                for loop_index in poly.loop_indices:
-                                    uv = mesh.uv_layers.active.data[loop_index].uv
-                                    uv_indices.append(uv_index_map.get((uv.x, uv.y), -1))
-                                out.write('\t\t\t*MESH_TFACE %-3d\t%d\t%d\t%d\n' % (
-                                    poly_index, uv_indices[0], uv_indices[1], uv_indices[2]
-                                ))
-                            out.write('\t\t}\n')
+                            def write_uv_face_list(uv_layer, indentation):
+                                out.write(f'{indentation}*MESH_NUMTVFACES %d\n' % len(mesh.polygons))
+                                out.write(f'{indentation}*MESH_TFACELIST {{\n')
+                                for poly_index, poly in enumerate(mesh.polygons):
+                                    uv_indices = []
+                                    for loop_index in poly.loop_indices:
+                                        uv = uv_layer.data[loop_index].uv
+                                        uv_indices.append(uv_index_map.get((uv.x, uv.y), -1))
+                                    out.write(f'{indentation}\t*MESH_TFACE %-3d\t%d\t%d\t%d\n' % (
+                                        poly_index, uv_indices[0], uv_indices[1], uv_indices[2]
+                                    ))
+                                out.write(f'{indentation}}}\n')
+
+                            exported_uv_layers = [
+                                index for index in range(layer_count)
+                                if uv_layers[index] is not None
+                            ]
+                            out.write('\t\t*MESH_NUMTFACELAYERS\t%d\n' % len(exported_uv_layers))
+                            for layer_index in exported_uv_layers:
+                                out.write('\t\t*MESH_TFACELAYER\t%d {\n' % layer_index)
+                                write_uv_face_list(uv_layers[layer_index], '\t\t\t')
+                                out.write('\t\t}\n')
 
                     if EXPORT_MESH_VCOLORS or synthesize_texture_color:
                         out.write('\t\t*MESH_NUMCVERTEX %u\n' % len(unique_colors))
@@ -1063,20 +1188,33 @@ def _write(context, filepath,
                                 ))
                             out.write('\t\t}\n')
 
-                            out.write('\t\t*MESH_NUMCVFACES %d\n' % len(mesh.polygons))
-                            out.write('\t\t*MESH_CFACELIST {\n')
-                            for poly_index, poly in enumerate(mesh.polygons):
-                                if synthesize_texture_color:
-                                    color_indices = [0, 0, 0]
-                                else:
-                                    color_indices = []
-                                    for loop_index in poly.loop_indices:
-                                        color = color_for_loop(mesh, color_layer, loop_index)
-                                        color_indices.append(color_index_map.get(color, -1))
-                                out.write('\t\t\t*MESH_CFACE %-3d\t%d\t%d\t%d\n' % (
-                                    poly_index, color_indices[0], color_indices[1], color_indices[2]
-                                ))
-                            out.write('\t\t}\n')
+                            exported_color_layers = (
+                                list(range(layer_count))
+                                if synthesize_texture_color
+                                else [
+                                    index for index in range(layer_count)
+                                    if mesh_color_layers[index] is not None
+                                ]
+                            )
+                            out.write('\t\t*MESH_NUMCFACELAYERS\t%d\n' % len(exported_color_layers))
+                            for layer_index in exported_color_layers:
+                                color_layer = mesh_color_layers[layer_index]
+                                out.write('\t\t*MESH_CFACELAYER\t%d {\n' % layer_index)
+                                out.write('\t\t\t*MESH_NUMCVFACES %d\n' % len(mesh.polygons))
+                                out.write('\t\t\t*MESH_CFACELIST {\n')
+                                for poly_index, poly in enumerate(mesh.polygons):
+                                    if synthesize_texture_color:
+                                        color_indices = [0, 0, 0]
+                                    else:
+                                        color_indices = []
+                                        for loop_index in poly.loop_indices:
+                                            color = color_for_loop(mesh, color_layer, loop_index)
+                                            color_indices.append(color_index_map.get(color, -1))
+                                    out.write('\t\t\t\t*MESH_CFACE %-3d\t%d\t%d\t%d\n' % (
+                                        poly_index, color_indices[0], color_indices[1], color_indices[2]
+                                    ))
+                                out.write('\t\t\t}\n')
+                                out.write('\t\t}\n')
 
                     if EXPORT_MESH_NORMALS:
                         out.write('\t\t*MESH_NORMALS {\n')
@@ -1916,7 +2054,8 @@ def _write(context, filepath,
 
                 write_scene_data(out, scene)
 
-                scene_materials = collect_scene_materials(mesh_occurrences) if EXPORT_MATERIALS else {}
+                # Layer metadata is also needed when only UV/color face layers are exported.
+                scene_materials = collect_scene_materials(mesh_occurrences)
                 if EXPORT_MATERIALS:
                     write_scene_materials(out, scene_materials)
 
