@@ -429,9 +429,6 @@ class ExportESE(bpy.types.Operator, ExportHelper):
         frame_start = bpy.context.scene.frame_start
         frame_end = bpy.context.scene.frame_end
 
-        #Override values
-        if self.Enable_Start_From_Frame and (self.Start_From_Frame >= frame_start):
-            self.Static_Frame = self.Start_From_Frame
         if self.Output_First_Only:
             self.Static_Frame = frame_start
 

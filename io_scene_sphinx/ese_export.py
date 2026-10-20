@@ -30,6 +30,7 @@ EXPORT_TRI = True
 EXPORT_APPLY_MODIFIERS = True
 START_FRAME = 0
 END_FRAME = 0
+TIMELINE_FRAME_ORIGIN = 0
 
 # Global variables
 FRAMES_COUNT = 0
@@ -180,28 +181,18 @@ def _write(context, filepath,
 
     #---------------------------------------------------------------------------------------------------------------------------
     def skin_normalization_scale(scene, armature):
-        """Find the inherited unit conversion shared by an armature and its weighted meshes.
-
-        EuroLand biped nodes do not reliably handle a unit conversion stored as hierarchy
-        scale (the common Blender import case is 0.01). Normalize only when every weighted
-        mesh driven by the armature has the same positive uniform world scale. Ambiguous,
-        mirrored and non-uniform rigs retain the legacy export path.
-        """
+        """Return a positive uniform unit scale for a skinned armature."""
         armature_scale = positive_uniform_matrix_scale(armature.matrix_world)
         if armature_scale is None or abs(armature_scale - 1.0) <= 0.000001:
             return 1.0
 
-        weighted_meshes = [
-            obj for obj in scene.objects
-            if obj.type == 'MESH' and armature_for_mesh(obj) == armature and mesh_has_skin(obj)
-        ]
-        if not weighted_meshes:
+        if not any(
+            obj.type == 'MESH'
+            and armature_for_mesh(obj) == armature
+            and mesh_has_skin(obj)
+            for obj in scene.objects
+        ):
             return 1.0
-
-        for mesh_obj in weighted_meshes:
-            mesh_scale = positive_uniform_matrix_scale(mesh_obj.matrix_world)
-            if mesh_scale is None or abs(mesh_scale - armature_scale) > max(0.0001, armature_scale * 0.0001):
-                return 1.0
 
         return armature_scale
 
@@ -209,6 +200,14 @@ def _write(context, filepath,
     def frame_in_range(frame):
         rounded = int(round(frame))
         return START_FRAME <= rounded <= END_FRAME
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def output_tick(frame):
+        return int(round((frame - TIMELINE_FRAME_ORIGIN) * TICKS_PER_FRAME))
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def static_output_tick():
+        return output_tick(min(max(EXPORT_STATIC_FRAME, START_FRAME), END_FRAME))
 
     #---------------------------------------------------------------------------------------------------------------------------
     def sorted_frame_set(frames):
@@ -586,7 +585,7 @@ def _write(context, filepath,
 
     #---------------------------------------------------------------------------------------------------------------------------
     def write_scene_data(out, scene):
-        global FRAMES_COUNT, TICKS_PER_FRAME, START_FRAME, END_FRAME
+        global FRAMES_COUNT, TICKS_PER_FRAME, START_FRAME, END_FRAME, TIMELINE_FRAME_ORIGIN
 
         START_FRAME = scene.frame_start
         END_FRAME = scene.frame_end
@@ -601,10 +600,13 @@ def _write(context, filepath,
         if END_FRAME < START_FRAME:
             END_FRAME = START_FRAME
 
+        # Export cropped clips on a zero-based timeline.
+        TIMELINE_FRAME_ORIGIN = START_FRAME
+
         scene.frame_set(EXPORT_STATIC_FRAME)
 
         frame_rate = scene.render.fps
-        FRAMES_COUNT = END_FRAME - START_FRAME + 1
+        FRAMES_COUNT = END_FRAME - TIMELINE_FRAME_ORIGIN + 1
 
         tick_frequency = 4800
         TICKS_PER_FRAME = max(1, tick_frequency // max(1, frame_rate))
@@ -637,7 +639,7 @@ def _write(context, filepath,
         out.write("*SCENE {\n")
         out.write('\t*SCENE_FILENAME "%s"\n' % bpy.data.filepath)
         out.write('\t*SCENE_FIRSTFRAME %s\n' % 0)
-        out.write('\t*SCENE_LASTFRAME %s\n' % (END_FRAME - START_FRAME))
+        out.write('\t*SCENE_LASTFRAME %s\n' % (END_FRAME - TIMELINE_FRAME_ORIGIN))
         out.write('\t*SCENE_FRAMESPEED %s\n' % frame_rate)
         out.write('\t*SCENE_TICKSPERFRAME %s\n' % TICKS_PER_FRAME)
         out.write(f'\t*SCENE_BACKGROUND_STATIC {df} {df} {df}\n' % export_background)
@@ -951,9 +953,9 @@ def _write(context, filepath,
             return result
 
         try:
-            for frame in frames:
+            for frame in sorted(set(frames)):
                 bpy.context.scene.frame_set(frame)
-                tick = (frame - START_FRAME) * TICKS_PER_FRAME
+                tick = output_tick(frame)
 
                 matrix_data = matrix_without_nonuniform_scale(matrix_provider().copy())
                 if obj_type == 'MESH':
@@ -1154,7 +1156,7 @@ def _write(context, filepath,
                     write_tm_node(out, obj_matrix_data, True)
 
                     out.write('\t*MESH {\n')
-                    static_tick = (EXPORT_STATIC_FRAME - START_FRAME) * TICKS_PER_FRAME
+                    static_tick = static_output_tick()
                     out.write('\t\t*TIMEVALUE %d\n' % static_tick)
                     out.write('\t\t*MESH_NUMVERTEX %u\n' % len(unique_vertices))
                     out.write('\t\t*MESH_NUMFACES %u\n' % len(mesh.polygons))
@@ -1248,7 +1250,12 @@ def _write(context, filepath,
                             )
                             out.write('\t\t*MESH_NUMCFACELAYERS\t%d\n' % len(exported_color_layers))
                             for layer_index in exported_color_layers:
-                                color_layer = mesh_color_layers[layer_index]
+                                # Synthesized texture colors have no source layer.
+                                color_layer = (
+                                    None
+                                    if synthesize_texture_color
+                                    else mesh_color_layers[layer_index]
+                                )
                                 out.write('\t\t*MESH_CFACELAYER\t%d {\n' % layer_index)
                                 out.write('\t\t\t*MESH_NUMCVFACES %d\n' % len(mesh.polygons))
                                 out.write('\t\t\t*MESH_CFACELIST {\n')
@@ -1268,15 +1275,22 @@ def _write(context, filepath,
 
                     if EXPORT_MESH_NORMALS:
                         out.write('\t\t*MESH_NORMALS {\n')
+                        corner_normals = getattr(mesh, "corner_normals", None)
                         for poly_index, poly in enumerate(mesh.polygons):
-                            normal = poly.normal
+                            face_normal = poly.normal
                             out.write(f'\t\t\t*MESH_FACENORMAL {poly_index:<3d}\t{df}\t{df}\t{df}\n' % (
-                                normal[0], normal[1], normal[2]
+                                face_normal[0], face_normal[1], face_normal[2]
                             ))
-                            for vertex_index in poly.vertices:
-                                export_vertex_index = source_vertex_index_map[vertex_index]
+                            for loop_index in poly.loop_indices:
+                                loop = mesh.loops[loop_index]
+                                export_vertex_index = source_vertex_index_map[loop.vertex_index]
+                                # Smooth normals are stored per face corner.
+                                if corner_normals is not None and loop_index < len(corner_normals):
+                                    vertex_normal = corner_normals[loop_index].vector
+                                else:
+                                    vertex_normal = loop.normal
                                 out.write(f'\t\t\t\t*MESH_VERTEXNORMAL {export_vertex_index:<3d}\t{df}\t{df}\t{df}\n' % (
-                                    normal[0], normal[1], normal[2]
+                                    vertex_normal[0], vertex_normal[1], vertex_normal[2]
                                 ))
                         out.write('\t\t}\n')
 
@@ -1458,12 +1472,21 @@ def _write(context, filepath,
         return armature.matrix_world @ armature.data.bones[bone_name].matrix_local
 
     #---------------------------------------------------------------------------------------------------------------------------
-    def pose_bone_animation_matrix(armature, bone_name, normalization_scale=1.0):
+    def pose_bone_animation_matrix(
+        armature,
+        bone_name,
+        normalization_scale=1.0,
+        synthetic_armature_parent=False,
+    ):
         pose_bone = armature.pose.bones.get(bone_name) if armature.pose else None
         if not pose_bone:
             bone = armature.data.bones[bone_name]
             if bone.parent:
                 matrix = bone.parent.matrix_local.inverted_safe() @ bone.matrix_local
+                matrix.translation *= normalization_scale
+                return matrix
+            if synthetic_armature_parent:
+                matrix = bone.matrix_local.copy()
                 matrix.translation *= normalization_scale
                 return matrix
             return remove_uniform_scale_factor(armature.matrix_world @ bone.matrix_local, normalization_scale)
@@ -1472,7 +1495,29 @@ def _write(context, filepath,
             matrix = pose_bone.parent.matrix.inverted_safe() @ pose_bone.matrix
             matrix.translation *= normalization_scale
             return matrix
+        if synthetic_armature_parent:
+            matrix = pose_bone.matrix.copy()
+            matrix.translation *= normalization_scale
+            return matrix
         return remove_uniform_scale_factor(armature.matrix_world @ pose_bone.matrix, normalization_scale)
+
+    #---------------------------------------------------------------------------------------------------------------------------
+    def needs_synthetic_biped_root(armature, bones, required_bones=None):
+        """Detect a Biped root represented by Blender's Armature object."""
+        if any(bone.name == armature.name for bone in bones):
+            return False
+
+        prefix = f'{armature.name} '
+        roots = [
+            bone for bone in bones
+            if bone.parent is None
+            and (required_bones is None or bone.name in required_bones)
+        ]
+        return any(
+            bone.name.startswith(prefix)
+            and bone.name[len(prefix):].casefold() == 'pelvis'
+            for bone in roots
+        )
 
     #---------------------------------------------------------------------------------------------------------------------------
     def armature_animation_frames(armature):
@@ -1504,7 +1549,7 @@ def _write(context, filepath,
         ]
 
         out.write('\t*MESH {\n')
-        out.write('\t\t*TIMEVALUE 0\n')
+        out.write('\t\t*TIMEVALUE %d\n' % static_output_tick())
         out.write('\t\t*MESH_NUMVERTEX %u\n' % len(vertices))
         out.write('\t\t*MESH_NUMFACES %u\n' % len(faces))
         out.write('\t\t*MESH_VERTEX_LIST {\n')
@@ -1541,11 +1586,53 @@ def _write(context, filepath,
             normalization_scale = skin_normalization_scale(scene, ob_main)
             weighted_skin = armature_has_weighted_skin(scene, ob_main)
             required_bones = required_bones_for_armature(scene, ob_main) if weighted_skin else None
+            exported_bones = [
+                bone for bone in bone_data.bones
+                if required_bones is None or bone.name in required_bones
+            ]
+            synthetic_root = needs_synthetic_biped_root(
+                ob_main,
+                exported_bones,
+                required_bones,
+            )
 
-            for bone in bone_data.bones:
-                if required_bones is not None and bone.name not in required_bones:
-                    continue
-                is_root = bone.parent is None
+            if synthetic_root:
+                root_bone = next(bone for bone in exported_bones if bone.parent is None)
+                root_matrix = remove_uniform_scale_factor(
+                    ob_main.matrix_world,
+                    normalization_scale,
+                )
+                root_matrix_data = {
+                    "name": ob_main.name,
+                    "type": 'BONE',
+                    "matrix_original": root_matrix.copy(),
+                    "matrix_transformed": root_matrix.copy(),
+                }
+
+                out.write('*GEOMOBJECT {\n')
+                out.write('\t*NODE_NAME "%s"\n' % ob_main.name)
+                out.write('\t*NODE_BIPED_SLAVE\n')
+                write_tm_node(out, root_matrix_data)
+                write_tm_node(out, root_matrix_data, True)
+                write_bone_display_mesh(out, root_bone, normalization_scale)
+                out.write('\t*PROP_MOTIONBLUR 0\n')
+                out.write('\t*PROP_CASTSHADOW 1\n')
+                out.write('\t*PROP_RECVSHADOW 1\n')
+                write_tm_animation(
+                    out,
+                    ob_main.name,
+                    'BONE',
+                    armature_animation_frames(ob_main),
+                    lambda armature=ob_main, scale=normalization_scale:
+                        remove_uniform_scale_factor(armature.matrix_world, scale),
+                )
+                out.write(f'\t*WIREFRAME_COLOR {df} {df} {df}\n' % (0.6510, 0.7922, 0.9412))
+                out.write('\t*MESH_ANIMATION {\n')
+                out.write('\t}\n')
+                out.write('}\n')
+
+            for bone in exported_bones:
+                is_root = bone.parent is None and not synthetic_root
                 # ESE NODE_TM is the transform at the selected static output frame.
                 # Weighted meshes above are evaluated at this same frame, matching
                 # the reference pose emitted by Eurocom's original 3ds Max plug-in.
@@ -1565,6 +1652,8 @@ def _write(context, filepath,
                 out.write('\t*NODE_NAME "%s"\n' % bone.name)
                 if bone.parent:
                     out.write('\t*NODE_PARENT "%s"\n' % bone.parent.name)
+                elif synthetic_root:
+                    out.write('\t*NODE_PARENT "%s"\n' % ob_main.name)
                 out.write('\t*%s\n' % ('NODE_BIPED_SLAVE' if is_root else 'NODE_BIPED_BODY'))
                 write_tm_node(out, obj_matrix_data)
                 write_tm_node(out, obj_matrix_data, True)
@@ -1578,8 +1667,14 @@ def _write(context, filepath,
                     bone.name,
                     'BONE',
                     armature_animation_frames(ob_main),
-                    lambda armature=ob_main, bone_name=bone.name, scale=normalization_scale:
-                        pose_bone_animation_matrix(armature, bone_name, scale)
+                    lambda armature=ob_main, bone_name=bone.name, scale=normalization_scale,
+                           synthetic_parent=(synthetic_root and bone.parent is None):
+                        pose_bone_animation_matrix(
+                            armature,
+                            bone_name,
+                            scale,
+                            synthetic_parent,
+                        )
                 )
                 if is_root:
                     out.write(f'\t*WIREFRAME_COLOR {df} {df} {df}\n' % (0.6510, 0.7922, 0.9412))
@@ -1717,7 +1812,7 @@ def _write(context, filepath,
                 out.write('\t*LIGHT_ABSMAPBIAS 0\n')
                 out.write('\t*LIGHT_OVERSHOOT 0\n')
 
-                static_tick = (EXPORT_STATIC_FRAME - START_FRAME) * TICKS_PER_FRAME
+                static_tick = static_output_tick()
                 write_light_settings(out, light_data, static_tick)
 
                 if EXPORT_CAMERA_LIGHT_ANIMS:
@@ -1727,7 +1822,7 @@ def _write(context, filepath,
                     for frame in light_frames:
                         scene.frame_set(frame)
                         current_light = ob_main.data
-                        tick = (frame - START_FRAME) * TICKS_PER_FRAME
+                        tick = output_tick(frame)
                         current = light_settings_signature(current_light)
                         if previous != current:
                             write_light_settings(out, current_light, tick, 2)
@@ -1875,7 +1970,7 @@ def _write(context, filepath,
                 write_parent(out, ob)
                 out.write('\t*CAMERA_TYPE Target\n')
                 write_tm_node(out, obj_matrix_data)
-                static_tick = (EXPORT_STATIC_FRAME - START_FRAME) * TICKS_PER_FRAME
+                static_tick = static_output_tick()
                 write_camera_settings(out, ob_main, camera_data, static_tick)
 
                 if EXPORT_CAMERA_LIGHT_ANIMS:
@@ -1884,7 +1979,7 @@ def _write(context, filepath,
                     for frame in data_frames_for(ob_main, camera_data):
                         scene.frame_set(frame)
                         current_data = ob_main.data
-                        tick = (frame - START_FRAME) * TICKS_PER_FRAME
+                        tick = output_tick(frame)
                         current = (
                             float(current_data.clip_start),
                             float(current_data.clip_end),
@@ -1966,7 +2061,7 @@ def _write(context, filepath,
 
         source_start = max(START_FRAME, source_start)
         source_end = min(END_FRAME, source_end)
-        return source_start - START_FRAME, source_end - START_FRAME
+        return source_start - TIMELINE_FRAME_ORIGIN, source_end - TIMELINE_FRAME_ORIGIN
 
     #---------------------------------------------------------------------------------------------------------------------------
     def write_sound_data(out, scene):
